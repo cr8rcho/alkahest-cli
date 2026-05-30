@@ -2,7 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
-import { runScan, loadOrScan } from "../core/pipeline.js";
+import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
+import { emitMap, emitDashboard } from "../core/emit.js";
 import type { ProductMap, Screen } from "../core/types.js";
 
 const require = createRequire(import.meta.url);
@@ -119,6 +120,40 @@ export function buildServer(): McpServer {
     },
   );
 
+  // ---- write-back tools: the agent saves its prose into map.json so the dashboard shows it ----
+
+  server.registerTool(
+    "set_summary",
+    {
+      title: "Set screen summary",
+      description:
+        "Save a one-line, PM-friendly summary ('what the user does here') onto a screen in map.json, " +
+        "then re-emit the dashboard so it appears in the screen's panel. Write the summary yourself from get_screen data.",
+      inputSchema: {
+        screen: z.string().describe("screen id / route / title"),
+        summary: z.string().describe("a 1-2 sentence summary in the user's language"),
+        path: z.string().optional(),
+      },
+    },
+    async ({ screen, summary, path }) => writeField(rootOf(path), screen, (s) => { s.summary = summary; }),
+  );
+
+  server.registerTool(
+    "set_prd",
+    {
+      title: "Set screen PRD",
+      description:
+        "Save a PRD/requirements markdown onto a screen in map.json, then re-emit the dashboard so it appears " +
+        "in the screen's panel (rendered). Write the PRD yourself from get_screen / who_calls data.",
+      inputSchema: {
+        screen: z.string().describe("screen id / route / title"),
+        prd: z.string().describe("PRD/requirements as markdown"),
+        path: z.string().optional(),
+      },
+    },
+    async ({ screen, prd, path }) => writeField(rootOf(path), screen, (s) => { s.prd = prd; }),
+  );
+
   return server;
 }
 
@@ -129,6 +164,18 @@ function text(t: string) {
 }
 function json(obj: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }] };
+}
+
+/** Load map.json, mutate the matched screen, then re-emit map.json + dashboard. */
+function writeField(root: string, screenArg: string, mutate: (s: Screen) => void) {
+  const map = loadMap(root);
+  if (!map) return text("No map.json found — run scan first.");
+  const s = matchScreen(map, screenArg);
+  if (!s) return text(`Screen not found: ${screenArg}`);
+  mutate(s);
+  emitMap(root, map);
+  emitDashboard(root, map);
+  return text(`Saved to ${s.id}. Dashboard updated.`);
 }
 
 function matchScreen(map: ProductMap, arg: string): Screen | undefined {
@@ -145,6 +192,7 @@ function screenDetail(map: ProductMap, s: Screen) {
     title: s.title,
     sourceFile: s.sourceFile,
     summary: s.summary || null,
+    prd: s.prd || null,
     features: s.features,
     components: s.components,
     navigatesTo: map.transitions

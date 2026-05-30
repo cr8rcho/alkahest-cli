@@ -39,8 +39,10 @@ export interface Screen {
   sourceHash: string;
   /** Human-readable screen name */
   title: string;
-  /** LLM-written "what the user does on this screen" — empty until Phase 3 */
+  /** Agent-written one-liner "what the user does on this screen" — empty until set via MCP */
   summary: string;
+  /** Agent-written PRD/requirements markdown for this screen — empty until set via MCP. Shown in the dashboard panel. */
+  prd?: string;
   features: Feature[];
   /** Names of the main components used on this screen */
   components: string[];

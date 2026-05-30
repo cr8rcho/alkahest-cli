@@ -90,6 +90,11 @@
       #panel .tag { font-family: ui-monospace, monospace; font-size: 10px; color: var(--muted); }
       #panel .lineno { float: right; color: var(--muted); font-family: ui-monospace, monospace; font-size: 10px; }
       #panel .empty { color: var(--muted); font-style: italic; }
+      #panel .prd h4, #panel .prd h5, #panel .prd h6 { margin: 12px 0 4px; font-size: 12px; font-weight: 700; color: var(--ink); text-transform: none; letter-spacing: 0; }
+      #panel .prd p { margin: 4px 0; }
+      #panel .prd ul.md { list-style: none; margin: 4px 0; padding: 0; }
+      #panel .prd ul.md li { border: none; background: none; padding: 1px 0; margin: 0; }
+      #panel .prd code { font-family: ui-monospace, monospace; font-size: 11px; background: var(--panel-soft); padding: 0 3px; border-radius: 3px; }
       .hint { color: var(--muted); }
       .node text { font-size: 11px; fill: var(--node-ink); pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
       .node circle, .node rect, .node path { cursor: pointer; stroke: var(--node-stroke); stroke-width: 1.5px; }
@@ -452,6 +457,27 @@
       function li(inner, cls) { return "<li" + (cls ? ' class="' + cls + '"' : "") + ">" + inner + "</li>"; }
       function listOr(items, emptyMsg) { return items.length ? "<ul>" + items.join("") + "</ul>" : '<p class="empty">' + emptyMsg + "</p>"; }
 
+      // Minimal markdown → HTML for PRD (headings, list/checkbox, bold/code, paragraphs). No deps.
+      function mdToHtml(md) {
+        const inline = (t) => esc(t)
+          .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+          .replace(/`([^`]+)`/g, "<code>$1</code>");
+        const out = [];
+        let list = null; // "ul" | null
+        const closeList = () => { if (list) { out.push("</" + list + ">"); list = null; } };
+        for (const raw of md.split("\n")) {
+          const line = raw.trimEnd();
+          let m;
+          if (!line.trim()) { closeList(); continue; }
+          if ((m = line.match(/^(#{1,4})\s+(.*)$/))) { closeList(); const lv = Math.min(m[1].length + 2, 6); out.push("<h" + lv + ">" + inline(m[2]) + "</h" + lv + ">"); }
+          else if ((m = line.match(/^\s*[-*]\s+\[([ xX])\]\s+(.*)$/))) { if (list !== "ul") { closeList(); out.push('<ul class="md">'); list = "ul"; } out.push("<li>" + (m[1].trim() ? "☑ " : "☐ ") + inline(m[2]) + "</li>"); }
+          else if ((m = line.match(/^\s*[-*]\s+(.*)$/))) { if (list !== "ul") { closeList(); out.push('<ul class="md">'); list = "ul"; } out.push("<li>" + inline(m[1]) + "</li>"); }
+          else { closeList(); out.push("<p>" + inline(line) + "</p>"); }
+        }
+        closeList();
+        return out.join("");
+      }
+
       function renderPanel(n) {
         if (n.type === "screen") return renderScreen(screensById.get(n.id));
         return renderResource(resourcesById.get(n.id));
@@ -482,6 +508,7 @@
           '<div class="route">' + esc(s.route) + "</div>" +
           '<div class="src">' + esc(s.sourceFile) + "</div>" +
           (s.summary ? "<section><h3>Summary</h3><p>" + esc(s.summary) + "</p></section>" : "") +
+          (s.prd ? '<section class="prd"><h3>PRD</h3>' + mdToHtml(s.prd) + "</section>" : "") +
           "<section><h3>Features (" + s.features.length + ")</h3>" + listOr(feats, "No UI features extracted") + "</section>" +
           "<section><h3>Outgoing (" + out.length + ")</h3>" + listOr(out.map(navItem), "None") + "</section>" +
           "<section><h3>Calls (" + calls.length + ")</h3>" + listOr(calls.map(callItem), "None") + "</section>" +
