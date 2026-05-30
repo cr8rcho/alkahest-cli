@@ -152,6 +152,9 @@
         n.vx = 0; n.vy = 0;
       });
 
+      // ---- 상호작용 상태 (force step 이 참조하므로 루프보다 먼저 선언) ----
+      let dragging = null, panStart = null, selected = null;
+
       // ---- force 시뮬레이션 ----
       let alpha = 1;
       const REPULSION = 5000, SPRING = 0.04, SPRING_LEN = 110, GRAVITY = 0.015, DAMP = 0.85;
@@ -244,8 +247,7 @@
       }
       tTrans.onchange = tCalls.onchange = applyLayers;
 
-      // ---- 선택/하이라이트 ----
-      let selected = null;
+      // ---- 선택/하이라이트 ---- (selected 는 위에서 선언됨)
       function select(n) {
         selected = n;
         const connected = new Set([n.key]);
@@ -334,7 +336,7 @@
       function applyTransform() { viewport.setAttribute("transform", "translate(" + tx + " " + ty + ") scale(" + k + ")"); }
       function toWorld(cx, cy) { const rect = svg.getBoundingClientRect(); return { x: (cx - rect.left - tx) / k, y: (cy - rect.top - ty) / k }; }
 
-      let dragging = null, panStart = null;
+      // dragging, panStart 는 위에서 선언됨
       function startDrag(ev, n) {
         ev.stopPropagation(); dragging = n; alpha = Math.max(alpha, 0.5);
         svg.setPointerCapture(ev.pointerId);
