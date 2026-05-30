@@ -95,8 +95,11 @@
       .node circle, .node rect, .node path { cursor: pointer; stroke: var(--node-stroke); stroke-width: 1.5px; }
       .node.selected circle, .node.selected rect, .node.selected path { stroke: var(--accent); stroke-width: 2.5px; }
       .node.dim { opacity: 0.2; }
+      /* 호버 미리보기 (선택 안 된 상태에서만): 연결 엣지·이웃 강조 */
+      .node.hl circle, .node.hl rect, .node.hl path { stroke: var(--ink); stroke-width: 2px; }
       .edge { opacity: 0.9; }
       .edge.dim { opacity: 0.08; }
+      .edge.hl { stroke: var(--ink) !important; opacity: 1; stroke-width: 2.2px; }
 
       /* ---- 모바일: 좁은 화면에서는 패널을 하단 시트로 ---- */
       @media (max-width: 640px) {
@@ -340,6 +343,8 @@
         txt.textContent = isEntry ? "▶ " + baseLabel : baseLabel;
         g.appendChild(shape); g.appendChild(txt);
         g.addEventListener("pointerdown", (ev) => onNodeDown(ev, n));
+        g.addEventListener("pointerenter", () => hoverOn(n));
+        g.addEventListener("pointerleave", hoverOff);
         gNodes.appendChild(g);
         n.el = g;
         return g;
@@ -381,6 +386,7 @@
 
       // ---- 선택/하이라이트 ---- (selected 는 위에서 선언됨)
       function select(n) {
+        hoverOff(); // 호버 강조 정리
         selected = n;
         const connected = new Set([n.key]);
         for (const e of edges) {
@@ -402,6 +408,24 @@
         panel.innerHTML = '<p class="hint">노드를 클릭하면 화면의 기능·이동·호출을 봅니다.</p>';
         document.body.classList.remove("panel-open");
       }
+      // ---- 호버 미리보기: 선택 안 된 상태 + 드래그 중 아닐 때만, 연결 엣지·이웃 강조 ----
+      let hovered = null;
+      function hoverOn(n) {
+        if (selected || dragging) return;
+        hovered = n;
+        for (const e of edges) {
+          const on = e.source === n || e.target === n;
+          e.el.classList.toggle("hl", on);
+          if (on) { e.source.el.classList.add("hl"); e.target.el.classList.add("hl"); }
+        }
+      }
+      function hoverOff() {
+        if (!hovered) return;
+        hovered = null;
+        for (const e of edges) e.el.classList.remove("hl");
+        for (const m of nodes) m.el.classList.remove("hl");
+      }
+
       // svg 빈 곳 탭 → clearSelection 은 pointerup(탭) 핸들러에서 처리.
       document.getElementById("panel-close").addEventListener("click", clearSelection);
 
