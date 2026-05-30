@@ -253,9 +253,12 @@
       let dragging = null, panStart = null, selected = null;
 
       // ---- force 시뮬레이션 ----
-      let alpha = 1;
-      const REPULSION = 16000, SPRING = 0.025, SPRING_LEN = 180, GRAVITY = 0.012, DAMP = 0.9;
+      // gravity 는 초기 정착에서만(노드들을 화면 안으로 모음). settled 이후엔 0 →
+      // 드래그로 옮긴 노드가 중앙으로 안 끌려가고 놓은 자리 근처에 머문다.
+      let alpha = 1, settled = false;
+      const REPULSION = 16000, SPRING = 0.025, SPRING_LEN = 180, GRAVITY = 0.012, DAMP = 0.82;
       function step() {
+        const grav = settled ? 0 : GRAVITY; // 정착 후 중력 OFF
         // 반발(모든 쌍)
         for (let i = 0; i < nodes.length; i++) {
           for (let j = i + 1; j < nodes.length; j++) {
@@ -276,10 +279,8 @@
           const fx = (dx / d) * f, fy = (dy / d) * f;
           a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
         }
-        // 중앙 중력
         for (const n of nodes) {
-          n.vx += (cx0 - n.x) * GRAVITY;
-          n.vy += (cy0 - n.y) * GRAVITY;
+          if (grav) { n.vx += (cx0 - n.x) * grav; n.vy += (cy0 - n.y) * grav; }
           if (n === dragging) continue;
           n.vx *= DAMP; n.vy *= DAMP;
           n.x += n.vx * alpha; n.y += n.vy * alpha;
@@ -368,9 +369,14 @@
       // 드래그 중에는 alpha 를 계속 높게 유지 → 잡은 노드를 따라 이웃이 활발히 따라옴.
       let fitted = false;
       function loop() {
-        if (dragging) { alpha = Math.max(alpha, 0.4); step(); paint(); }
-        else if (alpha > 0.02) { step(); paint(); }
-        else if (!fitted) { fitted = true; paint(); fitToView(); }
+        if (dragging) {
+          // 드래그 중: 약하게만 시뮬(alpha 0.12) → 이웃이 부드럽게 따라오되 놓을 때 안 튕김.
+          alpha = 0.12; step(); paint();
+        } else if (alpha > 0.02) {
+          step(); paint();
+        } else if (!fitted) {
+          fitted = true; settled = true; paint(); fitToView();
+        }
         requestAnimationFrame(loop);
       }
       // loop 시작은 스크립트 끝(fitToView/tx 선언 이후)에서 — TDZ 회피.
@@ -544,7 +550,7 @@
         if (!down) return;
         if (!down.moved && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > DRAG_THRESHOLD) {
           down.moved = true;
-          if (down.node) { dragging = down.node; alpha = Math.max(alpha, 0.3); fitted = true; } // 드래그 승격 + 재가열
+          if (down.node) { dragging = down.node; fitted = true; } // 드래그 승격(alpha는 loop가 관리)
         }
         if (!down.moved) return;
         if (dragging) { const w = toWorld(ev.clientX, ev.clientY); dragging.x = w.x; dragging.y = w.y; dragging.vx = 0; dragging.vy = 0; } // force 라 2D 자유
@@ -554,6 +560,9 @@
         if (down && !down.moved) {       // 안 움직였으면 = 탭
           if (down.node) select(down.node);
           else clearSelection();
+        } else if (dragging) {
+          // 놓을 때: 낮은 alpha 로 짧게 진정 → 튕김 없이 놓은 자리 근처에서 정착.
+          alpha = 0.06;
         }
         dragging = null; panStart = null; down = null;
       });
