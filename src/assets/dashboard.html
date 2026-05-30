@@ -95,6 +95,9 @@
       .node circle, .node rect { cursor: pointer; stroke: var(--node-stroke); stroke-width: 1.5px; }
       .node.selected circle, .node.selected rect { stroke: var(--accent); stroke-width: 2.5px; }
       .node.dim { opacity: 0.2; }
+      /* depth 밴드: 보일 듯 말 듯 (홀수 칸만 아주 옅게) */
+      .band-bg { fill: var(--ink); opacity: 0.025; }
+      .band-label { fill: var(--muted); opacity: 0.45; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; }
       .edge { opacity: 0.9; }
       .edge.dim { opacity: 0.08; }
 
@@ -162,6 +165,7 @@
           </marker>
         </defs>
         <g id="viewport">
+          <g id="bands"></g>
           <g id="edges"></g>
           <g id="nodes"></g>
         </g>
@@ -254,25 +258,45 @@
         byDepth.get(d).push(n);
       }
 
-      // 격자 배치: 붐비는 열은 여러 서브열로 wrap → 세로 폭발 방지.
-      // 각 노드의 목표 x는 (depth 밴드 시작 + 서브열) 로 정해 좌→우 흐름 유지.
-      const ROW_GAP = 64, SUB_GAP = 150, BAND_GAP = 230;
-      const maxRows = Math.max(6, Math.floor((H - 80) / ROW_GAP)); // 한 서브열 최대 노드 수
-      let bandX = 80;
+      // 교차 최소화 정렬(barycenter): 같은 칸 노드를 "부모(좌측 칸) 평균 순번"에 맞춰
+      // 미리 정렬해 두면 직선 엣지가 덜 겹친다. step()의 y-스프링이 이후 미세조정.
+      const inAdj = new Map(nodes.map((n) => [n.key, []]));
+      for (const e of edges) inAdj.get(e.target.key).push(e.source.key);
+      const orderInCol = new Map(); // key → 칸 내 초기 순번(정렬 결과)
       for (let d = 0; d <= maxDepth; d++) {
         const col = byDepth.get(d);
         if (!col || !col.length) continue;
+        if (d === 0) { col.forEach((n, i) => orderInCol.set(n.key, i)); continue; }
+        for (const n of col) {
+          const ps = inAdj.get(n.key).filter((p) => orderInCol.has(p));
+          n._bary = ps.length ? ps.reduce((s, p) => s + orderInCol.get(p), 0) / ps.length : 1e9;
+        }
+        col.sort((a, b) => a._bary - b._bary);
+        col.forEach((n, i) => orderInCol.set(n.key, i));
+      }
+
+      // 격자 배치: 붐비는 칸은 여러 서브열로 wrap → 세로 폭발 방지. 좌→우 흐름 유지.
+      const ROW_GAP = 64, SUB_GAP = 150, BAND_GAP = 230;
+      const maxRows = Math.max(6, Math.floor((H - 80) / ROW_GAP));
+      const bandRange = []; // depth별 [x0, x1] (은은한 밴드용)
+      let bandX = 80;
+      for (let d = 0; d <= maxDepth; d++) {
+        const col = byDepth.get(d);
+        if (!col || !col.length) { bandRange[d] = null; continue; }
         const subCols = Math.ceil(col.length / maxRows);
         const rows = Math.ceil(col.length / subCols);
+        const x0 = bandX;
         col.forEach((n, i) => {
           const sc = Math.floor(i / rows), row = i % rows;
           n.depth = d;
-          n.colX = bandX + sc * SUB_GAP;      // 목표 x (서브열 포함)
+          n.colX = bandX + sc * SUB_GAP;
           n.x = n.colX;
           n.y = 60 + row * ROW_GAP;
           n.vx = 0; n.vy = 0;
         });
-        bandX += (subCols - 1) * SUB_GAP + BAND_GAP;
+        const x1 = bandX + (subCols - 1) * SUB_GAP;
+        bandRange[d] = [x0, x1];
+        bandX = x1 + BAND_GAP;
       }
 
       // ---- 상호작용 상태 (force step 이 참조하므로 루프보다 먼저 선언) ----
@@ -311,6 +335,28 @@
       // ---- 렌더 ----
       const gEdges = document.getElementById("edges");
       const gNodes = document.getElementById("nodes");
+
+      // depth 밴드: 홀수 칸 배경 + "시작/depth N" 라벨. 보일 듯 말 듯(CSS opacity).
+      // bandEls 는 paint 에서 세로 길이(y범위)를 노드에 맞춰 갱신.
+      const gBands = document.getElementById("bands");
+      const bandEls = [];
+      const PAD = 26; // 칸 좌우 여백
+      for (let d = 0; d <= maxDepth; d++) {
+        const r = bandRange[d];
+        if (!r) continue;
+        const x0 = r[0] - PAD, w = (r[1] - r[0]) + PAD * 2;
+        const g = document.createElementNS(SVGNS, "g");
+        const rect = document.createElementNS(SVGNS, "rect");
+        rect.setAttribute("x", x0); rect.setAttribute("width", w); rect.setAttribute("rx", 8);
+        if (d % 2 === 1) rect.setAttribute("class", "band-bg"); else rect.setAttribute("fill", "none");
+        const lbl = document.createElementNS(SVGNS, "text");
+        lbl.setAttribute("class", "band-label");
+        lbl.setAttribute("x", x0 + w / 2); lbl.setAttribute("text-anchor", "middle");
+        lbl.textContent = d === 0 ? "시작" : ("depth " + d);
+        g.appendChild(rect); g.appendChild(lbl);
+        gBands.appendChild(g);
+        bandEls.push({ rect, lbl });
+      }
       // 같은 (source,target) 열쌍에 여러 엣지가 있으면 부채꼴로 벌리기 위한 인덱스
       const pairCount = new Map();
       for (const e of edges) {
@@ -365,26 +411,24 @@
 
       function paint() {
         for (const e of edges) {
+          // 직선 엣지(노드 가장자리 트림). 화살표가 노드에 안 가리게.
           const a = e.source, b = e.target;
           const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
           const ux = dx / len, uy = dy / len;
           const padA = (a.r || 10) + 2, padB = (b.r || 10) + 2;
           const x1 = a.x + ux * padA, y1 = a.y + uy * padA;
           const x2 = b.x - ux * padB, y2 = b.y - uy * padB;
-          // 곡률: 같은 열(수직)일수록 옆으로 크게 휘어 중간 노드를 비껴감.
-          // 부채(pairIdx)로 같은 쌍 여러 엣지를 갈라놓음.
-          const vertical = Math.abs(dx) < 30;            // 같은/가까운 열
-          const base = vertical ? 46 : 18;
-          const fan = e.pairIdx ? e.pairIdx * 14 : 0;
-          const side = (e.pairIdx % 2 === 0 ? 1 : -1);
-          const bend = (base + fan) * side;
-          // 수직이면 x로, 수평이면 y로 휨. 제어점을 중점에서 수직방향으로 offset.
-          const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
-          const cx = vertical ? mx + bend : mx;
-          const cy = vertical ? my : my - bend;
-          e.el.setAttribute("d", "M" + x1 + "," + y1 + " Q" + cx + "," + cy + " " + x2 + "," + y2);
+          e.el.setAttribute("d", "M" + x1 + "," + y1 + " L" + x2 + "," + y2);
         }
         for (const n of nodes) n.el.setAttribute("transform", "translate(" + n.x + "," + n.y + ")");
+        // depth 밴드: 현재 노드 y범위에 맞춰 세로 길이 갱신
+        let minY = Infinity, maxY = -Infinity;
+        for (const n of nodes) { if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y; }
+        const top = minY - 34, bot = maxY + 18;
+        for (const be of bandEls) {
+          be.rect.setAttribute("y", top); be.rect.setAttribute("height", Math.max(0, bot - top));
+          be.lbl.setAttribute("y", top + 4);
+        }
       }
       let fitted = false;
       function loop() {
