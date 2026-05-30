@@ -311,25 +311,31 @@
       // ---- 렌더 ----
       const gEdges = document.getElementById("edges");
       const gNodes = document.getElementById("nodes");
+      // 같은 (source,target) 열쌍에 여러 엣지가 있으면 부채꼴로 벌리기 위한 인덱스
+      const pairCount = new Map();
+      for (const e of edges) {
+        const key = e.source.key + "|" + e.target.key;
+        e.pairKey = key;
+        e.pairIdx = pairCount.get(key) || 0;
+        pairCount.set(key, e.pairIdx + 1);
+      }
       const edgeEls = edges.map((e) => {
-        const ln = document.createElementNS(SVGNS, "line");
-        ln.setAttribute("class", "edge " + e.kind);
-        ln.setAttribute("stroke", "var(--edge)");
-        ln.setAttribute("stroke-width", "1.4");
+        const pa = document.createElementNS(SVGNS, "path");
+        pa.setAttribute("class", "edge " + e.kind);
+        pa.setAttribute("stroke", "var(--edge)");
+        pa.setAttribute("stroke-width", "1.4");
+        pa.setAttribute("fill", "none");
         if (e.kind === "call") {
-          // 호출: 긴 점선 + 화살표
-          ln.setAttribute("stroke-dasharray", "4 4");
-          ln.setAttribute("marker-end", "url(#arrow)");
+          pa.setAttribute("stroke-dasharray", "4 4");
+          pa.setAttribute("marker-end", "url(#arrow)");
         } else if (e.rel === "contains") {
-          // 포함: 짧은 점선, 화살표 없음
-          ln.setAttribute("stroke-dasharray", "2 3");
+          pa.setAttribute("stroke-dasharray", "2 3");
         } else {
-          // 이동: 실선 + 화살표
-          ln.setAttribute("marker-end", "url(#arrow)");
+          pa.setAttribute("marker-end", "url(#arrow)");
         }
-        gEdges.appendChild(ln);
-        e.el = ln;
-        return ln;
+        gEdges.appendChild(pa);
+        e.el = pa;
+        return pa;
       });
       const nodeEls = nodes.map((n) => {
         const g = document.createElementNS(SVGNS, "g");
@@ -359,13 +365,24 @@
 
       function paint() {
         for (const e of edges) {
-          // 선을 노드 가장자리에서 끊어 화살표가 노드에 안 가리게 트림
           const a = e.source, b = e.target;
           const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
           const ux = dx / len, uy = dy / len;
           const padA = (a.r || 10) + 2, padB = (b.r || 10) + 2;
-          e.el.setAttribute("x1", a.x + ux * padA); e.el.setAttribute("y1", a.y + uy * padA);
-          e.el.setAttribute("x2", b.x - ux * padB); e.el.setAttribute("y2", b.y - uy * padB);
+          const x1 = a.x + ux * padA, y1 = a.y + uy * padA;
+          const x2 = b.x - ux * padB, y2 = b.y - uy * padB;
+          // 곡률: 같은 열(수직)일수록 옆으로 크게 휘어 중간 노드를 비껴감.
+          // 부채(pairIdx)로 같은 쌍 여러 엣지를 갈라놓음.
+          const vertical = Math.abs(dx) < 30;            // 같은/가까운 열
+          const base = vertical ? 46 : 18;
+          const fan = e.pairIdx ? e.pairIdx * 14 : 0;
+          const side = (e.pairIdx % 2 === 0 ? 1 : -1);
+          const bend = (base + fan) * side;
+          // 수직이면 x로, 수평이면 y로 휨. 제어점을 중점에서 수직방향으로 offset.
+          const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+          const cx = vertical ? mx + bend : mx;
+          const cy = vertical ? my : my - bend;
+          e.el.setAttribute("d", "M" + x1 + "," + y1 + " Q" + cx + "," + cy + " " + x2 + "," + y2);
         }
         for (const n of nodes) n.el.setAttribute("transform", "translate(" + n.x + "," + n.y + ")");
       }
