@@ -48,6 +48,39 @@ npm link          # link the 'alkahest' command globally (optional)
 
 After publish: `npm i -g alkahest` or `npx alkahest …`
 
+## Quickstart (Claude Code)
+
+The full flow for a Claude Code user, from zero to a graph + PRDs in the dashboard:
+
+```bash
+# 1. Install alkahest (until npm publish: build from source above, then `npm link`)
+
+# 2. In your project root, build the product map
+cd ~/my-next-app
+alkahest scan                 # → .alkahest/map.json + index.html
+
+# 3. Register the MCP server with Claude Code (project scope = shared via .mcp.json)
+claude mcp add alkahest -s project -- alkahest mcp
+#   verify it's connected:  run `claude` then `/mcp`  → "alkahest" should be listed
+```
+
+Now just **talk to Claude Code** — it uses the alkahest MCP tools for you:
+
+```
+You:  "Give me an overview of this product's screens."
+        → Claude calls overview → summarizes the structure.
+
+You:  "Write a PRD for the checkout screen and the cart screen."
+        → Claude calls get_screen / who_calls to read the structure,
+          writes each PRD, and calls set_prd to save it into map.json.
+
+You:  "alkahest view"   (or run it in a terminal)
+        → opens the dashboard. Click a screen node → the right panel
+          shows its Summary + PRD that Claude just wrote.
+```
+
+That's it: **scan → register MCP → ask Claude → `view`.** No API key — Claude does the writing, alkahest stores it in `map.json` and renders it in the self-contained dashboard.
+
 ## Usage
 
 Run it from the root of the project you want to analyze; outputs land in that project's `.alkahest/` folder.
@@ -72,7 +105,14 @@ alkahest mcp           # run the MCP server (agents query the product map; no ke
 
 ### Agent (MCP) integration
 
-Add it to your agent's MCP config; the agent queries the product map with the `scan` / `overview` / `get_screen` / `who_calls` tools and **writes the summaries / PRDs / requirements itself** — no separate key needed.
+Register the MCP server once, then the agent reads the map and **writes summaries / PRDs / requirements itself** — no key needed.
+
+```bash
+# Claude Code (recommended): project scope writes a shared .mcp.json
+claude mcp add alkahest -s project -- alkahest mcp
+```
+
+Or add it to any MCP-capable agent's config directly:
 
 ```json
 {
@@ -81,6 +121,19 @@ Add it to your agent's MCP config; the agent queries the product map with the `s
   }
 }
 ```
+
+**Tools exposed:**
+
+| Tool | What it does |
+|---|---|
+| `scan` | (re)build the product map for the project |
+| `overview` | list all screens & resources at a glance |
+| `get_screen` | one screen's full structure (features, navigation, calls, source) |
+| `who_calls` | which screens call a given API/resource (impact analysis) |
+| `set_summary` | save a one-line summary onto a screen → shown in the dashboard panel |
+| `set_prd` | save a PRD/requirements markdown onto a screen → rendered in the panel |
+
+The agent reads with `get_screen` / `who_calls` and writes back with `set_summary` / `set_prd`; both write into `map.json` and re-render `index.html`, so the dashboard always reflects the latest.
 
 ## Output — `.alkahest/`
 

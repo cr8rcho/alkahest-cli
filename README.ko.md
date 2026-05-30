@@ -48,6 +48,39 @@ npm link          # 'alkahest' 명령을 전역에 연결 (선택)
 
 배포 후에는: `npm i -g alkahest` 또는 `npx alkahest …`
 
+## 빠른 시작 (Claude Code)
+
+Claude Code 사용자가 0부터 대시보드에서 그래프 + PRD를 보기까지:
+
+```bash
+# 1. alkahest 설치 (npm 배포 전까진 위처럼 소스 빌드 후 `npm link`)
+
+# 2. 내 프로젝트 루트에서 제품 지도 생성
+cd ~/my-next-app
+alkahest scan                 # → .alkahest/map.json + index.html
+
+# 3. Claude Code에 MCP 서버 등록 (project 스코프 = .mcp.json으로 공유)
+claude mcp add alkahest -s project -- alkahest mcp
+#   연결 확인:  `claude` 실행 후 `/mcp`  → 목록에 "alkahest" 표시
+```
+
+이제 **Claude Code에 말만 하면** 됩니다 — 알아서 alkahest MCP 도구를 씁니다:
+
+```
+나:  "이 제품 화면들 개요 좀 정리해줘."
+        → Claude가 overview 호출 → 구조 요약.
+
+나:  "체크아웃 화면이랑 장바구니 화면 PRD 써줘."
+        → Claude가 get_screen / who_calls 로 구조를 읽고,
+          각 PRD를 작성해 set_prd 로 map.json에 저장.
+
+나:  "alkahest view"   (또는 터미널에서 직접 실행)
+        → 대시보드가 열림. 화면 노드를 클릭하면 우측 패널에
+          방금 Claude가 쓴 Summary + PRD가 보임.
+```
+
+요약: **scan → MCP 등록 → Claude에게 요청 → `view`.** 키 없음 — 글은 Claude가 쓰고, alkahest가 `map.json`에 저장해 자기완결 대시보드로 렌더합니다.
+
 ## 사용법
 
 분석할 프로젝트 루트에서 실행하면, 그 프로젝트 안 `.alkahest/` 에 산출물이 생깁니다.
@@ -72,7 +105,14 @@ alkahest mcp           # MCP 서버 실행 (에이전트가 제품 지도를 질
 
 ### 에이전트(MCP) 연동
 
-에이전트의 MCP 설정에 추가하면, 에이전트가 `scan` / `overview` / `get_screen` / `who_calls` 도구로 제품 지도를 질의하고 **요약·PRD·요구사항을 에이전트 자신이** 작성합니다 — 별도 키 불필요.
+MCP 서버를 한 번 등록하면, 에이전트가 제품 지도를 읽고 **요약·PRD·요구사항을 직접** 작성합니다 — 키 불필요.
+
+```bash
+# Claude Code (권장): project 스코프는 공유용 .mcp.json 에 기록
+claude mcp add alkahest -s project -- alkahest mcp
+```
+
+또는 MCP를 지원하는 다른 에이전트 설정에 직접 추가:
 
 ```json
 {
@@ -81,6 +121,19 @@ alkahest mcp           # MCP 서버 실행 (에이전트가 제품 지도를 질
   }
 }
 ```
+
+**제공 도구:**
+
+| 도구 | 하는 일 |
+|---|---|
+| `scan` | 프로젝트 제품 지도를 (재)생성 |
+| `overview` | 전체 화면·리소스 목록 한눈에 |
+| `get_screen` | 한 화면의 전체 구조(기능·이동·호출·소스) |
+| `who_calls` | 특정 API/리소스를 부르는 화면들 (변경 영향) |
+| `set_summary` | 화면에 한 줄 요약 저장 → 대시보드 패널에 표시 |
+| `set_prd` | 화면에 PRD/요구사항 마크다운 저장 → 패널에 렌더 |
+
+에이전트는 `get_screen` / `who_calls` 로 읽고 `set_summary` / `set_prd` 로 써넣습니다. 둘 다 `map.json`에 기록하고 `index.html`을 재생성하므로 대시보드가 항상 최신입니다.
 
 ## 산출물 — `.alkahest/`
 
