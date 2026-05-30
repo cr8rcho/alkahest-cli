@@ -63,9 +63,13 @@ const SUMMARY_SCHEMA = {
   required: ["summaries"],
 } as const;
 
-/** 전체 화면을 한 번의 호출로 요약 → screenId → summary 맵. */
-export async function summarizeScreens(map: ProductMap): Promise<Map<string, string>> {
-  const input = map.screens.map((s) => ({ id: s.id, ...screenContext(map, s) }));
+/**
+ * 주어진 화면들을 한 번의 호출로 요약 → screenId → summary 맵.
+ * `targets` 로 일부만 요약(증분 시 변경된 화면만). 컨텍스트는 항상 전체 map 기준.
+ */
+export async function summarizeScreens(map: ProductMap, targets: Screen[] = map.screens): Promise<Map<string, string>> {
+  if (!targets.length) return new Map();
+  const input = targets.map((s) => ({ id: s.id, ...screenContext(map, s) }));
   const res = await client().messages.create({
     model: MODEL,
     max_tokens: 8000,

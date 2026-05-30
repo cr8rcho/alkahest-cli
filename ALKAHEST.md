@@ -124,6 +124,7 @@ alkahest scan --open      # scan 후 바로 view
 alkahest view             # .alkahest/ 대시보드를 로컬 서버로 오픈
 alkahest prd <screen...>  # 화면 PRD 마크다운 생성 (스탠드얼론, 키 필요)
 alkahest mcp              # MCP 서버(stdio) — 에이전트가 제품 지도 질의 (키 불필요, §7)
+alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (diff 자동 갱신, §10)
 ```
 
 대상은 **단일 프로젝트(코드베이스) 하나**. `scan`은 기본 **증분**(§10).
@@ -171,7 +172,9 @@ alkahest mcp              # MCP 서버(stdio) — 에이전트가 제품 지도 
   - git `post-commit` / `post-merge` hook, 또는
   - Claude Code 하니스 hook(편집 후), 또는
   - `--watch` 모드(개발 중 파일 감시).
-- 즉 **증분 로직은 `scan` 안에**, **자동 실행은 hook이** 담당. 둘을 분리한다. (Phase 1에서 기준선/증분, hook 배선은 Phase 2~3에서)
+- 즉 **증분 로직은 `scan` 안에**, **자동 실행은 hook이** 담당. 둘을 분리한다.
+
+**구현 완료**: `scan`은 기본 증분 — `map.json`의 `fileHashes`와 비교해 **해시가 같은 화면은 재파싱하지 않고 LLM 요약까지 보존**, 변경/추가만 재처리, 삭제된 화면을 가리키던 내부 이동은 미해결로 강등. `--summarize`도 요약이 비어있는(변경된) 화면만 LLM 호출. `--full`로 전체 재스캔. `alkahest hook install`이 git `post-commit`/`post-merge`에 멱등하게 자동 `scan`을 심는다(`uninstall`로 제거). 미구현: `--watch`, Claude Code 하니스 hook 연동.
 
 ## 11. 알려진 트레이드오프 / 열린 질문
 
@@ -181,7 +184,7 @@ alkahest mcp              # MCP 서버(stdio) — 에이전트가 제품 지도 
 
 ---
 
-_마지막 갱신: 2026-05-30 · 상태: Phase 3 + MCP 완료 — `scan --summarize`/`prd`(스탠드얼론 LLM, 키 필요) + **`alkahest mcp`(에이전트 모드, 키 불필요)**. MCP 도구 scan/overview/get_screen/who_calls 를 MCP 클라이언트로 end-to-end 검증. 다음: §10 증분+hook · Phase 4(타 프레임워크·런타임 스크린샷)_
+_마지막 갱신: 2026-05-30 · 상태: P1~P3 + MCP + **§10 증분/hook 완료**. `scan` 증분(재사용 5/0, 1파일수정→4/1 검증)·요약 보존, `alkahest hook install`(멱등, 검증). 다음: Phase 4(타 프레임워크·런타임 스크린샷) 또는 배포(npm publish) 준비_
 
 > Phase 3 검증 한계: 컴파일·배선·구조화출력 스키마·키-부재 처리까지 확인. **실제 LLM 왕복은 ANTHROPIC_API_KEY 환경에서 미검증** — 키 셋업 후 `alkahest scan . --summarize` / `alkahest prd <화면>` 로 확인 필요._
 

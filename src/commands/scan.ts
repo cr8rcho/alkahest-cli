@@ -19,7 +19,7 @@ export interface ScanOptions {
  */
 export async function scan(path: string, options: ScanOptions): Promise<void> {
   const projectRoot = resolve(path);
-  const result = runScan(projectRoot);
+  const result = runScan(projectRoot, { full: options.full });
 
   if (!result) {
     console.log(`[alkahest] ${projectRoot}: 화면을 찾지 못했습니다.`);
@@ -27,21 +27,29 @@ export async function scan(path: string, options: ScanOptions): Promise<void> {
     return;
   }
 
-  const { map, outFile } = result;
+  const { map, outFile, stats } = result;
   console.log(`[alkahest] scan: ${projectRoot}`);
-  console.log(`  framework=${map.meta.framework} router=${map.meta.router} screens=${map.screens.length}`);
-  if (options.full) console.log("  (--full: 전체 재스캔)");
+  const mode = stats.incremental ? `증분 (재사용 ${stats.reused} / 재파싱 ${stats.reparsed})` : "전체";
+  console.log(`  framework=${map.meta.framework} router=${map.meta.router} screens=${map.screens.length} · ${mode}`);
 
   if (options.summarize) {
     if (!hasApiKey()) {
       console.log("  ⚠ --summarize: ANTHROPIC_API_KEY 가 없어 요약을 건너뜁니다.");
     } else {
-      process.stdout.write("  요약 생성 중(LLM)… ");
-      const summaries = await summarizeScreens(map);
-      for (const s of map.screens) s.summary = summaries.get(s.id) ?? "";
-      emitMap(projectRoot, map); // 요약 반영해 재기록
-      emitDashboard(projectRoot, map);
-      console.log(`완료 (${summaries.size}개 화면)`);
+      const need = map.screens.filter((s) => !s.summary); // 증분: 변경된 화면만(요약 비어있음)
+      if (!need.length) {
+        console.log("  요약: 변경 없음 — 전부 보존");
+      } else {
+        process.stdout.write(`  요약 생성 중(LLM, ${need.length}개)… `);
+        const summaries = await summarizeScreens(map, need);
+        for (const s of map.screens) {
+          const v = summaries.get(s.id);
+          if (v) s.summary = v;
+        }
+        emitMap(projectRoot, map); // 요약 반영해 재기록
+        emitDashboard(projectRoot, map);
+        console.log("완료");
+      }
     }
   }
 

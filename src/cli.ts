@@ -5,6 +5,7 @@ import { scan } from "./commands/scan.js";
 import { view } from "./commands/view.js";
 import { prd } from "./commands/prd.js";
 import { mcp } from "./commands/mcp.js";
+import { hook } from "./commands/hook.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
@@ -41,6 +42,12 @@ program
   .command("mcp")
   .description("MCP 서버를 stdio로 실행 (에이전트가 제품 지도를 질의, 키 불필요)")
   .action(() => mcp());
+
+program
+  .command("hook")
+  .description("git hook 설치/제거 — 커밋·머지 시 scan 자동 실행 (diff 자동 갱신)")
+  .argument("<action>", "install | uninstall")
+  .action((action: string) => hook(action));
 
 program.parseAsync().catch((err) => {
   console.error(err instanceof Error ? err.message : err);

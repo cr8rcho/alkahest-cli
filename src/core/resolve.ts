@@ -13,7 +13,7 @@ export interface ResolveInput {
   alkahestVersion: string;
 }
 
-/** 원시 신호(parse) → 2-레이어 ProductMap(ALKAHEST.md §3). */
+/** 원시 신호(parse) → 2-레이어 ProductMap (전체 빌드, ALKAHEST.md §3). */
 export function buildMap(input: ResolveInput): ProductMap {
   const { discovery, parsed, hashes } = input;
   const routes = new Set(discovery.screenFiles.map((f) => f.route));
@@ -26,47 +26,84 @@ export function buildMap(input: ResolveInput): ProductMap {
   for (const file of discovery.screenFiles) {
     const raw = parsed.get(file.relPath);
     if (!raw) continue;
-    const screenId = file.route;
-
-    screens.push({
-      id: screenId,
-      route: file.route,
-      sourceFile: file.relPath,
-      sourceHash: hashes.get(file.relPath) ?? "",
-      title: titleFromRoute(file.route),
-      summary: "",
-      features: raw.features.map((f) => ({
-        kind: f.kind,
-        label: f.label,
-        detail: f.detail,
-        loc: { file: file.relPath, line: f.line },
-      })),
-      components: raw.components,
-    });
-
-    for (const nav of raw.navs) {
-      transitions.push(resolveTransition(screenId, nav, routes, file.relPath));
-    }
-    for (const call of raw.calls) {
-      calls.push(resolveCall(screenId, call, resources, file.relPath));
-    }
+    screens.push(screenFromRaw(file.route, file.relPath, hashes.get(file.relPath) ?? "", raw));
+    transitions.push(...resolveTransitions(file.route, raw.navs, routes, file.relPath));
+    calls.push(...resolveCalls(file.route, raw.calls, file.relPath, resources));
   }
 
-  return {
+  return assembleMap({
     screens,
-    resources: [...resources.values()].sort((a, b) => a.id.localeCompare(b.id)),
     transitions,
     calls,
+    resources: [...resources.values()],
+    hashes,
+    discovery,
+    projectRoot: input.projectRoot,
+    scannedAt: input.scannedAt,
+    alkahestVersion: input.alkahestVersion,
+  });
+}
+
+/** 한 화면 파일의 원시 신호 → Screen 노드 (엣지 제외). */
+export function screenFromRaw(route: string, relPath: string, hash: string, raw: RawScreen): Screen {
+  return {
+    id: route,
+    route,
+    sourceFile: relPath,
+    sourceHash: hash,
+    title: titleFromRoute(route),
+    summary: "",
+    features: raw.features.map((f) => ({ kind: f.kind, label: f.label, detail: f.detail, loc: { file: relPath, line: f.line } })),
+    components: raw.components,
+  };
+}
+
+/** 한 화면의 navs → Transition[] (route 집합 기준 해석). */
+export function resolveTransitions(from: string, navs: RawNav[], routes: Set<string>, file: string): Transition[] {
+  return navs.map((nav) => resolveTransition(from, nav, routes, file));
+}
+
+/** 한 화면의 calls → Call[]. 발견한 Resource 를 resourceMap 에 dedupe 적재. */
+export function resolveCalls(from: string, raw: RawCall[], file: string, resourceMap: Map<string, Resource>): Call[] {
+  return raw.map((call) => resolveCall(from, call, resourceMap, file));
+}
+
+/** 외부 URL 여부. */
+export function isExternalUrl(s: string): boolean {
+  return /^https?:\/\//.test(s);
+}
+
+export interface AssembleInput {
+  screens: Screen[];
+  transitions: Transition[];
+  calls: Call[];
+  resources: Resource[];
+  hashes: Map<string, string>;
+  discovery: Discovery;
+  projectRoot: string;
+  scannedAt: string;
+  alkahestVersion: string;
+}
+
+/** 노드/엣지/리소스 → 최종 ProductMap (메타 채움, 리소스 정렬). */
+export function assembleMap(a: AssembleInput): ProductMap {
+  return {
+    screens: a.screens,
+    resources: a.resources.sort((x, y) => x.id.localeCompare(y.id)),
+    transitions: a.transitions,
+    calls: a.calls,
     meta: {
-      framework: discovery.framework,
-      router: discovery.router,
-      scannedAt: input.scannedAt,
-      projectRoot: input.projectRoot,
-      fileHashes: Object.fromEntries(hashes),
-      alkahestVersion: input.alkahestVersion,
+      framework: a.discovery.framework,
+      router: a.discovery.router,
+      scannedAt: a.scannedAt,
+      projectRoot: a.projectRoot,
+      fileHashes: Object.fromEntries(a.hashes),
+      alkahestVersion: a.alkahestVersion,
     },
   };
 }
+
+// ---------- internals ----------
 
 function resolveTransition(from: string, nav: RawNav, routes: Set<string>, file: string): Transition {
   const loc = { file, line: nav.line };
@@ -74,7 +111,7 @@ function resolveTransition(from: string, nav: RawNav, routes: Set<string>, file:
     return { from, to: null, rawTarget: nav.raw, trigger: nav.trigger, loc };
   }
   const clean = nav.target.split(/[?#]/)[0];
-  if (/^https?:\/\//.test(clean)) {
+  if (isExternalUrl(clean)) {
     return { from, to: clean, trigger: nav.trigger, loc }; // 외부 URL
   }
   let route = clean.startsWith("/") ? clean : "/" + clean;
@@ -82,7 +119,6 @@ function resolveTransition(from: string, nav: RawNav, routes: Set<string>, file:
   if (routes.has(route)) {
     return { from, to: route, trigger: nav.trigger, loc };
   }
-  // 내부 경로 같지만 매칭되는 화면 없음(동적 세그먼트 등) → 미해결
   return { from, to: null, rawTarget: nav.target, trigger: nav.trigger, loc };
 }
 
@@ -92,17 +128,11 @@ function resolveCall(from: string, call: RawCall, resources: Map<string, Resourc
     return { from, to: null, rawTarget: call.raw, trigger: call.trigger, loc };
   }
   const path = call.url.split("#")[0];
-  const external = /^https?:\/\//.test(path);
+  const external = isExternalUrl(path);
   const method = (call.method ?? "GET").toUpperCase();
   const id = `${method} ${path}`;
   if (!resources.has(id)) {
-    resources.set(id, {
-      id,
-      kind: external ? "external" : "endpoint",
-      label: id,
-      method,
-      path,
-    });
+    resources.set(id, { id, kind: external ? "external" : "endpoint", label: id, method, path });
   }
   return { from, to: id, trigger: call.trigger, loc };
 }
@@ -112,7 +142,7 @@ function titleFromRoute(route: string): string {
   if (route === "/") return "Home";
   const last = route.split("/").filter(Boolean).pop() ?? route;
   return last
-    .replace(/^\[(\.\.\.)?(.+?)\]$/, "$2") // [slug] / [...slug] → slug
+    .replace(/^\[(\.\.\.)?(.+?)\]$/, "$2")
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
