@@ -1,38 +1,38 @@
 import type { Feature, Framework, Router } from "../types.js";
 
 /**
- * 프레임워크 어댑터 레이어 (ALKAHEST.md §8 어댑터).
- * discover+parse 만 프레임워크별로 갈리고, resolve/emit/dashboard/MCP 는 공유한다.
- * 새 플랫폼 지원 = 어댑터 하나 추가. 파싱 방식(AST/정규식/tree-sitter)은 어댑터 자유.
+ * Framework adapter layer (ALKAHEST.md §8 adapters).
+ * Only discover+parse differ per framework; resolve/emit/dashboard/MCP are shared.
+ * Supporting a new platform = adding one adapter. The parsing approach (AST/regex/tree-sitter) is up to the adapter.
  */
 
-/** 발견된 화면 파일 하나. id/route/title 은 어댑터가 채운다. */
+/** One discovered screen file. id/route/title are filled in by the adapter. */
 export interface ScreenFile {
-  /** 절대 경로 */
+  /** Absolute path */
   absPath: string;
-  /** projectRoot 기준 상대 경로 (posix) */
+  /** Path relative to projectRoot (posix) */
   relPath: string;
-  /** 안정적 화면 식별자. Next=route("/x"), SwiftUI=View 이름 */
+  /** Stable screen identifier. Next=route("/x"), SwiftUI=View name */
   id: string;
-  /** 라우트 표기 (없으면 id 와 동일) */
+  /** Route notation (same as id if none) */
   route: string;
-  /** 사람이 읽는 이름 */
+  /** Human-readable name */
   title: string;
-  /** 앱 진입점 여부 (@main/App 이 띄우는 루트, 또는 "/" 라우트). */
+  /** Whether this is the app entry point (root launched by @main/App, or the "/" route). */
   isEntry?: boolean;
 }
 
-// ---- parse 단계 원시 신호 (resolve 가 그래프 모델로 변환) ----
+// ---- raw signals from the parse stage (resolve converts them into the graph model) ----
 
 export interface RawNav {
-  /** 정적으로 푼 대상 화면 식별자/URL, 못 풀면 null */
+  /** Statically resolved target screen identifier/URL, null if unresolved */
   target: string | null;
   raw: string;
   trigger: string;
   line: number;
 }
 export interface RawCall {
-  /** 정적으로 푼 엔드포인트 URL, 못 풀면 null */
+  /** Statically resolved endpoint URL, null if unresolved */
   url: string | null;
   method?: string;
   raw: string;
@@ -51,21 +51,21 @@ export interface RawScreen {
   features: RawFeature[];
   components: string[];
   /**
-   * 이 화면이 직접 인스턴스화한 다른 화면 후보 (대문자 생성자 호출).
-   * resolve 가 screenIds 와 교집합만 "contains"(구조적 포함) 엣지로 만든다.
-   * 예: SwiftUI TabView 의 Recents()/Assets(), 부모가 박는 자식 View.
+   * Candidate other screens this screen directly instantiates (capitalized constructor calls).
+   * resolve turns only the intersection with screenIds into "contains" (structural containment) edges.
+   * Example: SwiftUI TabView's Recents()/Assets(), child Views embedded by a parent.
    */
   contains: string[];
 }
 
-/** 프레임워크 어댑터. */
+/** Framework adapter. */
 export interface FrameworkAdapter {
   id: Framework;
   router: Router;
-  /** 이 프로젝트가 이 어댑터 대상인가? (가볍게 판별) */
+  /** Is this project a target for this adapter? (lightweight check) */
   detect(projectRoot: string): boolean;
-  /** 화면 파일 열거 (id/route/title 채움). */
+  /** Enumerate screen files (fills id/route/title). */
   discover(projectRoot: string): ScreenFile[];
-  /** 화면 파일 하나를 파싱해 원시 신호 추출. */
+  /** Parse one screen file to extract raw signals. */
   parse(file: ScreenFile): RawScreen;
 }

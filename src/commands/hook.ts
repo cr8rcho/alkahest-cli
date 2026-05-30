@@ -2,15 +2,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, statSync
 import { join, resolve } from "node:path";
 
 /**
- * diff 시 제품 지도를 자동 갱신하는 git hook 설치/제거 (ALKAHEST.md §10).
- * 증분 로직은 `scan` 안에, 자동 실행은 이 hook이 담당 — 둘을 분리한다.
+ * Install/remove a git hook that auto-refreshes the product map on diffs (ALKAHEST.md §10).
+ * Incremental logic lives in `scan`; this hook only triggers it — the two are separate.
  */
 const HOOKS = ["post-commit", "post-merge"];
 const START = "# >>> alkahest >>>";
 const END = "# <<< alkahest <<<";
 const BLOCK =
   `${START}\n` +
-  `# diff 시 제품 지도 자동 갱신 (ALKAHEST.md §10). 제거: alkahest hook uninstall\n` +
+  `# Auto-refresh the product map on diffs (ALKAHEST.md §10). Remove: alkahest hook uninstall\n` +
   `alkahest scan >/dev/null 2>&1 || npx --no-install alkahest scan >/dev/null 2>&1 || true\n` +
   `${END}\n`;
 
@@ -18,11 +18,11 @@ export async function hook(action: string): Promise<void> {
   const root = resolve(".");
   const gitPath = join(root, ".git");
   if (!existsSync(gitPath)) {
-    console.log("[alkahest] git 저장소가 아닙니다 (.git 없음).");
+    console.log("[alkahest] not a git repository (no .git).");
     return;
   }
   if (!statSync(gitPath).isDirectory()) {
-    console.log("[alkahest] .git 이 파일입니다(worktree/submodule) — hook 수동 설치가 필요합니다.");
+    console.log("[alkahest] .git is a file (worktree/submodule) — install the hook manually.");
     return;
   }
   const hooksDir = join(gitPath, "hooks");
@@ -30,18 +30,18 @@ export async function hook(action: string): Promise<void> {
 
   if (action === "install") {
     for (const h of HOOKS) installOne(join(hooksDir, h));
-    console.log(`[alkahest] git hook 설치: ${HOOKS.join(", ")} → 커밋/머지 시 'alkahest scan'(증분) 자동 실행`);
+    console.log(`[alkahest] git hooks installed: ${HOOKS.join(", ")} → runs 'alkahest scan' (incremental) on commit/merge`);
   } else if (action === "uninstall") {
     for (const h of HOOKS) uninstallOne(join(hooksDir, h));
-    console.log(`[alkahest] git hook 제거: ${HOOKS.join(", ")}`);
+    console.log(`[alkahest] git hooks removed: ${HOOKS.join(", ")}`);
   } else {
-    console.log("사용법: alkahest hook <install|uninstall>");
+    console.log("usage: alkahest hook <install|uninstall>");
   }
 }
 
 function installOne(file: string): void {
   let content = existsSync(file) ? readFileSync(file, "utf8") : "#!/bin/sh\n";
-  if (content.includes(START)) return; // 이미 설치됨 (멱등)
+  if (content.includes(START)) return; // already installed (idempotent)
   if (!content.startsWith("#!")) content = "#!/bin/sh\n" + content;
   if (!content.endsWith("\n")) content += "\n";
   writeFileSync(file, content + "\n" + BLOCK);

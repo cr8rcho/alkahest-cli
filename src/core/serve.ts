@@ -13,8 +13,8 @@ const MIME: Record<string, string> = {
 };
 
 /**
- * `<projectRoot>/.alkahest` 를 로컬 정적 서버로 띄우고 브라우저를 연다.
- * 서버가 이벤트 루프를 유지하므로 프로세스는 Ctrl+C 까지 살아있다.
+ * Serves `<projectRoot>/.alkahest` as a local static server and opens the browser.
+ * The server keeps the event loop alive, so the process stays up until Ctrl+C.
  */
 export async function serveDashboard(projectRoot: string): Promise<void> {
   const root = resolve(projectRoot, OUTPUT_DIR);
@@ -38,7 +38,7 @@ export async function serveDashboard(projectRoot: string): Promise<void> {
   const addr = server.address();
   const port = typeof addr === "object" && addr ? addr.port : 0;
   const url = `http://127.0.0.1:${port}/`;
-  console.log(`[alkahest] 대시보드: ${url}  (Ctrl+C 로 종료)`);
+  console.log(`[alkahest] dashboard: ${url}  (Ctrl+C to stop)`);
   openBrowser(url);
 }
 
@@ -48,6 +48,6 @@ function openBrowser(url: string): void {
   try {
     spawn(cmd, [url], { stdio: "ignore", detached: true, shell: isWin }).unref();
   } catch {
-    /* 브라우저 자동 오픈 실패는 무시 — URL 은 위에 출력됨 */
+    /* ignore browser auto-open failures — the URL is printed above */
   }
 }

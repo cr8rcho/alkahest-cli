@@ -5,8 +5,8 @@ import type { SourceFile, JsxOpeningElement, JsxSelfClosingElement } from "ts-mo
 import type { FrameworkAdapter, ScreenFile, RawScreen } from "./types.js";
 
 /**
- * Next.js app-router 어댑터: `app/**​/page.tsx` 를 화면으로, ts-morph 로 파싱.
- * 화면 id = route ("/dashboard/settings"). 진입점 = 루트 라우트 "/".
+ * Next.js app-router adapter: treats `app/**​/page.tsx` as screens, parses with ts-morph.
+ * Screen id = route ("/dashboard/settings"). Entry point = root route "/".
  */
 const PAGE_RE = /^page\.(tsx|jsx|ts|js)$/;
 
@@ -40,7 +40,7 @@ export const nextAppAdapter: FrameworkAdapter = {
         id: route,
         route,
         title: titleFromRoute(route),
-        isEntry: route === "/", // app-router 진입점 = 루트 라우트
+        isEntry: route === "/", // app-router entry point = root route
       });
     });
     files.sort((a, b) => a.route.localeCompare(b.route));
@@ -72,7 +72,7 @@ function walk(dir: string, onFile: (file: string) => void): void {
   }
 }
 
-/** app-router 파일 경로 → 라우트. 라우트그룹 `(x)` 제거, 동적 `[slug]` 유지. */
+/** app-router file path → route. Strips route groups `(x)`, keeps dynamic `[slug]`. */
 function routeFromAppFile(appDir: string, file: string): string {
   const segs = relative(appDir, file)
     .split(sep)
@@ -91,7 +91,7 @@ function titleFromRoute(route: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ---------- ts-morph 파싱 ----------
+// ---------- ts-morph parsing ----------
 
 const NAV_HOOKS = new Set(["redirect", "permanentRedirect"]);
 const QUERY_HOOKS = new Set(["useQuery", "useMutation", "useSWR", "useSWRMutation", "useInfiniteQuery"]);
@@ -121,10 +121,10 @@ function parseScreen(sf: SourceFile): RawScreen {
         line,
       });
     } else if (tag === "form") {
-      features.push({ kind: "form", label: "폼", detail: "form", line });
+      features.push({ kind: "form", label: "Form", detail: "form", line });
     } else if (tag === "button" || tag === "Button") {
       const text = Node.isJsxOpeningElement(el) ? jsxText(el) : "";
-      features.push({ kind: "button", label: text || "버튼", detail: tag, line });
+      features.push({ kind: "button", label: text || "Button", detail: tag, line });
     } else if (HTML_INPUTS.has(tag)) {
       const label = attrString(el, "placeholder") ?? attrString(el, "name") ?? tag;
       features.push({ kind: "input", label, detail: tag, line });
@@ -142,7 +142,7 @@ function parseScreen(sf: SourceFile): RawScreen {
       if (routerVars.has(obj) && (name === "push" || name === "replace")) {
         navs.push({ target: literalString(args[0]), raw: snippet(ce.getText()), trigger: `router.${name}`, line });
       } else if (name === "map" && callbackReturnsJsx(args)) {
-        features.push({ kind: "list", label: "리스트", detail: `${obj}.map`, line });
+        features.push({ kind: "list", label: "List", detail: `${obj}.map`, line });
       }
       continue;
     }

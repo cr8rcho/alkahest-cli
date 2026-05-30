@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="ko" data-theme="light">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alkahest — Product Map</title>
     <style>
-      /* 미니멀 팔레트 — 라이트 기본, [data-theme="dark"] 로 스왑 (스타일 F) */
+      /* Minimal palette — light by default, swapped via [data-theme="dark"] (style F) */
       :root {
         --bg: #ffffff;
         --panel: #f7f7f8;
@@ -13,10 +13,10 @@
         --line: #e4e4e7;
         --ink: #18181b;
         --muted: #71717a;
-        --node-fill: #ffffff;       /* 화면 */
+        --node-fill: #ffffff;       /* screen */
         --node-stroke: #c4c4cc;
         --node-ink: #27272a;
-        --res-fill: #f4f4f5;        /* 리소스 (F: 옅은 회색 채움) */
+        --res-fill: #f4f4f5;        /* resource (F: light gray fill) */
         --entry: #16a34a;
         --accent: #2563eb;
         --edge: #a1a1aa;
@@ -95,13 +95,13 @@
       .node circle, .node rect, .node path { cursor: pointer; stroke: var(--node-stroke); stroke-width: 1.5px; }
       .node.selected circle, .node.selected rect, .node.selected path { stroke: var(--accent); stroke-width: 2.5px; }
       .node.dim { opacity: 0.2; }
-      /* 호버 미리보기 (선택 안 된 상태에서만): 연결 엣지·이웃을 색으로만 강조(두께 유지) */
+      /* Hover preview (only when nothing is selected): highlight connected edges/neighbors by color only (keep width) */
       .node.hl circle, .node.hl rect, .node.hl path { stroke: var(--ink); }
       .edge { opacity: 0.9; }
       .edge.dim { opacity: 0.08; }
       .edge.hl { stroke: var(--ink) !important; opacity: 1; }
 
-      /* ---- 모바일: 좁은 화면에서는 패널을 하단 시트로 ---- */
+      /* ---- Mobile: on narrow screens, render the panel as a bottom sheet ---- */
       @media (max-width: 640px) {
         body { height: 100dvh; }
         .toolbar { column-gap: 12px; padding: 8px 12px; font-size: 12px; }
@@ -131,7 +131,7 @@
           font-size: 20px; color: var(--muted);
           background: none; border: none; cursor: pointer;
         }
-        /* 시트 손잡이 */
+        /* sheet handle */
         #panel::before {
           content: ""; position: absolute; top: 9px; left: 50%;
           width: 38px; height: 4px; margin-left: -19px;
@@ -144,24 +144,24 @@
     <header class="toolbar">
       <div class="brand">Alkahest<span class="sub">Product Map</span></div>
       <div class="counts" id="counts"></div>
-      <label><input type="checkbox" id="t-trans" checked /> 이동</label>
-      <label><input type="checkbox" id="t-calls" checked /> 호출</label>
+      <label><input type="checkbox" id="t-trans" checked /> Navigate</label>
+      <label><input type="checkbox" id="t-calls" checked /> Call</label>
       <div class="legend">
-        <span style="font-weight:700">▶ 시작</span>
-        <span><span class="swatch" style="background: var(--node-fill); border: 1.5px solid var(--node-stroke)"></span>화면</span>
-        <span><span class="swatch" style="background: var(--res-fill); border: 1.5px solid var(--node-stroke); border-radius: 2px"></span>리소스</span>
-        <span><span class="edge" style="border-color: var(--edge)"></span>이동</span>
-        <span><span class="edge" style="border-top-style: dotted; border-color: var(--edge)"></span>포함</span>
-        <span><span class="edge" style="border-top-style: dashed; border-color: var(--edge)"></span>호출</span>
+        <span style="font-weight:700">▶ Start</span>
+        <span><span class="swatch" style="background: var(--node-fill); border: 1.5px solid var(--node-stroke)"></span>Screen</span>
+        <span><span class="swatch" style="background: var(--res-fill); border: 1.5px solid var(--node-stroke); border-radius: 2px"></span>Resource</span>
+        <span><span class="edge" style="border-color: var(--edge)"></span>Navigate</span>
+        <span><span class="edge" style="border-top-style: dotted; border-color: var(--edge)"></span>Contains</span>
+        <span><span class="edge" style="border-top-style: dashed; border-color: var(--edge)"></span>Call</span>
       </div>
-      <button class="theme-toggle" id="fit-btn" aria-label="화면 맞춤">⤢ 맞춤</button>
-      <button class="theme-toggle" id="theme-toggle" aria-label="테마 전환">🌗</button>
+      <button class="theme-toggle" id="fit-btn" aria-label="Fit to view">⤢ Fit</button>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">🌗</button>
     </header>
     <main>
       <svg id="graph">
         <defs>
-          <!-- 단일 화살표(이동·호출 공용). userSpaceOnUse: 선 두께와 무관하게 크기 고정 -->
-          <!-- 열린 V자 화살표(채운 삼각형 대신) — 선에 자연스럽게 녹아 덜 도드라짐 -->
+          <!-- single arrow (shared by transitions and calls). userSpaceOnUse: fixed size regardless of line width -->
+          <!-- open V-shaped arrow (instead of a filled triangle) — blends into the line so it stands out less -->
           <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto">
             <path d="M1,1 L8,5 L1,9" fill="none" stroke="var(--edge)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
           </marker>
@@ -172,9 +172,9 @@
         </g>
       </svg>
       <aside id="panel">
-        <button class="panel-close" id="panel-close" aria-label="닫기">×</button>
+        <button class="panel-close" id="panel-close" aria-label="Close">×</button>
         <div id="panel-body">
-          <p class="hint">노드를 클릭하면 화면의 기능·이동·호출을 봅니다.<br /><br />드래그로 노드 이동, 휠/핀치로 확대/축소, 빈 곳 드래그로 이동.</p>
+          <p class="hint">Click a node to see its features, transitions, and calls.<br /><br />Drag to move a node, wheel/pinch to zoom, drag empty space to pan.</p>
         </div>
       </aside>
     </main>
@@ -184,11 +184,11 @@
       const MAP = JSON.parse(document.getElementById("alkahest-data").textContent);
       const SVGNS = "http://www.w3.org/2000/svg";
 
-      // ---- 인덱스 ----
+      // ---- indexes ----
       const screensById = new Map(MAP.screens.map((s) => [s.id, s]));
       const resourcesById = new Map(MAP.resources.map((r) => [r.id, r]));
 
-      // ---- 노드/엣지 그래프 모델 ----
+      // ---- node/edge graph model ----
       const nodes = [];
       const nodeByKey = new Map();
       function addNode(n) { nodes.push(n); nodeByKey.set(n.key, n); return n; }
@@ -199,8 +199,8 @@
       for (const t of MAP.transitions) {
         if (t.to == null) continue;
         const target = nodeByKey.get("s:" + t.to);
-        if (!target) continue; // 외부 URL/미해결은 그래프에 안 그림 (패널에 표시)
-        // rel: "contains"(구조적 포함) vs "navigate"(사용자 이동). 둘 다 "transition" 레이어.
+        if (!target) continue; // external URLs/unresolved aren't drawn in the graph (shown in the panel)
+        // rel: "contains" (structural containment) vs "navigate" (user navigation). Both are the "transition" layer.
         edges.push({ source: nodeByKey.get("s:" + t.from), target, kind: "transition", rel: t.kind || "navigate" });
       }
       for (const c of MAP.calls) {
@@ -214,18 +214,18 @@
         const navCount = MAP.transitions.filter((t) => (t.kind || "navigate") === "navigate").length;
         const containCount = MAP.transitions.length - navCount;
         document.getElementById("counts").textContent =
-          MAP.screens.length + " 화면 · " + MAP.resources.length + " 리소스 · " +
-          navCount + " 이동" + (containCount ? " · " + containCount + " 포함" : "") +
-          " · " + MAP.calls.length + " 호출";
+          MAP.screens.length + " screens · " + MAP.resources.length + " resources · " +
+          navCount + " navigate" + (containCount ? " · " + containCount + " contains" : "") +
+          " · " + MAP.calls.length + " calls";
       }
 
-      // ====== force-directed 레이아웃 (레퍼런스 방식) ======
-      // 얽힌 화면 그래프엔 force 가 자연스럽다. depth 강제 안 함.
-      // 결정론적: Math.random 대신 고정 시드 PRNG → 매번 동일 배치.
+      // ====== force-directed layout (reference approach) ======
+      // Force is natural for a tangled screen graph. Depth is not enforced.
+      // Deterministic: a fixed-seed PRNG instead of Math.random → identical layout every time.
       const svg = document.getElementById("graph");
       let W = (svg.clientWidth || 800), H = (svg.clientHeight || 600);
 
-      // 시드 PRNG (mulberry32) — 노드 수로 시드 고정해 항상 같은 결과.
+      // Seeded PRNG (mulberry32) — seeded by node count for the same result every time.
       let _seed = 0x9e3779b9 ^ nodes.length;
       function rng() {
         _seed |= 0; _seed = (_seed + 0x6D2B79F5) | 0;
@@ -234,14 +234,14 @@
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
       }
 
-      // 진입점(있으면 중앙 근처에 약하게 고정 — 시작점 가늠)
+      // Entry points (if any, weakly pinned near the center — to hint at the start point)
       const entryKeys = new Set(MAP.screens.filter((s) => s.isEntry).map((s) => "s:" + s.id));
 
-      // 이웃(연결) 인접 — 스프링용
+      // Neighbor (connection) adjacency — for springs
       const adj = new Map(nodes.map((n) => [n.key, []]));
       for (const e of edges) { adj.get(e.source.key).push(e.target); adj.get(e.target.key).push(e.source); }
 
-      // 초기 배치: 원형 + 시드 지터 (force 가 펼칠 출발점)
+      // Initial placement: circular + seeded jitter (the starting point force will spread out)
       const cx0 = W / 2, cy0 = H / 2, R0 = Math.min(W, H) * 0.42;
       nodes.forEach((n, i) => {
         const a = (i / nodes.length) * Math.PI * 2;
@@ -250,18 +250,18 @@
         n.vx = 0; n.vy = 0;
       });
 
-      // ---- 상호작용 상태 (step 이 dragging 참조) ----
+      // ---- interaction state (step references dragging) ----
       let dragging = null, panStart = null, selected = null;
 
-      // ---- force 시뮬레이션 ----
-      // gravity 는 초기 정착에서만(노드들을 화면 안으로 모음). settled 이후엔 0 →
-      // 드래그로 옮긴 노드가 중앙으로 안 끌려가고 놓은 자리 근처에 머문다.
+      // ---- force simulation ----
+      // Gravity applies only during initial settling (gathers nodes into view). After settled it's 0 →
+      // a node moved by dragging isn't pulled toward the center and stays near where it was dropped.
       let alpha = 1, settled = false;
       const REPULSION = 16000, SPRING = 0.025, SPRING_LEN = 180, GRAVITY = 0.012, DAMP = 0.82;
       const REPULSE_RANGE = 320, REPULSE_RANGE2 = REPULSE_RANGE * REPULSE_RANGE;
       function step() {
-        const grav = settled ? 0 : GRAVITY; // 정착 후 중력 OFF
-        // 반발(쌍) — 일정 거리(REPULSE_RANGE) 밖이면 무시. 먼 노드까지 밀어내는 "불도저" 방지.
+        const grav = settled ? 0 : GRAVITY; // gravity OFF after settling
+        // Repulsion (pairwise) — ignored beyond a fixed distance (REPULSE_RANGE). Avoids a "bulldozer" that pushes distant nodes.
         for (let i = 0; i < nodes.length; i++) {
           for (let j = i + 1; j < nodes.length; j++) {
             const a = nodes[i], b = nodes[j];
@@ -273,7 +273,7 @@
             a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
           }
         }
-        // 스프링(엣지)
+        // Springs (edges)
         for (const e of edges) {
           const a = e.source, b = e.target;
           let dx = b.x - a.x, dy = b.y - a.y;
@@ -283,7 +283,7 @@
           a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
         }
         for (const n of nodes) {
-          if (n === dragging) { n.vx = 0; n.vy = 0; continue; } // 드래그 노드: 속도 누적 금지(놓을 때 안 튕김)
+          if (n === dragging) { n.vx = 0; n.vy = 0; continue; } // dragged node: no velocity accumulation (no bounce on release)
           if (grav) { n.vx += (cx0 - n.x) * grav; n.vy += (cy0 - n.y) * grav; }
           n.vx *= DAMP; n.vy *= DAMP;
           n.x += n.vx * alpha; n.y += n.vy * alpha;
@@ -292,12 +292,12 @@
       }
 
 
-      // ---- 렌더 ----
+      // ---- render ----
       const gEdges = document.getElementById("edges");
       const gNodes = document.getElementById("nodes");
 
-      // (force 레이아웃엔 depth 밴드 없음 — 열 개념이 없으므로)
-      // 같은 (source,target) 쌍에 여러 엣지가 있으면 부채꼴로 벌리기 위한 인덱스
+      // (no depth bands in the force layout — there is no column concept)
+      // Index for fanning out multiple edges that share the same (source,target) pair
       const pairCount = new Map();
       for (const e of edges) {
         const key = e.source.key + "|" + e.target.key;
@@ -326,7 +326,7 @@
       const nodeEls = nodes.map((n) => {
         const g = document.createElementNS(SVGNS, "g");
         g.setAttribute("class", "node");
-        // 스타일 F: 화면=흰 원 / 리소스=옅은 회색 사각. 시작점은 라벨에 ▶ 접두로 표시.
+        // Style F: screen=white circle / resource=light gray square. Start points get a ▶ prefix on the label.
         const isEntry = n.type === "screen" && entryKeys.has(n.key);
         let shape;
         if (n.type === "screen") {
@@ -356,7 +356,7 @@
 
       function paint() {
         for (const e of edges) {
-          // 직선 엣지(노드 가장자리 트림). 화살표가 노드에 안 가리게.
+          // Straight edge (trimmed at node edges) so the arrow isn't hidden behind the node.
           const a = e.source, b = e.target;
           const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
           const ux = dx / len, uy = dy / len;
@@ -368,12 +368,12 @@
         for (const n of nodes) n.el.setAttribute("transform", "translate(" + n.x + "," + n.y + ")");
       }
 
-      // ---- 시뮬레이션 루프: 정착되면 멈추고 화면 맞춤 ----
-      // 드래그 중에는 alpha 를 계속 높게 유지 → 잡은 노드를 따라 이웃이 활발히 따라옴.
+      // ---- simulation loop: stop once settled, then fit to view ----
+      // While dragging, keep alpha high → neighbors actively follow the grabbed node.
       let fitted = false;
       function loop() {
         if (dragging) {
-          // 드래그 중: 약하게만 시뮬(alpha 0.12) → 이웃이 부드럽게 따라오되 놓을 때 안 튕김.
+          // While dragging: simulate only weakly (alpha 0.12) → neighbors follow smoothly but don't bounce on release.
           alpha = 0.12; step(); paint();
         } else if (alpha > 0.02) {
           step(); paint();
@@ -382,9 +382,9 @@
         }
         requestAnimationFrame(loop);
       }
-      // loop 시작은 스크립트 끝(fitToView/tx 선언 이후)에서 — TDZ 회피.
+      // The loop is started at the end of the script (after fitToView/tx are declared) — to avoid TDZ.
 
-      // ---- 레이어 토글 ----
+      // ---- layer toggles ----
       const tTrans = document.getElementById("t-trans"), tCalls = document.getElementById("t-calls");
       function applyLayers() {
         for (const e of edges) e.el.style.display =
@@ -393,9 +393,9 @@
       }
       tTrans.onchange = tCalls.onchange = applyLayers;
 
-      // ---- 선택/하이라이트 ---- (selected 는 위에서 선언됨)
+      // ---- selection/highlight ---- (selected is declared above)
       function select(n) {
-        hoverOff(); // 호버 강조 정리
+        hoverOff(); // clear hover highlight
         selected = n;
         const connected = new Set([n.key]);
         for (const e of edges) {
@@ -404,7 +404,7 @@
         }
         for (const m of nodes) {
           m.el.classList.toggle("dim", !connected.has(m.key));
-          m.el.classList.toggle("selected", m === n); // 선택 노드 액센트 링
+          m.el.classList.toggle("selected", m === n); // accent ring on the selected node
         }
         for (const e of edges) e.el.classList.toggle("dim", e.source !== n && e.target !== n);
         document.body.classList.add("panel-open");
@@ -414,10 +414,10 @@
         selected = null;
         for (const m of nodes) { m.el.classList.remove("dim"); m.el.classList.remove("selected"); }
         for (const e of edges) e.el.classList.remove("dim");
-        panel.innerHTML = '<p class="hint">노드를 클릭하면 화면의 기능·이동·호출을 봅니다.</p>';
+        panel.innerHTML = '<p class="hint">Click a node to see its features, transitions, and calls.</p>';
         document.body.classList.remove("panel-open");
       }
-      // ---- 호버 미리보기: 선택 안 된 상태 + 드래그 중 아닐 때만, 연결 엣지·이웃 강조 ----
+      // ---- hover preview: only when nothing is selected and not dragging, highlight connected edges/neighbors ----
       let hovered = null;
       function hoverOn(n) {
         if (selected || dragging) return;
@@ -435,19 +435,19 @@
         for (const m of nodes) m.el.classList.remove("hl");
       }
 
-      // svg 빈 곳 탭 → clearSelection 은 pointerup(탭) 핸들러에서 처리.
+      // Tapping empty svg space → clearSelection is handled in the pointerup (tap) handler.
       document.getElementById("panel-close").addEventListener("click", clearSelection);
 
-      // ---- 테마 토글 (라이트 기본 ↔ 다크) ----
+      // ---- theme toggle (light by default ↔ dark) ----
       document.getElementById("theme-toggle").addEventListener("click", () => {
         const h = document.documentElement;
         h.setAttribute("data-theme", h.getAttribute("data-theme") === "dark" ? "light" : "dark");
       });
-      // ---- 화면 맞춤 버튼 ----
+      // ---- fit-to-view button ----
       document.getElementById("fit-btn").addEventListener("click", fitToView);
 
-      // ---- 패널 ----
-      const panel = document.getElementById("panel-body"); // 내용 컨테이너(닫기버튼/핸들은 보존)
+      // ---- panel ----
+      const panel = document.getElementById("panel-body"); // content container (close button/handle are preserved)
       const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
       function li(inner, cls) { return "<li" + (cls ? ' class="' + cls + '"' : "") + ">" + inner + "</li>"; }
       function listOr(items, emptyMsg) { return items.length ? "<ul>" + items.join("") + "</ul>" : '<p class="empty">' + emptyMsg + "</p>"; }
@@ -464,14 +464,14 @@
         const feats = s.features.map((f) =>
           li('<span class="tag">[' + f.kind + "]</span> " + esc(f.label) + (f.loc ? '<span class="lineno">L' + f.loc.line + "</span>" : "")));
         const navItem = (t) => {
-          const label = t.to ? (screensById.has(t.to) ? esc(screensById.get(t.to).title || t.to) : esc(t.to)) : esc(t.rawTarget || "미해결");
+          const label = t.to ? (screensById.has(t.to) ? esc(screensById.get(t.to).title || t.to) : esc(t.to)) : esc(t.rawTarget || "unresolved");
           const cls = t.to && screensById.has(t.to) ? "clickable" : "";
           const key = t.to && screensById.has(t.to) ? ' data-sel="s:' + esc(t.to) + '"' : "";
           return "<li" + (cls ? ' class="' + cls + '"' : "") + key + '><span class="tag">' + esc(t.trigger) + "</span> → " + label +
             '<span class="lineno">L' + t.loc.line + "</span></li>";
         };
         const callItem = (c) => {
-          const label = c.to ? esc(c.to) : esc(c.rawTarget || "미해결");
+          const label = c.to ? esc(c.to) : esc(c.rawTarget || "unresolved");
           const cls = c.to ? "clickable" : "";
           const key = c.to ? ' data-sel="r:' + esc(c.to) + '"' : "";
           return "<li" + (cls ? ' class="' + cls + '"' : "") + key + '><span class="tag">' + esc(c.trigger) + "</span> " + label +
@@ -481,11 +481,11 @@
           "<h2>" + esc(s.title) + "</h2>" +
           '<div class="route">' + esc(s.route) + "</div>" +
           '<div class="src">' + esc(s.sourceFile) + "</div>" +
-          (s.summary ? "<section><h3>요약</h3><p>" + esc(s.summary) + "</p></section>" : "") +
-          "<section><h3>기능 (" + s.features.length + ")</h3>" + listOr(feats, "추출된 UI 기능 없음") + "</section>" +
-          "<section><h3>나가는 이동 (" + out.length + ")</h3>" + listOr(out.map(navItem), "없음") + "</section>" +
-          "<section><h3>부르는 리소스 (" + calls.length + ")</h3>" + listOr(calls.map(callItem), "없음") + "</section>" +
-          "<section><h3>들어오는 이동 (" + inc.length + ")</h3>" + listOr(inc.map(navItem), "없음") + "</section>";
+          (s.summary ? "<section><h3>Summary</h3><p>" + esc(s.summary) + "</p></section>" : "") +
+          "<section><h3>Features (" + s.features.length + ")</h3>" + listOr(feats, "No UI features extracted") + "</section>" +
+          "<section><h3>Outgoing (" + out.length + ")</h3>" + listOr(out.map(navItem), "None") + "</section>" +
+          "<section><h3>Calls (" + calls.length + ")</h3>" + listOr(calls.map(callItem), "None") + "</section>" +
+          "<section><h3>Incoming (" + inc.length + ")</h3>" + listOr(inc.map(navItem), "None") + "</section>";
         wirePanelLinks();
       }
 
@@ -500,7 +500,7 @@
           "<h2>" + esc(r.label) + "</h2>" +
           '<div class="route">' + esc(r.kind) + (r.method ? " · " + esc(r.method) : "") + "</div>" +
           '<div class="src">' + esc(r.path || "") + "</div>" +
-          "<section><h3>함께 부르는 화면 (" + callers.length + ")</h3>" + listOr(items, "없음") + "</section>";
+          "<section><h3>Called by screens (" + callers.length + ")</h3>" + listOr(items, "None") + "</section>";
         wirePanelLinks();
       }
 
@@ -516,12 +516,12 @@
       function applyTransform() { viewport.setAttribute("transform", "translate(" + tx + " " + ty + ") scale(" + k + ")"); }
       function toWorld(cx, cy) { const rect = svg.getBoundingClientRect(); return { x: (cx - rect.left - tx) / k, y: (cy - rect.top - ty) / k }; }
 
-      // 전체 그래프가 화면에 들어오게 맞춤 (여백 40px, 최대 1.3배)
+      // Fit the whole graph into view (40px margin, max 1.3x)
       function fitToView() {
         if (!nodes.length) return;
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const n of nodes) {
-          const r = (n.r || 10) + 60; // 라벨 여유
+          const r = (n.r || 10) + 60; // room for the label
           minX = Math.min(minX, n.x - r); maxX = Math.max(maxX, n.x + r);
           minY = Math.min(minY, n.y - r); maxY = Math.max(maxY, n.y + r);
         }
@@ -533,8 +533,8 @@
         applyTransform();
       }
 
-      // dragging, panStart 는 위에서 선언됨.
-      // 탭 vs 드래그 구분: pointerdown 시점만 기록하고, 임계값(4px) 넘게 움직이면 드래그로 승격.
+      // dragging, panStart are declared above.
+      // Tap vs drag: record only the pointerdown position, and promote to a drag once movement exceeds the threshold (4px).
       const DRAG_THRESHOLD = 4;
       let down = null; // {node|null, x, y, moved, pointerId}
 
@@ -544,7 +544,7 @@
         svg.setPointerCapture(ev.pointerId);
       }
       svg.addEventListener("pointerdown", (ev) => {
-        if (down) return; // 노드에서 이미 시작됨
+        if (down) return; // already started on a node
         down = { node: null, x: ev.clientX, y: ev.clientY, moved: false, pointerId: ev.pointerId };
         panStart = { x: ev.clientX - tx, y: ev.clientY - ty };
         svg.setPointerCapture(ev.pointerId);
@@ -553,18 +553,18 @@
         if (!down) return;
         if (!down.moved && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > DRAG_THRESHOLD) {
           down.moved = true;
-          if (down.node) { dragging = down.node; fitted = true; } // 드래그 승격(alpha는 loop가 관리)
+          if (down.node) { dragging = down.node; fitted = true; } // promote to drag (alpha is managed by loop)
         }
         if (!down.moved) return;
-        if (dragging) { const w = toWorld(ev.clientX, ev.clientY); dragging.x = w.x; dragging.y = w.y; dragging.vx = 0; dragging.vy = 0; } // force 라 2D 자유
+        if (dragging) { const w = toWorld(ev.clientX, ev.clientY); dragging.x = w.x; dragging.y = w.y; dragging.vx = 0; dragging.vy = 0; } // free 2D since it's force-based
         else if (panStart) { tx = ev.clientX - panStart.x; ty = ev.clientY - panStart.y; applyTransform(); }
       });
       svg.addEventListener("pointerup", () => {
-        if (down && !down.moved) {       // 안 움직였으면 = 탭
+        if (down && !down.moved) {       // didn't move = tap
           if (down.node) select(down.node);
           else clearSelection();
         } else if (dragging) {
-          // 놓을 때: 낮은 alpha 로 짧게 진정 → 튕김 없이 놓은 자리 근처에서 정착.
+          // On release: briefly settle with a low alpha → no bounce, settles near where it was dropped.
           alpha = 0.06;
         }
         dragging = null; panStart = null; down = null;
@@ -582,7 +582,7 @@
       window.addEventListener("resize", () => { W = (svg.clientWidth || 800); H = (svg.clientHeight || 600); fitToView(); });
       applyLayers();
 
-      // ---- 시뮬레이션 시작 (force 정착 후 자동 화면 맞춤) ----
+      // ---- start the simulation (auto fit-to-view after force settles) ----
       loop();
     </script>
   </body>

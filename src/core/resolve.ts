@@ -5,7 +5,7 @@ export interface ResolveInput {
   files: ScreenFile[];
   /** key = ScreenFile.relPath */
   parsed: Map<string, RawScreen>;
-  /** key = ScreenFile.relPath → 내용 해시 */
+  /** key = ScreenFile.relPath → content hash */
   hashes: Map<string, string>;
   framework: Framework;
   router: Router;
@@ -14,7 +14,7 @@ export interface ResolveInput {
   alkahestVersion: string;
 }
 
-/** 원시 신호(parse) → 2-레이어 ProductMap (전체 빌드, ALKAHEST.md §3). 어댑터 무관. */
+/** Raw signals (parse) → 2-layer ProductMap (full build, ALKAHEST.md §3). Adapter-agnostic. */
 export function buildMap(input: ResolveInput): ProductMap {
   const { files, parsed, hashes } = input;
   const screenIds = new Set(files.map((f) => f.id));
@@ -30,7 +30,7 @@ export function buildMap(input: ResolveInput): ProductMap {
     screens.push(screenFromRaw(file, hashes.get(file.relPath) ?? "", raw));
     const navTrans = resolveTransitions(file.id, raw.navs, screenIds, file.relPath);
     transitions.push(...navTrans);
-    // 포함(contains): 이 화면이 직접 인스턴스화한 다른 화면 → 구조적 흐름(진입점→탭 등). §11
+    // contains: other screens this screen directly instantiates → structural flow (entry point→tabs, etc.). §11
     transitions.push(...resolveContains(file.id, raw.contains, screenIds, navTrans, file.relPath));
     calls.push(...resolveCalls(file.id, raw.calls, file.relPath, resources));
   }
@@ -49,7 +49,7 @@ export function buildMap(input: ResolveInput): ProductMap {
   });
 }
 
-/** 한 화면 파일의 원시 신호 → Screen 노드 (엣지 제외). title/id 는 어댑터가 정한 값을 사용. */
+/** One screen file's raw signals → Screen node (excluding edges). title/id use the values the adapter assigned. */
 export function screenFromRaw(file: ScreenFile, hash: string, raw: RawScreen): Screen {
   return {
     id: file.id,
@@ -64,14 +64,14 @@ export function screenFromRaw(file: ScreenFile, hash: string, raw: RawScreen): S
   };
 }
 
-/** 한 화면의 navs → Transition[] (화면 id 집합 기준 해석). */
+/** A screen's navs → Transition[] (resolved against the set of screen ids). */
 export function resolveTransitions(from: string, navs: RawNav[], screenIds: Set<string>, file: string): Transition[] {
   return navs.map((nav) => resolveTransition(from, nav, screenIds, file));
 }
 
 /**
- * 화면이 인스턴스화한 자식 화면 → "contains" 엣지 (구조적 흐름, 시작점 판별용).
- * contains 후보 중 실제 화면(screenIds)인 것만, 자기 자신·이미 nav 로 연결된 것은 제외.
+ * Child screens a screen instantiates → "contains" edges (structural flow, for identifying the start point).
+ * Only contains candidates that are real screens (screenIds); excludes itself and any already linked via nav.
  */
 export function resolveContains(
   from: string,
@@ -91,7 +91,7 @@ export function resolveContains(
   return out;
 }
 
-/** 한 화면의 calls → Call[]. 발견한 Resource 를 resourceMap 에 dedupe 적재. */
+/** A screen's calls → Call[]. Loads discovered Resources into resourceMap, deduplicated. */
 export function resolveCalls(from: string, raw: RawCall[], file: string, resourceMap: Map<string, Resource>): Call[] {
   return raw.map((call) => resolveCall(from, call, resourceMap, file));
 }
@@ -113,7 +113,7 @@ export interface AssembleInput {
   alkahestVersion: string;
 }
 
-/** 노드/엣지/리소스 → 최종 ProductMap (메타 채움, 리소스 정렬). */
+/** Nodes/edges/resources → final ProductMap (fills meta, sorts resources). */
 export function assembleMap(a: AssembleInput): ProductMap {
   return {
     screens: a.screens,

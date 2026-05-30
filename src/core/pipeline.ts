@@ -19,7 +19,7 @@ const require = createRequire(import.meta.url);
 const pkg = require("../../package.json") as { version: string };
 
 export interface ScanOptions {
-  /** 기준선(map.json) 무시하고 전체 재스캔 (ALKAHEST.md §10) */
+  /** Ignore the baseline (map.json) and do a full rescan (ALKAHEST.md §10) */
   full?: boolean;
 }
 
@@ -30,9 +30,9 @@ export interface ScanResult {
 }
 
 /**
- * 코어 파이프라인 detect→discover→parse→resolve→emit (콘솔 출력 없음).
- * 프레임워크는 어댑터로 자동 선택(ALKAHEST.md §8). 기본 증분(§10).
- * 화면을 못 찾으면 null. CLI(scan)와 MCP 서버가 공유한다.
+ * Core pipeline detect→discover→parse→resolve→emit (no console output).
+ * Framework is auto-selected via adapters (ALKAHEST.md §8). Incremental by default (§10).
+ * Null if no screens are found. Shared by the CLI (scan) and the MCP server.
  */
 export function runScan(projectRoot: string, options: ScanOptions = {}): ScanResult | null {
   const adapter = selectAdapter(projectRoot);
@@ -98,7 +98,7 @@ function incrementalBuild(
 
     if (unchanged) {
       reused++;
-      screens.push(prevScreen); // summary 포함 그대로 보존
+      screens.push(prevScreen); // preserve as-is, including summary
       transitions.push(...prev.transitions.filter((t) => t.loc.file === file.relPath));
       for (const c of prev.calls.filter((c) => c.loc.file === file.relPath)) {
         calls.push(c);
@@ -118,7 +118,7 @@ function incrementalBuild(
     }
   }
 
-  // 재사용 엣지를 새 화면 집합에 맞춰 재해석: 사라진 화면을 가리키는 내부 이동은 미해결로.
+  // Re-resolve reused edges against the new screen set: internal transitions pointing to a vanished screen become unresolved.
   for (const t of transitions) {
     if (t.to && !isExternalUrl(t.to) && !screenIds.has(t.to)) {
       t.rawTarget = t.rawTarget ?? t.to;
@@ -141,7 +141,7 @@ function incrementalBuild(
   return { map, stats: { reused, reparsed, total: screens.length, incremental: true } };
 }
 
-/** 기존 `.alkahest/map.json` 을 읽는다(없으면 null). */
+/** Reads an existing `.alkahest/map.json` (null if absent). */
 export function loadMap(projectRoot: string): ProductMap | null {
   const file = join(projectRoot, OUTPUT_DIR, "map.json");
   if (!existsSync(file)) return null;
@@ -152,7 +152,7 @@ export function loadMap(projectRoot: string): ProductMap | null {
   }
 }
 
-/** map.json 이 있으면 읽고, 없으면 즉석 스캔. 둘 다 실패하면 null. */
+/** Reads map.json if present, otherwise scans on the fly. Null if both fail. */
 export function loadOrScan(projectRoot: string): ProductMap | null {
   return loadMap(projectRoot) ?? runScan(projectRoot)?.map ?? null;
 }

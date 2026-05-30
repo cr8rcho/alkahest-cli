@@ -3,15 +3,15 @@ import { join, relative, sep, basename } from "node:path";
 import type { FrameworkAdapter, ScreenFile, RawScreen, RawNav, RawCall, RawFeature } from "./types.js";
 
 /**
- * SwiftUI 어댑터 (첫 비-JS 어댑터, ALKAHEST.md §8).
- * 화면 = `struct X: View`. 파싱은 의존성 0 휴리스틱(라인 스캔).
- * 나중에 tree-sitter-swift 로 교체 가능(인터페이스 동일).
+ * SwiftUI adapter (first non-JS adapter, ALKAHEST.md §8).
+ * Screen = `struct X: View`. Parsing uses zero-dependency heuristics (line scan).
+ * Can later be swapped for tree-sitter-swift (same interface).
  *
- * 매핑:
- *  - 이동: NavigationLink(destination:) / .sheet / .fullScreenCover / .navigationDestination → 대상 View
- *  - 포함: TabView Tab{}/embed 가 인스턴스화하는 자식 View → contains (resolve 에서 엣지화)
- *  - 호출: URL(string:) / "https://…" / URLRequest(url:) → 엔드포인트
- *  - 기능: Button / TextField / Toggle / Picker / List / ForEach / Form …
+ * Mapping:
+ *  - transition: NavigationLink(destination:) / .sheet / .fullScreenCover / .navigationDestination → target View
+ *  - containment: child Views instantiated by TabView Tab{}/embed → contains (turned into edges in resolve)
+ *  - call: URL(string:) / "https://…" / URLRequest(url:) → endpoint
+ *  - feature: Button / TextField / Toggle / Picker / List / ForEach / Form …
  */
 
 const VIEW_STRUCT = /\bstruct\s+([A-Za-z_]\w*)\s*:\s*[^{]*\bView\b/;
@@ -36,7 +36,7 @@ export const swiftUiAdapter: FrameworkAdapter = {
     let entryView: string | null = null;
     walkSwift(projectRoot, (file) => {
       const src = safeRead(file);
-      if (!entryView) entryView = entryViewIn(src); // @main App 이 띄우는 루트 View
+      if (!entryView) entryView = entryViewIn(src); // root View launched by the @main App
       const primary = primaryView(file, src);
       if (!primary) return;
       files.push({
@@ -73,7 +73,7 @@ function walkSwift(dir: string, onFile: (file: string) => void): void {
     if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (SKIP_DIRS.test(entry.name)) continue; // 죽은 코드 폴더 제외
+      if (SKIP_DIRS.test(entry.name)) continue; // skip dead-code folders
       walkSwift(full, onFile);
     } else if (entry.name.endsWith(".swift")) {
       onFile(full);
@@ -89,7 +89,7 @@ function safeRead(file: string): string {
   }
 }
 
-/** 파일의 대표 View: 파일명과 같은 View 우선, 없으면 첫 View struct. 없으면 null. */
+/** A file's primary View: prefer the View matching the filename, else the first View struct. Null if none. */
 function primaryView(file: string, src: string): string | null {
   const names: string[] = [];
   for (const line of src.split("\n")) {
@@ -102,8 +102,8 @@ function primaryView(file: string, src: string): string | null {
 }
 
 /**
- * `@main struct X: App` 의 body 에서 처음 인스턴스화하는 View → 앱 진입점.
- * 예: iobookApp.body → `ContentView()` → "ContentView".
+ * The first View instantiated in the body of `@main struct X: App` → app entry point.
+ * Example: iobookApp.body → `ContentView()` → "ContentView".
  */
 function entryViewIn(src: string): string | null {
   if (!/@main/.test(src) || !/:\s*App\b/.test(src)) return null;
@@ -124,12 +124,12 @@ const NAV_CONSTRUCTS: Array<{ re: RegExp; trigger: string }> = [
 ];
 
 const FEATURE_RULES: Array<{ re: RegExp; kind: RawFeature["kind"]; label: (m: RegExpMatchArray) => string }> = [
-  { re: /\bButton\s*\(\s*"([^"]*)"/, kind: "button", label: (m) => m[1] || "버튼" },
-  { re: /\bButton\s*\{/, kind: "button", label: () => "버튼" },
-  { re: /\b(?:TextField|SecureField)\s*\(\s*"([^"]*)"/, kind: "input", label: (m) => m[1] || "입력" },
-  { re: /\b(?:Toggle|Picker|Stepper|Slider|DatePicker)\s*\(\s*"([^"]*)"/, kind: "input", label: (m) => m[1] || "입력" },
-  { re: /\bForm\s*\{/, kind: "form", label: () => "폼" },
-  { re: /\b(?:List|ForEach)\b/, kind: "list", label: () => "리스트" },
+  { re: /\bButton\s*\(\s*"([^"]*)"/, kind: "button", label: (m) => m[1] || "Button" },
+  { re: /\bButton\s*\{/, kind: "button", label: () => "Button" },
+  { re: /\b(?:TextField|SecureField)\s*\(\s*"([^"]*)"/, kind: "input", label: (m) => m[1] || "Input" },
+  { re: /\b(?:Toggle|Picker|Stepper|Slider|DatePicker)\s*\(\s*"([^"]*)"/, kind: "input", label: (m) => m[1] || "Input" },
+  { re: /\bForm\s*\{/, kind: "form", label: () => "Form" },
+  { re: /\b(?:List|ForEach)\b/, kind: "list", label: () => "List" },
 ];
 
 const VIEW_INSTANCE = /\b([A-Z]\w*View)\s*\(/g;
@@ -138,7 +138,7 @@ const URL_STRING = /URL\(string:\s*"([^"]+)"|"(https?:\/\/[^"]+)"/;
 const URL_REQUEST = /URLRequest\(\s*url:/;
 const CTOR_CALL = /\b([A-Z]\w*)\s*\(/g;
 
-/** SwiftUI 내장 컨테이너/요소 — contains 후보에서 제외(노이즈). */
+/** SwiftUI built-in containers/elements — excluded from contains candidates (noise). */
 const SWIFT_BUILTINS = new Set([
   "VStack", "HStack", "ZStack", "LazyVStack", "LazyHStack", "LazyVGrid", "LazyHGrid", "Grid", "GridRow",
   "Text", "Image", "Button", "Label", "Link", "Spacer", "Divider", "Group", "Section", "Form", "List",
@@ -161,7 +161,7 @@ function parseSwift(src: string): RawScreen {
     const line = lines[i];
     const lineNo = i + 1;
 
-    // --- 이동: 네비 구문이 있는 라인 (+ 다음 몇 줄)에서 대상 View 추출 ---
+    // --- transition: extract target View from the line with a nav construct (+ next few lines) ---
     const nav = NAV_CONSTRUCTS.find((c) => c.re.test(line));
     if (nav) {
       const target = findNavTarget(lines, i);
@@ -169,7 +169,7 @@ function parseSwift(src: string): RawScreen {
       if (target) components.add(target);
     }
 
-    // --- 호출: URL 리터럴 / URLRequest ---
+    // --- call: URL literal / URLRequest ---
     const urlM = line.match(URL_STRING);
     if (urlM) {
       calls.push({ url: urlM[1] ?? urlM[2] ?? null, raw: snippet(line), trigger: "URL", line: lineNo });
@@ -177,7 +177,7 @@ function parseSwift(src: string): RawScreen {
       calls.push({ url: null, raw: snippet(line), trigger: "URLRequest", line: lineNo });
     }
 
-    // --- 기능: UI 컨트롤 (라인당 하나) ---
+    // --- feature: UI controls (one per line) ---
     for (const rule of FEATURE_RULES) {
       const m = line.match(rule.re);
       if (m) {
@@ -186,12 +186,12 @@ function parseSwift(src: string): RawScreen {
       }
     }
 
-    // --- 컴포넌트(표시용: XxxView) ---
+    // --- components (for display: XxxView) ---
     if (!nav) {
       for (const m of line.matchAll(VIEW_INSTANCE)) components.add(m[1]);
     }
 
-    // --- contains 후보: 대문자 생성자 호출 (내장 제외). resolve 가 screenIds 와 교집합. ---
+    // --- contains candidates: capitalized constructor calls (excluding built-ins). resolve intersects with screenIds. ---
     for (const m of line.matchAll(CTOR_CALL)) {
       if (!SWIFT_BUILTINS.has(m[1])) contains.add(m[1]);
     }
@@ -206,7 +206,7 @@ function parseSwift(src: string): RawScreen {
   };
 }
 
-/** 네비 구문에서 대상 View 이름: destination: 우선, 없으면 같은/다음 3줄에서 XxxView(. */
+/** Target View name from a nav construct: prefer destination:, else XxxView( on the same/next 3 lines. */
 function findNavTarget(lines: string[], i: number): string | null {
   for (let j = i; j < Math.min(i + 4, lines.length); j++) {
     const dest = lines[j].match(DEST_VIEW);
