@@ -65,6 +65,7 @@
       .legend { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); align-items: center; }
       .legend span { white-space: nowrap; }
       .legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+      .legend .tri { display: inline-block; width: 0; height: 0; margin-right: 5px; vertical-align: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 10px solid; }
       .legend .edge { display: inline-block; width: 22px; border-top: 2px solid; margin-right: 5px; vertical-align: 3px; }
       main { flex: 1 1 auto; display: flex; min-height: 0; position: relative; }
       #graph { flex: 1 1 auto; min-width: 0; cursor: grab; touch-action: none; }
@@ -92,8 +93,8 @@
       #panel .empty { color: var(--muted); font-style: italic; }
       .hint { color: var(--muted); }
       .node text { font-size: 11px; fill: var(--node-ink); pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
-      .node circle, .node rect { cursor: pointer; stroke: var(--node-stroke); stroke-width: 1.5px; }
-      .node.selected circle, .node.selected rect { stroke: var(--accent); stroke-width: 2.5px; }
+      .node circle, .node rect, .node path { cursor: pointer; stroke: var(--node-stroke); stroke-width: 1.5px; }
+      .node.selected circle, .node.selected rect, .node.selected path { stroke: var(--accent); stroke-width: 2.5px; }
       .node.dim { opacity: 0.2; }
       .edge { opacity: 0.9; }
       .edge.dim { opacity: 0.08; }
@@ -144,6 +145,7 @@
       <label><input type="checkbox" id="t-trans" checked /> 이동</label>
       <label><input type="checkbox" id="t-calls" checked /> 호출</label>
       <div class="legend">
+        <span><span class="tri" style="border-left-color: var(--node-stroke)"></span>시작</span>
         <span><span class="swatch" style="background: var(--node-fill); border: 1.5px solid var(--node-stroke)"></span>화면</span>
         <span><span class="swatch" style="background: var(--res-fill); border: 1.5px solid var(--node-stroke); border-radius: 2px"></span>리소스</span>
         <span><span class="edge" style="border-color: var(--edge)"></span>이동</span>
@@ -250,7 +252,7 @@
 
       // ---- force 시뮬레이션 ----
       let alpha = 1;
-      const REPULSION = 6000, SPRING = 0.02, SPRING_LEN = 120, GRAVITY = 0.02, DAMP = 0.9;
+      const REPULSION = 16000, SPRING = 0.025, SPRING_LEN = 180, GRAVITY = 0.012, DAMP = 0.9;
       function step() {
         // 반발(모든 쌍)
         for (let i = 0; i < nodes.length; i++) {
@@ -318,9 +320,17 @@
       const nodeEls = nodes.map((n) => {
         const g = document.createElementNS(SVGNS, "g");
         g.setAttribute("class", "node");
-        // 스타일 F: 화면=흰 원 / 리소스=옅은 회색 사각. 시작점은 위치(맨 왼쪽)로만 구분.
+        // 스타일 F: 화면=흰 원 / 리소스=옅은 회색 사각 / 시작점=▶ 삼각형.
+        const isEntry = n.type === "screen" && entryKeys.has(n.key);
         let shape;
-        if (n.type === "screen") {
+        if (isEntry) {
+          // 시작점: 오른쪽을 가리키는 삼각형(▶) — 한눈에 진입점 식별
+          n.r = 13;
+          shape = document.createElementNS(SVGNS, "path");
+          const r = n.r;
+          shape.setAttribute("d", "M" + (-r) + "," + (-r) + " L" + (r * 1.1) + ",0 L" + (-r) + "," + r + " Z");
+          shape.setAttribute("fill", "var(--node-fill)");
+        } else if (n.type === "screen") {
           shape = document.createElementNS(SVGNS, "circle");
           shape.setAttribute("r", n.r);
           shape.setAttribute("fill", "var(--node-fill)");
@@ -332,7 +342,8 @@
           shape.setAttribute("fill", "var(--res-fill)");
         }
         const txt = document.createElementNS(SVGNS, "text");
-        txt.setAttribute("x", n.r + 4); txt.setAttribute("y", 4);
+        txt.setAttribute("x", n.r + 6); txt.setAttribute("y", 4);
+        if (isEntry) txt.setAttribute("font-weight", "700");
         txt.textContent = n.label.length > 26 ? n.label.slice(0, 25) + "…" : n.label;
         g.appendChild(shape); g.appendChild(txt);
         g.addEventListener("pointerdown", (ev) => onNodeDown(ev, n));
@@ -356,9 +367,11 @@
       }
 
       // ---- 시뮬레이션 루프: 정착되면 멈추고 화면 맞춤 ----
+      // 드래그 중에는 alpha 를 계속 높게 유지 → 잡은 노드를 따라 이웃이 활발히 따라옴.
       let fitted = false;
       function loop() {
-        if (alpha > 0.02) { step(); paint(); }
+        if (dragging) { alpha = Math.max(alpha, 0.4); step(); paint(); }
+        else if (alpha > 0.02) { step(); paint(); }
         else if (!fitted) { fitted = true; paint(); fitToView(); }
         requestAnimationFrame(loop);
       }
