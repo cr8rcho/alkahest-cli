@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alkahest — Product Map</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --line: #1f2937;
+        --ink: #e5e7eb;
+        --muted: #9ca3af;
+        --screen: #3b82f6;
+        --endpoint: #10b981;
+        --external: #f59e0b;
+        --trans: #64748b;
+        --call: #34d399;
+        --accent: #818cf8;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--line);
+        background: #0b1220;
+        flex: 0 0 auto;
+      }
+      .brand { font-weight: 700; letter-spacing: 0.3px; }
+      .brand .sub { color: var(--muted); font-weight: 400; margin-left: 6px; }
+      .counts { color: var(--muted); }
+      .toolbar label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
+      .legend { margin-left: auto; display: flex; gap: 14px; color: var(--muted); align-items: center; }
+      .legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+      .legend .edge { display: inline-block; width: 22px; border-top: 2px solid; margin-right: 5px; vertical-align: 3px; }
+      main { flex: 1 1 auto; display: flex; min-height: 0; }
+      #graph { flex: 1 1 auto; min-width: 0; cursor: grab; }
+      #graph:active { cursor: grabbing; }
+      #panel {
+        flex: 0 0 360px;
+        border-left: 1px solid var(--line);
+        background: var(--panel);
+        padding: 16px;
+        overflow-y: auto;
+      }
+      #panel h2 { margin: 0 0 2px; font-size: 16px; }
+      #panel .route { color: var(--accent); font-family: ui-monospace, monospace; font-size: 12px; margin-bottom: 12px; word-break: break-all; }
+      #panel .src { color: var(--muted); font-family: ui-monospace, monospace; font-size: 11px; margin-bottom: 14px; word-break: break-all; }
+      #panel section { margin-bottom: 16px; }
+      #panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 0 0 7px; }
+      #panel ul { list-style: none; margin: 0; padding: 0; }
+      #panel li { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 5px; background: #0b1220; }
+      #panel li.clickable { cursor: pointer; }
+      #panel li.clickable:hover { border-color: var(--accent); }
+      #panel .tag { font-family: ui-monospace, monospace; font-size: 10px; color: var(--muted); }
+      #panel .lineno { float: right; color: var(--muted); font-family: ui-monospace, monospace; font-size: 10px; }
+      #panel .empty { color: var(--muted); font-style: italic; }
+      .hint { color: var(--muted); }
+      .node text { font-size: 11px; fill: var(--ink); pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+      .node circle, .node rect { cursor: pointer; stroke: #0b1220; stroke-width: 1.5px; }
+      .node.dim { opacity: 0.25; }
+      .edge { opacity: 0.85; }
+      .edge.dim { opacity: 0.08; }
+      .edge.unresolved { stroke-dasharray: 1 5; }
+    </style>
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="brand">Alkahest<span class="sub">Product Map</span></div>
+      <div class="counts" id="counts"></div>
+      <label><input type="checkbox" id="t-trans" checked /> 이동</label>
+      <label><input type="checkbox" id="t-calls" checked /> 호출</label>
+      <div class="legend">
+        <span><span class="swatch" style="background: var(--screen)"></span>화면</span>
+        <span><span class="swatch" style="background: var(--endpoint)"></span>리소스</span>
+        <span><span class="edge" style="border-color: var(--trans)"></span>이동</span>
+        <span><span class="edge" style="border-color: var(--call); border-top-style: dashed"></span>호출</span>
+      </div>
+    </header>
+    <main>
+      <svg id="graph">
+        <defs>
+          <marker id="arrow-trans" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--trans)" />
+          </marker>
+          <marker id="arrow-call" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--call)" />
+          </marker>
+        </defs>
+        <g id="viewport">
+          <g id="edges"></g>
+          <g id="nodes"></g>
+        </g>
+      </svg>
+      <aside id="panel">
+        <p class="hint">노드를 클릭하면 화면의 기능·이동·호출을 봅니다.<br /><br />드래그로 노드 이동, 휠로 확대/축소, 빈 곳 드래그로 이동.</p>
+      </aside>
+    </main>
+
+    <script id="alkahest-data" type="application/json">/*__ALKAHEST_MAP__*/</script>
+    <script>
+      const MAP = JSON.parse(document.getElementById("alkahest-data").textContent);
+      const SVGNS = "http://www.w3.org/2000/svg";
+
+      // ---- 인덱스 ----
+      const screensById = new Map(MAP.screens.map((s) => [s.id, s]));
+      const resourcesById = new Map(MAP.resources.map((r) => [r.id, r]));
+
+      // ---- 노드/엣지 그래프 모델 ----
+      const nodes = [];
+      const nodeByKey = new Map();
+      function addNode(n) { nodes.push(n); nodeByKey.set(n.key, n); return n; }
+      for (const s of MAP.screens) addNode({ key: "s:" + s.id, type: "screen", id: s.id, label: s.title || s.route, r: 10 });
+      for (const r of MAP.resources) addNode({ key: "r:" + r.id, type: "resource", id: r.id, label: r.label, kind: r.kind, r: 8 });
+
+      const edges = [];
+      for (const t of MAP.transitions) {
+        if (t.to == null) continue;
+        const target = nodeByKey.get("s:" + t.to);
+        if (!target) continue; // 외부 URL/미해결은 그래프에 안 그림 (패널에 표시)
+        edges.push({ source: nodeByKey.get("s:" + t.from), target, kind: "transition" });
+      }
+      for (const c of MAP.calls) {
+        if (c.to == null) continue;
+        const target = nodeByKey.get("r:" + c.to);
+        if (!target) continue;
+        edges.push({ source: nodeByKey.get("s:" + c.from), target, kind: "call" });
+      }
+
+      document.getElementById("counts").textContent =
+        MAP.screens.length + " 화면 · " + MAP.resources.length + " 리소스 · " +
+        MAP.transitions.length + " 이동 · " + MAP.calls.length + " 호출";
+
+      // ---- 초기 배치 ----
+      const svg = document.getElementById("graph");
+      let W = svg.clientWidth, H = svg.clientHeight;
+      nodes.forEach((n, i) => {
+        const a = (i / nodes.length) * Math.PI * 2;
+        n.x = W / 2 + Math.cos(a) * 180 + (Math.random() - 0.5) * 40;
+        n.y = H / 2 + Math.sin(a) * 180 + (Math.random() - 0.5) * 40;
+        n.vx = 0; n.vy = 0;
+      });
+
+      // ---- force 시뮬레이션 ----
+      let alpha = 1;
+      const REPULSION = 5000, SPRING = 0.04, SPRING_LEN = 110, GRAVITY = 0.015, DAMP = 0.85;
+      function step() {
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const a = nodes[i], b = nodes[j];
+            let dx = a.x - b.x, dy = a.y - b.y;
+            let d2 = dx * dx + dy * dy || 1;
+            const f = REPULSION / d2;
+            const d = Math.sqrt(d2);
+            const fx = (dx / d) * f, fy = (dy / d) * f;
+            a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+          }
+        }
+        for (const e of edges) {
+          const a = e.source, b = e.target;
+          let dx = b.x - a.x, dy = b.y - a.y;
+          const d = Math.sqrt(dx * dx + dy * dy) || 1;
+          const f = (d - SPRING_LEN) * SPRING;
+          const fx = (dx / d) * f, fy = (dy / d) * f;
+          a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+        }
+        for (const n of nodes) {
+          n.vx += (W / 2 - n.x) * GRAVITY;
+          n.vy += (H / 2 - n.y) * GRAVITY;
+          if (n === dragging) continue;
+          n.vx *= DAMP; n.vy *= DAMP;
+          n.x += n.vx * alpha; n.y += n.vy * alpha;
+        }
+        alpha *= 0.99;
+      }
+
+      // ---- 렌더 ----
+      const gEdges = document.getElementById("edges");
+      const gNodes = document.getElementById("nodes");
+      const edgeEls = edges.map((e) => {
+        const ln = document.createElementNS(SVGNS, "line");
+        ln.setAttribute("class", "edge " + e.kind);
+        ln.setAttribute("stroke", e.kind === "call" ? "var(--call)" : "var(--trans)");
+        ln.setAttribute("stroke-width", "1.5");
+        if (e.kind === "call") ln.setAttribute("stroke-dasharray", "5 4");
+        ln.setAttribute("marker-end", e.kind === "call" ? "url(#arrow-call)" : "url(#arrow-trans)");
+        gEdges.appendChild(ln);
+        e.el = ln;
+        return ln;
+      });
+      const nodeEls = nodes.map((n) => {
+        const g = document.createElementNS(SVGNS, "g");
+        g.setAttribute("class", "node");
+        let shape;
+        if (n.type === "screen") {
+          shape = document.createElementNS(SVGNS, "circle");
+          shape.setAttribute("r", n.r);
+          shape.setAttribute("fill", "var(--screen)");
+        } else {
+          shape = document.createElementNS(SVGNS, "rect");
+          shape.setAttribute("width", n.r * 2); shape.setAttribute("height", n.r * 2);
+          shape.setAttribute("x", -n.r); shape.setAttribute("y", -n.r);
+          shape.setAttribute("rx", 3);
+          shape.setAttribute("fill", n.kind === "external" ? "var(--external)" : "var(--endpoint)");
+        }
+        const txt = document.createElementNS(SVGNS, "text");
+        txt.setAttribute("x", n.r + 4); txt.setAttribute("y", 4);
+        txt.textContent = n.label.length > 26 ? n.label.slice(0, 25) + "…" : n.label;
+        g.appendChild(shape); g.appendChild(txt);
+        g.addEventListener("pointerdown", (ev) => startDrag(ev, n));
+        g.addEventListener("click", (ev) => { ev.stopPropagation(); select(n); });
+        gNodes.appendChild(g);
+        n.el = g;
+        return g;
+      });
+
+      function paint() {
+        for (const e of edges) {
+          e.el.setAttribute("x1", e.source.x); e.el.setAttribute("y1", e.source.y);
+          e.el.setAttribute("x2", e.target.x); e.el.setAttribute("y2", e.target.y);
+        }
+        for (const n of nodes) n.el.setAttribute("transform", "translate(" + n.x + "," + n.y + ")");
+      }
+      function loop() { if (alpha > 0.004) { step(); paint(); } requestAnimationFrame(loop); }
+      loop();
+
+      // ---- 레이어 토글 ----
+      const tTrans = document.getElementById("t-trans"), tCalls = document.getElementById("t-calls");
+      function applyLayers() {
+        for (const e of edges) e.el.style.display =
+          (e.kind === "transition" && !tTrans.checked) || (e.kind === "call" && !tCalls.checked) ? "none" : "";
+        for (const n of nodes) if (n.type === "resource") n.el.style.display = tCalls.checked ? "" : "none";
+      }
+      tTrans.onchange = tCalls.onchange = applyLayers;
+
+      // ---- 선택/하이라이트 ----
+      let selected = null;
+      function select(n) {
+        selected = n;
+        const connected = new Set([n.key]);
+        for (const e of edges) {
+          if (e.source === n) connected.add(e.target.key);
+          if (e.target === n) connected.add(e.source.key);
+        }
+        for (const m of nodes) m.el.classList.toggle("dim", !connected.has(m.key));
+        for (const e of edges) e.el.classList.toggle("dim", e.source !== n && e.target !== n);
+        renderPanel(n);
+      }
+      svg.addEventListener("click", () => {
+        selected = null;
+        for (const m of nodes) m.el.classList.remove("dim");
+        for (const e of edges) e.el.classList.remove("dim");
+        panel.innerHTML = '<p class="hint">노드를 클릭하면 화면의 기능·이동·호출을 봅니다.</p>';
+      });
+
+      // ---- 패널 ----
+      const panel = document.getElementById("panel");
+      const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+      function li(inner, cls) { return "<li" + (cls ? ' class="' + cls + '"' : "") + ">" + inner + "</li>"; }
+      function listOr(items, emptyMsg) { return items.length ? "<ul>" + items.join("") + "</ul>" : '<p class="empty">' + emptyMsg + "</p>"; }
+
+      function renderPanel(n) {
+        if (n.type === "screen") return renderScreen(screensById.get(n.id));
+        return renderResource(resourcesById.get(n.id));
+      }
+
+      function renderScreen(s) {
+        const out = MAP.transitions.filter((t) => t.from === s.id);
+        const inc = MAP.transitions.filter((t) => t.to === s.id);
+        const calls = MAP.calls.filter((c) => c.from === s.id);
+        const feats = s.features.map((f) =>
+          li('<span class="tag">[' + f.kind + "]</span> " + esc(f.label) + (f.loc ? '<span class="lineno">L' + f.loc.line + "</span>" : "")));
+        const navItem = (t) => {
+          const label = t.to ? (screensById.has(t.to) ? esc(screensById.get(t.to).title || t.to) : esc(t.to)) : esc(t.rawTarget || "미해결");
+          const cls = t.to && screensById.has(t.to) ? "clickable" : "";
+          const key = t.to && screensById.has(t.to) ? ' data-sel="s:' + esc(t.to) + '"' : "";
+          return "<li" + (cls ? ' class="' + cls + '"' : "") + key + '><span class="tag">' + esc(t.trigger) + "</span> → " + label +
+            '<span class="lineno">L' + t.loc.line + "</span></li>";
+        };
+        const callItem = (c) => {
+          const label = c.to ? esc(c.to) : esc(c.rawTarget || "미해결");
+          const cls = c.to ? "clickable" : "";
+          const key = c.to ? ' data-sel="r:' + esc(c.to) + '"' : "";
+          return "<li" + (cls ? ' class="' + cls + '"' : "") + key + '><span class="tag">' + esc(c.trigger) + "</span> " + label +
+            '<span class="lineno">L' + c.loc.line + "</span></li>";
+        };
+        panel.innerHTML =
+          "<h2>" + esc(s.title) + "</h2>" +
+          '<div class="route">' + esc(s.route) + "</div>" +
+          '<div class="src">' + esc(s.sourceFile) + "</div>" +
+          (s.summary ? "<section><h3>요약</h3><p>" + esc(s.summary) + "</p></section>" : "") +
+          "<section><h3>기능 (" + s.features.length + ")</h3>" + listOr(feats, "추출된 UI 기능 없음") + "</section>" +
+          "<section><h3>나가는 이동 (" + out.length + ")</h3>" + listOr(out.map(navItem), "없음") + "</section>" +
+          "<section><h3>부르는 리소스 (" + calls.length + ")</h3>" + listOr(calls.map(callItem), "없음") + "</section>" +
+          "<section><h3>들어오는 이동 (" + inc.length + ")</h3>" + listOr(inc.map(navItem), "없음") + "</section>";
+        wirePanelLinks();
+      }
+
+      function renderResource(r) {
+        const callers = MAP.calls.filter((c) => c.to === r.id);
+        const items = callers.map((c) => {
+          const s = screensById.get(c.from);
+          return '<li class="clickable" data-sel="s:' + esc(c.from) + '"><span class="tag">' + esc(c.trigger) + "</span> " +
+            esc(s ? s.title : c.from) + '<span class="lineno">L' + c.loc.line + "</span></li>";
+        });
+        panel.innerHTML =
+          "<h2>" + esc(r.label) + "</h2>" +
+          '<div class="route">' + esc(r.kind) + (r.method ? " · " + esc(r.method) : "") + "</div>" +
+          '<div class="src">' + esc(r.path || "") + "</div>" +
+          "<section><h3>함께 부르는 화면 (" + callers.length + ")</h3>" + listOr(items, "없음") + "</section>";
+        wirePanelLinks();
+      }
+
+      function wirePanelLinks() {
+        panel.querySelectorAll("[data-sel]").forEach((el) => {
+          el.addEventListener("click", () => { const n = nodeByKey.get(el.getAttribute("data-sel")); if (n) select(n); });
+        });
+      }
+
+      // ---- pan / zoom / drag ----
+      const viewport = document.getElementById("viewport");
+      let tx = 0, ty = 0, k = 1;
+      function applyTransform() { viewport.setAttribute("transform", "translate(" + tx + " " + ty + ") scale(" + k + ")"); }
+      function toWorld(cx, cy) { const rect = svg.getBoundingClientRect(); return { x: (cx - rect.left - tx) / k, y: (cy - rect.top - ty) / k }; }
+
+      let dragging = null, panStart = null;
+      function startDrag(ev, n) {
+        ev.stopPropagation(); dragging = n; alpha = Math.max(alpha, 0.5);
+        svg.setPointerCapture(ev.pointerId);
+      }
+      svg.addEventListener("pointerdown", (ev) => {
+        if (dragging) return;
+        panStart = { x: ev.clientX - tx, y: ev.clientY - ty };
+        svg.setPointerCapture(ev.pointerId);
+      });
+      svg.addEventListener("pointermove", (ev) => {
+        if (dragging) { const w = toWorld(ev.clientX, ev.clientY); dragging.x = w.x; dragging.y = w.y; dragging.vx = 0; dragging.vy = 0; paint(); }
+        else if (panStart) { tx = ev.clientX - panStart.x; ty = ev.clientY - panStart.y; applyTransform(); }
+      });
+      svg.addEventListener("pointerup", () => { dragging = null; panStart = null; });
+      svg.addEventListener("wheel", (ev) => {
+        ev.preventDefault();
+        const rect = svg.getBoundingClientRect();
+        const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+        const factor = ev.deltaY < 0 ? 1.1 : 1 / 1.1;
+        const nk = Math.min(4, Math.max(0.2, k * factor));
+        tx = mx - (mx - tx) * (nk / k); ty = my - (my - ty) * (nk / k); k = nk;
+        applyTransform();
+      }, { passive: false });
+
+      window.addEventListener("resize", () => { W = svg.clientWidth; H = svg.clientHeight; alpha = Math.max(alpha, 0.3); });
+      applyLayers();
+    </script>
+  </body>
+</html>

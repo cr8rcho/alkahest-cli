@@ -4,7 +4,8 @@ import { createRequire } from "node:module";
 import { discover } from "../core/discover.js";
 import { createProject, parseScreen, type RawScreen } from "../core/parse.js";
 import { buildMap } from "../core/resolve.js";
-import { emitMap } from "../core/emit.js";
+import { emitMap, emitDashboard } from "../core/emit.js";
+import { serveDashboard } from "../core/serve.js";
 import { hashContent } from "../core/hash.js";
 
 const require = createRequire(import.meta.url);
@@ -54,10 +55,11 @@ export async function scan(path: string, options: ScanOptions): Promise<void> {
   });
 
   const outFile = emitMap(projectRoot, map);
+  emitDashboard(projectRoot, map);
 
   const unresolvedNav = map.transitions.filter((t) => t.to === null).length;
   const unresolvedCall = map.calls.filter((c) => c.to === null).length;
-  console.log(`  → ${relative(projectRoot, outFile) || outFile}`);
+  console.log(`  → ${relative(projectRoot, outFile) || outFile} (+ index.html)`);
   console.log(
     `  screens=${map.screens.length} resources=${map.resources.length} ` +
       `transitions=${map.transitions.length}(미해결 ${unresolvedNav}) ` +
@@ -65,5 +67,5 @@ export async function scan(path: string, options: ScanOptions): Promise<void> {
   );
 
   // TODO(Phase 1.x): 증분 — 기준선 fileHashes 비교로 변경 파일만 재처리 (현재는 항상 전체 스캔)
-  if (options.open) console.log("  └─ --open: Phase 2(view) 구현 후 동작합니다.");
+  if (options.open) await serveDashboard(projectRoot);
 }

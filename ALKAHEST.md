@@ -166,7 +166,7 @@ alkahest prd <screen...>  # 화면 PRD 마크다운 생성
 
 ---
 
-_마지막 갱신: 2026-05-30 · 상태: Phase 1 코어 완료 — `scan`이 Next app-router → `map.json` 생성(화면·이동·리소스·호출·UI기능). 다음: Phase 2 대시보드_
+_마지막 갱신: 2026-05-30 · 상태: Phase 2 완료 — `scan`이 `map.json`+자기완결 `index.html` 생성, `view`가 로컬 서버로 2-레이어 그래프 대시보드 제공. 다음: Phase 3 LLM 요약·PRD_
 
 **Phase 1 알려진 한계(다음 보강 대상):**
 - 페이지 파일 *자체만* 파싱 — 임포트한 컴포넌트 내부의 기능/호출은 미추적.
