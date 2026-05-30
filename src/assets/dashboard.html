@@ -95,11 +95,11 @@
       .node circle, .node rect, .node path { cursor: pointer; stroke: var(--node-stroke); stroke-width: 1.5px; }
       .node.selected circle, .node.selected rect, .node.selected path { stroke: var(--accent); stroke-width: 2.5px; }
       .node.dim { opacity: 0.2; }
-      /* 호버 미리보기 (선택 안 된 상태에서만): 연결 엣지·이웃 강조 */
-      .node.hl circle, .node.hl rect, .node.hl path { stroke: var(--ink); stroke-width: 2px; }
+      /* 호버 미리보기 (선택 안 된 상태에서만): 연결 엣지·이웃을 색으로만 강조(두께 유지) */
+      .node.hl circle, .node.hl rect, .node.hl path { stroke: var(--ink); }
       .edge { opacity: 0.9; }
       .edge.dim { opacity: 0.08; }
-      .edge.hl { stroke: var(--ink) !important; opacity: 1; stroke-width: 2.2px; }
+      .edge.hl { stroke: var(--ink) !important; opacity: 1; }
 
       /* ---- 모바일: 좁은 화면에서는 패널을 하단 시트로 ---- */
       @media (max-width: 640px) {
