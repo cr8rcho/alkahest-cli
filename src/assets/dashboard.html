@@ -258,14 +258,16 @@
       // 드래그로 옮긴 노드가 중앙으로 안 끌려가고 놓은 자리 근처에 머문다.
       let alpha = 1, settled = false;
       const REPULSION = 16000, SPRING = 0.025, SPRING_LEN = 180, GRAVITY = 0.012, DAMP = 0.82;
+      const REPULSE_RANGE = 320, REPULSE_RANGE2 = REPULSE_RANGE * REPULSE_RANGE;
       function step() {
         const grav = settled ? 0 : GRAVITY; // 정착 후 중력 OFF
-        // 반발(모든 쌍)
+        // 반발(쌍) — 일정 거리(REPULSE_RANGE) 밖이면 무시. 먼 노드까지 밀어내는 "불도저" 방지.
         for (let i = 0; i < nodes.length; i++) {
           for (let j = i + 1; j < nodes.length; j++) {
             const a = nodes[i], b = nodes[j];
             let dx = a.x - b.x, dy = a.y - b.y;
             let d2 = dx * dx + dy * dy || 1;
+            if (d2 > REPULSE_RANGE2) continue;
             const f = REPULSION / d2, d = Math.sqrt(d2);
             const fx = (dx / d) * f, fy = (dy / d) * f;
             a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
@@ -281,8 +283,8 @@
           a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
         }
         for (const n of nodes) {
+          if (n === dragging) { n.vx = 0; n.vy = 0; continue; } // 드래그 노드: 속도 누적 금지(놓을 때 안 튕김)
           if (grav) { n.vx += (cx0 - n.x) * grav; n.vy += (cy0 - n.y) * grav; }
-          if (n === dragging) continue;
           n.vx *= DAMP; n.vy *= DAMP;
           n.x += n.vx * alpha; n.y += n.vy * alpha;
         }
