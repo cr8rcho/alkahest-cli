@@ -30,10 +30,8 @@ export function buildMap(input: ResolveInput): ProductMap {
     screens.push(screenFromRaw(file, hashes.get(file.relPath) ?? "", raw));
     const navTrans = resolveTransitions(file.id, raw.navs, screenIds, file.relPath);
     transitions.push(...navTrans);
-    // 포함(contains): 이 화면이 직접 인스턴스화한 *다른 화면* → 약한 이동.
-    // 자식 뷰 포함은 .sheet/NavigationLink가 아니라 nav로 안 잡히지만,
-    // 진입점→탭 같은 구조적 흐름을 복원한다 (ALKAHEST.md §11 흐름).
-    transitions.push(...resolveContains(file.id, raw.components, screenIds, navTrans, file.relPath));
+    // 포함(contains): 이 화면이 직접 인스턴스화한 다른 화면 → 구조적 흐름(진입점→탭 등). §11
+    transitions.push(...resolveContains(file.id, raw.contains, screenIds, navTrans, file.relPath));
     calls.push(...resolveCalls(file.id, raw.calls, file.relPath, resources));
   }
 
@@ -137,17 +135,17 @@ export function assembleMap(a: AssembleInput): ProductMap {
 
 function resolveTransition(from: string, nav: RawNav, screenIds: Set<string>, file: string): Transition {
   const loc = { file, line: nav.line };
+  const base = { from, kind: "navigate" as const, trigger: nav.trigger, loc };
   if (nav.target == null) {
-    return { from, to: null, rawTarget: nav.raw, trigger: nav.trigger, loc };
+    return { ...base, to: null, rawTarget: nav.raw };
   }
   if (isExternalUrl(nav.target)) {
-    return { from, to: nav.target.split(/[?#]/)[0], trigger: nav.trigger, loc };
+    return { ...base, to: nav.target.split(/[?#]/)[0] };
   }
-  // 내부 대상: route 표기(앞 슬래시 정규화) 또는 식별자 그대로 매칭.
   const candidates = [nav.target, normalizeRoute(nav.target)];
   const hit = candidates.find((c) => screenIds.has(c));
-  if (hit) return { from, to: hit, trigger: nav.trigger, loc };
-  return { from, to: null, rawTarget: nav.target, trigger: nav.trigger, loc };
+  if (hit) return { ...base, to: hit };
+  return { ...base, to: null, rawTarget: nav.target };
 }
 
 function normalizeRoute(target: string): string {

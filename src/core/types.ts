@@ -43,6 +43,8 @@ export interface Screen {
   features: Feature[];
   /** 이 화면에서 쓰인 주요 컴포넌트 이름 */
   components: string[];
+  /** 앱 진입점 여부 (@main/App이 띄우는 루트, 또는 "/" 라우트). 시작점 표시·레이아웃 루트. */
+  isEntry?: boolean;
 }
 
 /** 1차 레이어 엣지 = 화면 → 화면(또는 외부 URL) 이동(navigation). */

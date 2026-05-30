@@ -1,14 +1,15 @@
-import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep, basename } from "node:path";
 import type { FrameworkAdapter, ScreenFile, RawScreen, RawNav, RawCall, RawFeature } from "./types.js";
 
 /**
  * SwiftUI 어댑터 (첫 비-JS 어댑터, ALKAHEST.md §8).
- * 화면 = `struct X: View`. 파싱은 의존성 0 휴리스틱(라인 스캔) — React 어댑터와 같은 철학.
+ * 화면 = `struct X: View`. 파싱은 의존성 0 휴리스틱(라인 스캔).
  * 나중에 tree-sitter-swift 로 교체 가능(인터페이스 동일).
  *
  * 매핑:
  *  - 이동: NavigationLink(destination:) / .sheet / .fullScreenCover / .navigationDestination → 대상 View
+ *  - 포함: TabView Tab{}/embed 가 인스턴스화하는 자식 View → contains (resolve 에서 엣지화)
  *  - 호출: URL(string:) / "https://…" / URLRequest(url:) → 엔드포인트
  *  - 기능: Button / TextField / Toggle / Picker / List / ForEach / Form …
  */
@@ -21,12 +22,11 @@ export const swiftUiAdapter: FrameworkAdapter = {
   router: "swiftui-views",
 
   detect(projectRoot) {
-    // .swift + SwiftUI import 가 하나라도 있으면 대상.
     let found = false;
     walkSwift(projectRoot, (file) => {
       if (found) return;
-      const head = safeRead(file).slice(0, 2000);
-      if (/\bimport\s+SwiftUI\b/.test(head) && VIEW_STRUCT.test(safeRead(file))) found = true;
+      const src = safeRead(file);
+      if (/\bimport\s+SwiftUI\b/.test(src.slice(0, 2000)) && VIEW_STRUCT.test(src)) found = true;
     });
     return found;
   },
@@ -109,7 +109,6 @@ function entryViewIn(src: string): string | null {
   if (!/@main/.test(src) || !/:\s*App\b/.test(src)) return null;
   const bodyIdx = src.search(/var\s+body\s*:\s*some\s+Scene/);
   const region = bodyIdx >= 0 ? src.slice(bodyIdx) : src;
-  // WindowGroup { XxxView() } 안의 첫 대문자 생성자
   const m = region.match(/\b([A-Z]\w*)\s*\(\s*\)/);
   return m ? m[1] : null;
 }
@@ -137,18 +136,18 @@ const VIEW_INSTANCE = /\b([A-Z]\w*View)\s*\(/g;
 const DEST_VIEW = /destination:\s*([A-Z]\w*)\s*\(/;
 const URL_STRING = /URL\(string:\s*"([^"]+)"|"(https?:\/\/[^"]+)"/;
 const URL_REQUEST = /URLRequest\(\s*url:/;
+const CTOR_CALL = /\b([A-Z]\w*)\s*\(/g;
 
 /** SwiftUI 내장 컨테이너/요소 — contains 후보에서 제외(노이즈). */
 const SWIFT_BUILTINS = new Set([
-  "VStack","HStack","ZStack","LazyVStack","LazyHStack","LazyVGrid","LazyHGrid","Grid","GridRow",
-  "Text","Image","Button","Label","Link","Spacer","Divider","Group","Section","Form","List",
-  "ForEach","Toggle","Picker","Stepper","Slider","DatePicker","TextField","SecureField","TextEditor",
-  "NavigationStack","NavigationView","NavigationLink","TabView","Tab","ScrollView","ScrollViewReader",
-  "Color","Circle","Rectangle","RoundedRectangle","Capsule","Ellipse","Path","Menu","Chart",
-  "GeometryReader","Canvas","Gauge","ProgressView","Table","DisclosureGroup","ControlGroup","LazyView",
-  "VStackLayout","HStackLayout","AnyView","EmptyView","ViewThatFits","Grid",
+  "VStack", "HStack", "ZStack", "LazyVStack", "LazyHStack", "LazyVGrid", "LazyHGrid", "Grid", "GridRow",
+  "Text", "Image", "Button", "Label", "Link", "Spacer", "Divider", "Group", "Section", "Form", "List",
+  "ForEach", "Toggle", "Picker", "Stepper", "Slider", "DatePicker", "TextField", "SecureField", "TextEditor",
+  "NavigationStack", "NavigationView", "NavigationLink", "TabView", "Tab", "ScrollView", "ScrollViewReader",
+  "Color", "Circle", "Rectangle", "RoundedRectangle", "Capsule", "Ellipse", "Path", "Menu", "Chart",
+  "GeometryReader", "Canvas", "Gauge", "ProgressView", "Table", "DisclosureGroup", "ControlGroup", "LazyView",
+  "AnyView", "EmptyView", "ViewThatFits",
 ]);
-const CTOR_CALL = /\b([A-Z]\w*)\s*\(/g;
 
 function parseSwift(src: string): RawScreen {
   const lines = src.split("\n");
@@ -166,13 +165,8 @@ function parseSwift(src: string): RawScreen {
     const nav = NAV_CONSTRUCTS.find((c) => c.re.test(line));
     if (nav) {
       const target = findNavTarget(lines, i);
-      navs.push({
-        target,
-        raw: snippet(line),
-        trigger: nav.trigger,
-        line: lineNo,
-      });
-      if (target) components.add(target); // 대상도 컴포넌트로 기록
+      navs.push({ target, raw: snippet(line), trigger: nav.trigger, line: lineNo });
+      if (target) components.add(target);
     }
 
     // --- 호출: URL 리터럴 / URLRequest ---
@@ -183,22 +177,33 @@ function parseSwift(src: string): RawScreen {
       calls.push({ url: null, raw: snippet(line), trigger: "URLRequest", line: lineNo });
     }
 
-    // --- 기능: UI 컨트롤 ---
+    // --- 기능: UI 컨트롤 (라인당 하나) ---
     for (const rule of FEATURE_RULES) {
       const m = line.match(rule.re);
       if (m) {
         features.push({ kind: rule.kind, label: rule.label(m), detail: m[0].trim().slice(0, 40), line: lineNo });
-        break; // 라인당 하나로 제한
+        break;
       }
     }
 
-    // --- 컴포넌트: 임베드된 XxxView( (네비 라인은 위에서 처리) ---
+    // --- 컴포넌트(표시용: XxxView) ---
     if (!nav) {
       for (const m of line.matchAll(VIEW_INSTANCE)) components.add(m[1]);
     }
+
+    // --- contains 후보: 대문자 생성자 호출 (내장 제외). resolve 가 screenIds 와 교집합. ---
+    for (const m of line.matchAll(CTOR_CALL)) {
+      if (!SWIFT_BUILTINS.has(m[1])) contains.add(m[1]);
+    }
   }
 
-  return { navs, calls, features, components: [...components].sort() };
+  return {
+    navs,
+    calls,
+    features,
+    components: [...components].sort(),
+    contains: [...contains].sort(),
+  };
 }
 
 /** 네비 구문에서 대상 View 이름: destination: 우선, 없으면 같은/다음 3줄에서 XxxView(. */
@@ -207,7 +212,7 @@ function findNavTarget(lines: string[], i: number): string | null {
     const dest = lines[j].match(DEST_VIEW);
     if (dest) return dest[1];
     const inst = lines[j].match(/\b([A-Z]\w*View)\s*\(/);
-    if (inst && !/NavigationLink|navigationDestination|sheet|fullScreenCover|popover/.test(inst.input!.slice(0, inst.index)))
+    if (inst && inst.index !== undefined && !/NavigationLink|navigationDestination|sheet|fullScreenCover|popover/.test(lines[j].slice(0, inst.index)))
       return inst[1];
   }
   return null;

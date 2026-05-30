@@ -1,4 +1,4 @@
-import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
+import { readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { Project, Node, SyntaxKind, ts } from "ts-morph";
 import type { SourceFile, JsxOpeningElement, JsxSelfClosingElement } from "ts-morph";
@@ -6,7 +6,7 @@ import type { FrameworkAdapter, ScreenFile, RawScreen } from "./types.js";
 
 /**
  * Next.js app-router 어댑터: `app/**​/page.tsx` 를 화면으로, ts-morph 로 파싱.
- * 화면 id = route ("/dashboard/settings").
+ * 화면 id = route ("/dashboard/settings"). 진입점 = 루트 라우트 "/".
  */
 const PAGE_RE = /^page\.(tsx|jsx|ts|js)$/;
 
@@ -91,7 +91,7 @@ function titleFromRoute(route: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ---------- ts-morph 파싱 (구 parse.ts) ----------
+// ---------- ts-morph 파싱 ----------
 
 const NAV_HOOKS = new Set(["redirect", "permanentRedirect"]);
 const QUERY_HOOKS = new Set(["useQuery", "useMutation", "useSWR", "useSWRMutation", "useInfiniteQuery"]);
