@@ -1,22 +1,40 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alkahest — Product Map</title>
     <style>
+      /* 미니멀 팔레트 — 라이트 기본, [data-theme="dark"] 로 스왑 (스타일 F) */
       :root {
-        --bg: #0f172a;
-        --panel: #111827;
-        --line: #1f2937;
-        --ink: #e5e7eb;
-        --muted: #9ca3af;
-        --screen: #3b82f6;
-        --endpoint: #10b981;
-        --external: #f59e0b;
-        --trans: #64748b;
-        --call: #34d399;
-        --accent: #818cf8;
+        --bg: #ffffff;
+        --panel: #f7f7f8;
+        --panel-soft: #ffffff;
+        --line: #e4e4e7;
+        --ink: #18181b;
+        --muted: #71717a;
+        --node-fill: #ffffff;       /* 화면 */
+        --node-stroke: #c4c4cc;
+        --node-ink: #27272a;
+        --res-fill: #f4f4f5;        /* 리소스 (F: 옅은 회색 채움) */
+        --entry: #16a34a;
+        --accent: #2563eb;
+        --edge: #a1a1aa;
+      }
+      html[data-theme="dark"] {
+        --bg: #0d1117;
+        --panel: #161b22;
+        --panel-soft: #1c2128;
+        --line: #2a2f37;
+        --ink: #e6edf3;
+        --muted: #8b949e;
+        --node-fill: #1c2128;
+        --node-stroke: #444c56;
+        --node-ink: #e6edf3;
+        --res-fill: #30404f;
+        --entry: #3fb950;
+        --accent: #58a6ff;
+        --edge: #484f58;
       }
       * { box-sizing: border-box; }
       html, body { margin: 0; height: 100%; }
@@ -36,9 +54,10 @@
         row-gap: 6px;
         padding: 8px 14px;
         border-bottom: 1px solid var(--line);
-        background: #0b1220;
+        background: var(--panel);
         flex: 0 0 auto;
       }
+      .theme-toggle { cursor: pointer; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 7px; padding: 4px 9px; font-size: 12px; }
       .brand { font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; }
       .brand .sub { color: var(--muted); font-weight: 400; margin-left: 6px; }
       .counts { color: var(--muted); white-space: nowrap; }
@@ -65,19 +84,19 @@
       #panel section { margin-bottom: 16px; }
       #panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 0 0 7px; }
       #panel ul { list-style: none; margin: 0; padding: 0; }
-      #panel li { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 5px; background: #0b1220; }
+      #panel li { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 5px; background: var(--panel-soft); }
       #panel li.clickable { cursor: pointer; }
       #panel li.clickable:hover { border-color: var(--accent); }
       #panel .tag { font-family: ui-monospace, monospace; font-size: 10px; color: var(--muted); }
       #panel .lineno { float: right; color: var(--muted); font-family: ui-monospace, monospace; font-size: 10px; }
       #panel .empty { color: var(--muted); font-style: italic; }
       .hint { color: var(--muted); }
-      .node text { font-size: 11px; fill: var(--ink); pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
-      .node circle, .node rect { cursor: pointer; stroke: #0b1220; stroke-width: 1.5px; }
-      .node.dim { opacity: 0.25; }
-      .edge { opacity: 0.85; }
+      .node text { font-size: 11px; fill: var(--node-ink); pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+      .node circle, .node rect { cursor: pointer; stroke: var(--node-stroke); stroke-width: 1.5px; }
+      .node.selected circle, .node.selected rect { stroke: var(--accent); stroke-width: 2.5px; }
+      .node.dim { opacity: 0.2; }
+      .edge { opacity: 0.9; }
       .edge.dim { opacity: 0.08; }
-      .edge.unresolved { stroke-dasharray: 1 5; }
 
       /* ---- 모바일: 좁은 화면에서는 패널을 하단 시트로 ---- */
       @media (max-width: 640px) {
@@ -125,22 +144,20 @@
       <label><input type="checkbox" id="t-trans" checked /> 이동</label>
       <label><input type="checkbox" id="t-calls" checked /> 호출</label>
       <div class="legend">
-        <span><span class="swatch" style="background: #22c55e"></span>시작</span>
-        <span><span class="swatch" style="background: var(--screen)"></span>화면</span>
-        <span><span class="swatch" style="background: var(--endpoint)"></span>리소스</span>
-        <span><span class="edge" style="border-color: var(--trans)"></span>이동</span>
-        <span><span class="edge" style="border-color: var(--accent); border-top-width: 3px"></span>포함</span>
-        <span><span class="edge" style="border-color: var(--call); border-top-style: dashed"></span>호출</span>
+        <span><span class="swatch" style="background: var(--node-fill); border: 1.5px solid var(--node-stroke)"></span>화면</span>
+        <span><span class="swatch" style="background: var(--res-fill); border: 1.5px solid var(--node-stroke); border-radius: 2px"></span>리소스</span>
+        <span><span class="edge" style="border-color: var(--edge)"></span>이동</span>
+        <span><span class="edge" style="border-top-style: dotted; border-color: var(--edge)"></span>포함</span>
+        <span><span class="edge" style="border-top-style: dashed; border-color: var(--edge)"></span>호출</span>
       </div>
+      <button class="theme-toggle" id="theme-toggle" aria-label="테마 전환">🌗</button>
     </header>
     <main>
       <svg id="graph">
         <defs>
-          <marker id="arrow-trans" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill="var(--trans)" />
-          </marker>
-          <marker id="arrow-call" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill="var(--call)" />
+          <!-- 단일 화살표(이동·호출 공용). userSpaceOnUse: 선 두께와 무관하게 크기 고정 -->
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)" />
           </marker>
         </defs>
         <g id="viewport">
@@ -289,20 +306,18 @@
       const edgeEls = edges.map((e) => {
         const ln = document.createElementNS(SVGNS, "line");
         ln.setAttribute("class", "edge " + e.kind);
+        ln.setAttribute("stroke", "var(--edge)");
+        ln.setAttribute("stroke-width", "1.4");
         if (e.kind === "call") {
-          ln.setAttribute("stroke", "var(--call)");
-          ln.setAttribute("stroke-width", "1.5");
-          ln.setAttribute("stroke-dasharray", "5 4");
-          ln.setAttribute("marker-end", "url(#arrow-call)");
+          // 호출: 긴 점선 + 화살표
+          ln.setAttribute("stroke-dasharray", "4 4");
+          ln.setAttribute("marker-end", "url(#arrow)");
         } else if (e.rel === "contains") {
-          // 구조적 포함(진입점→탭 등): 굵고 은은하게, 화살표 없음
-          ln.setAttribute("stroke", "var(--accent)");
-          ln.setAttribute("stroke-width", "2.5");
-          ln.setAttribute("stroke-opacity", "0.5");
+          // 포함: 짧은 점선, 화살표 없음
+          ln.setAttribute("stroke-dasharray", "2 3");
         } else {
-          ln.setAttribute("stroke", "var(--trans)");
-          ln.setAttribute("stroke-width", "1.5");
-          ln.setAttribute("marker-end", "url(#arrow-trans)");
+          // 이동: 실선 + 화살표
+          ln.setAttribute("marker-end", "url(#arrow)");
         }
         gEdges.appendChild(ln);
         e.el = ln;
@@ -311,26 +326,22 @@
       const nodeEls = nodes.map((n) => {
         const g = document.createElementNS(SVGNS, "g");
         g.setAttribute("class", "node");
-        const isEntry = n.type === "screen" && screensById.get(n.id) && screensById.get(n.id).isEntry;
-        if (isEntry) n.r = 15;
+        // 스타일 F: 화면=흰 원 / 리소스=옅은 회색 사각. 시작점은 위치(맨 왼쪽)로만 구분.
         let shape;
         if (n.type === "screen") {
           shape = document.createElementNS(SVGNS, "circle");
           shape.setAttribute("r", n.r);
-          shape.setAttribute("fill", isEntry ? "#22c55e" : "var(--screen)");
-          if (isEntry) { shape.setAttribute("stroke", "#bbf7d0"); shape.setAttribute("stroke-width", "2.5"); }
+          shape.setAttribute("fill", "var(--node-fill)");
         } else {
           shape = document.createElementNS(SVGNS, "rect");
           shape.setAttribute("width", n.r * 2); shape.setAttribute("height", n.r * 2);
           shape.setAttribute("x", -n.r); shape.setAttribute("y", -n.r);
           shape.setAttribute("rx", 3);
-          shape.setAttribute("fill", n.kind === "external" ? "var(--external)" : "var(--endpoint)");
+          shape.setAttribute("fill", "var(--res-fill)");
         }
         const txt = document.createElementNS(SVGNS, "text");
         txt.setAttribute("x", n.r + 4); txt.setAttribute("y", 4);
-        const baseLabel = n.label.length > 26 ? n.label.slice(0, 25) + "…" : n.label;
-        txt.textContent = isEntry ? "▶ " + baseLabel + " (시작)" : baseLabel;
-        if (isEntry) txt.setAttribute("font-weight", "700");
+        txt.textContent = n.label.length > 26 ? n.label.slice(0, 25) + "…" : n.label;
         g.appendChild(shape); g.appendChild(txt);
         g.addEventListener("pointerdown", (ev) => startDrag(ev, n));
         g.addEventListener("click", (ev) => { ev.stopPropagation(); select(n); });
@@ -341,8 +352,13 @@
 
       function paint() {
         for (const e of edges) {
-          e.el.setAttribute("x1", e.source.x); e.el.setAttribute("y1", e.source.y);
-          e.el.setAttribute("x2", e.target.x); e.el.setAttribute("y2", e.target.y);
+          // 선을 노드 가장자리에서 끊어 화살표가 노드에 안 가리게 트림
+          const a = e.source, b = e.target;
+          const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+          const ux = dx / len, uy = dy / len;
+          const padA = (a.r || 10) + 2, padB = (b.r || 10) + 2;
+          e.el.setAttribute("x1", a.x + ux * padA); e.el.setAttribute("y1", a.y + uy * padA);
+          e.el.setAttribute("x2", b.x - ux * padB); e.el.setAttribute("y2", b.y - uy * padB);
         }
         for (const n of nodes) n.el.setAttribute("transform", "translate(" + n.x + "," + n.y + ")");
       }
@@ -366,20 +382,29 @@
           if (e.source === n) connected.add(e.target.key);
           if (e.target === n) connected.add(e.source.key);
         }
-        for (const m of nodes) m.el.classList.toggle("dim", !connected.has(m.key));
+        for (const m of nodes) {
+          m.el.classList.toggle("dim", !connected.has(m.key));
+          m.el.classList.toggle("selected", m === n); // 선택 노드 액센트 링
+        }
         for (const e of edges) e.el.classList.toggle("dim", e.source !== n && e.target !== n);
         document.body.classList.add("panel-open");
         renderPanel(n);
       }
       function clearSelection() {
         selected = null;
-        for (const m of nodes) m.el.classList.remove("dim");
+        for (const m of nodes) { m.el.classList.remove("dim"); m.el.classList.remove("selected"); }
         for (const e of edges) e.el.classList.remove("dim");
         panel.innerHTML = '<p class="hint">노드를 클릭하면 화면의 기능·이동·호출을 봅니다.</p>';
         document.body.classList.remove("panel-open");
       }
       svg.addEventListener("click", clearSelection);
       document.getElementById("panel-close").addEventListener("click", clearSelection);
+
+      // ---- 테마 토글 (라이트 기본 ↔ 다크) ----
+      document.getElementById("theme-toggle").addEventListener("click", () => {
+        const h = document.documentElement;
+        h.setAttribute("data-theme", h.getAttribute("data-theme") === "dark" ? "light" : "dark");
+      });
 
       // ---- 패널 ----
       const panel = document.getElementById("panel-body"); // 내용 컨테이너(닫기버튼/핸들은 보존)
