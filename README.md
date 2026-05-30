@@ -2,24 +2,93 @@
 
 > 코드에서 제품을 역으로 복원해, 사람이 제품 결정을 내리게 한다.
 
-React/Next 프론트엔드 코드베이스를 정적 분석해 **제품 지도(Product Map)** 를 만드는 CLI입니다.
-화면(route/page)을 노드로, 화면 간 이동과 화면이 부르는 API/데이터 호출을 엣지로 뽑아
-인터랙티브 대시보드로 보여주고, 거기서 PRD·요구사항 문서를 추출합니다. 대상: **PM/기획자**.
+React/Next 프론트엔드 코드베이스를 **정적 분석**해 **제품 지도(Product Map)** 를 만드는 CLI입니다.
+화면을 노드로, 화면 간 이동과 화면이 부르는 API/데이터 호출을 엣지로 뽑아내, 인터랙티브 대시보드로 보여주고 PRD·요구사항 작성을 돕습니다.
 
-## 사용 (예정)
+레퍼런스들(graphify·codegraph·Understand-Anything)이 *코드 심볼* 그래프라면, Alkahest는 한 단계 위 **화면(screen) 레벨의 제품 이해**를 목표로 합니다 — 대상 사용자는 **PM/기획자**.
 
-```bash
-npx alkahest scan        # 프로젝트 분석 → .alkahest/map.json (+ index.html)
-npx alkahest view        # 대시보드로 화면/호출 그래프 탐색
-npx alkahest prd <화면>  # 화면별 PRD/요구사항 마크다운 생성
+```
+화면(Screen) ──이동(Link/router.push/redirect)──▶ 화면(Screen)
+     │
+     └──호출(fetch/useQuery/server action)──▶ 리소스(API 엔드포인트/데이터)
 ```
 
-## 상태
+## 2-레이어 그래프
 
-개발 초기. **Phase 1 완료** — `scan`이 Next app-router를 분석해 화면·이동·리소스·호출·UI기능을
-`.alkahest/map.json`으로 출력합니다. 대시보드(Phase 2)·LLM 요약/PRD(Phase 3)는 진행 예정.
+- **노드**: `Screen`(route/page) · `Resource`(화면이 부르는 API·데이터)
+- **엣지**: `Transition`(화면→화면 이동) · `Call`(화면→리소스 호출)
+- 여러 화면이 같은 리소스를 부르면 노드를 공유 → "어떤 화면들이 `/api/orders`를 함께 쓰는가"가 그래프로 드러납니다(데이터 의존성·변경 영향).
 
-설계 단일 출처는 [`ALKAHEST.md`](./ALKAHEST.md) 입니다.
+## 두 가지 실행 모드 — LLM 키가 필요한가?
+
+핵심 산출물 `map.json`은 **결정론적이라 키가 전혀 필요 없습니다.** LLM은 요약·PRD 같은 *선택적 위층*에서만 쓰이고, 누가 그 LLM이냐가 모드를 가릅니다.
+
+| | **에이전트 모드** (스킬/도구로 호출) | **스탠드얼론 모드** (사람이 직접) |
+|---|---|---|
+| 누가 추론 | 호출한 에이전트(Claude Code/Codex/Cursor)가 이미 LLM | Alkahest가 자체 호출 |
+| `ANTHROPIC_API_KEY` | **불필요** | 필요 |
+| 통로 | `alkahest mcp` (MCP 서버) | `scan --summarize` / `prd` |
+
+## 설치
+
+> npm 배포 예정. 현재는 소스에서 빌드해 사용합니다.
+
+```bash
+git clone https://github.com/cr8rcho/alkahest.git
+cd alkahest
+npm install
+npm run build
+npm link          # 'alkahest' 명령을 전역에 연결 (선택)
+```
+
+배포 후에는: `npm i -g alkahest` 또는 `npx alkahest …`
+
+## 사용법
+
+분석할 React/Next 프로젝트 루트에서 실행하면, 그 프로젝트 안 `.alkahest/` 에 산출물이 생깁니다.
+
+```bash
+alkahest scan              # 분석 → .alkahest/map.json + index.html (기본: 증분)
+alkahest scan --full       # 기준선 무시하고 전체 재스캔
+alkahest view              # 대시보드를 로컬 서버로 열기 (2-레이어 그래프)
+alkahest scan --summarize  # 화면별 LLM 요약 채우기 (ANTHROPIC_API_KEY 필요)
+alkahest prd checkout      # 화면 PRD/요구사항 마크다운 생성 → .alkahest/prd/checkout.md
+alkahest hook install      # 커밋·머지 시 scan 자동 실행 (diff 자동 갱신)
+alkahest mcp               # MCP 서버 실행 (에이전트가 제품 지도를 질의, 키 불필요)
+```
+
+### 에이전트(MCP) 연동
+
+에이전트의 MCP 설정에 추가하면, 에이전트가 `scan` / `overview` / `get_screen` / `who_calls` 도구로 제품 지도를 질의하고 **요약·PRD는 에이전트 자신이** 작성합니다(별도 키 불필요).
+
+```json
+{
+  "mcpServers": {
+    "alkahest": { "command": "alkahest", "args": ["mcp"] }
+  }
+}
+```
+
+## 산출물 — `.alkahest/`
+
+```
+.alkahest/
+├─ map.json       # 표준 ProductMap (모든 출력의 원천)
+├─ index.html     # 자기완결 인터랙티브 대시보드 (외부 의존성/네트워크 없음)
+└─ prd/<screen>.md
+```
+
+`.alkahest/` 는 `.gitignore` 에 추가하길 권장합니다.
+
+## 증분 + 자동 갱신
+
+`scan`은 기본 **증분**입니다 — `map.json`의 파일 해시와 비교해 바뀐 화면만 재파싱하고, 변경되지 않은 화면은 LLM 요약까지 그대로 보존합니다. `alkahest hook install`로 git hook을 걸면 커밋·머지 때마다 자동으로 갱신됩니다.
+
+## 지원 범위 / 한계
+
+- **현재 지원**: Next.js **app-router** (`app/**/page.tsx`, 라우트 그룹/동적 세그먼트 인식).
+- **한계**: 페이지 파일 자체만 파싱 — 임포트한 자식 컴포넌트 내부의 기능/호출은 아직 미추적. `useQuery` 등 훅의 URL, 동적 `router.push(변수)`는 "미해결"로 표시.
+- pages router / React Router / Vite, 런타임 스크린샷은 수요에 따라 추가 예정.
 
 ## 개발
 
@@ -27,4 +96,11 @@ npx alkahest prd <화면>  # 화면별 PRD/요구사항 마크다운 생성
 npm install
 npm run build
 node dist/cli.js scan examples/sample-next   # 번들 픽스처로 시험
+npm run typecheck
 ```
+
+설계 단일 출처는 [`ALKAHEST.md`](./ALKAHEST.md) 입니다.
+
+## License
+
+MIT

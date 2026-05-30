@@ -1,6 +1,6 @@
 {
   "name": "alkahest",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "코드에서 제품을 역복원하는 화면-그래프 CLI (React/Next 정적 분석 → 제품 지도)",
   "type": "module",
   "bin": {
@@ -15,8 +15,29 @@
   "scripts": {
     "build": "tsc && node scripts/copy-assets.mjs",
     "dev": "tsx src/cli.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
+  "keywords": [
+    "cli",
+    "react",
+    "nextjs",
+    "product-map",
+    "screen-graph",
+    "static-analysis",
+    "prd",
+    "mcp",
+    "ast"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cr8rcho/alkahest.git"
+  },
+  "homepage": "https://github.com/cr8rcho/alkahest#readme",
+  "bugs": {
+    "url": "https://github.com/cr8rcho/alkahest/issues"
+  },
+  "author": "cr8rcho",
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
