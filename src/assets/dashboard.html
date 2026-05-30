@@ -95,9 +95,6 @@
       .node circle, .node rect { cursor: pointer; stroke: var(--node-stroke); stroke-width: 1.5px; }
       .node.selected circle, .node.selected rect { stroke: var(--accent); stroke-width: 2.5px; }
       .node.dim { opacity: 0.2; }
-      /* depth 밴드: 보일 듯 말 듯 (홀수 칸만 아주 옅게) */
-      .band-bg { fill: var(--ink); opacity: 0.025; }
-      .band-label { fill: var(--muted); opacity: 0.45; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; }
       .edge { opacity: 0.9; }
       .edge.dim { opacity: 0.08; }
 
@@ -165,7 +162,6 @@
           </marker>
         </defs>
         <g id="viewport">
-          <g id="bands"></g>
           <g id="edges"></g>
           <g id="nodes"></g>
         </g>
@@ -218,126 +214,82 @@
           " · " + MAP.calls.length + " 호출";
       }
 
-      // ---- 초기 배치: 진입점에서 BFS depth → 좌→우 계층 ----
+      // ====== force-directed 레이아웃 (레퍼런스 방식) ======
+      // 얽힌 화면 그래프엔 force 가 자연스럽다. depth 강제 안 함.
+      // 결정론적: Math.random 대신 고정 시드 PRNG → 매번 동일 배치.
       const svg = document.getElementById("graph");
       let W = (svg.clientWidth || 800), H = (svg.clientHeight || 600);
 
-      // 화면 노드의 나가는 이웃 (이동+포함). 리소스는 호출의 끝단.
-      const outAdj = new Map(nodes.map((n) => [n.key, []]));
-      for (const e of edges) outAdj.get(e.source.key).push(e.target.key);
-
-      // 진입점: isEntry 표시된 화면 우선, 없으면 들어오는 엣지 없는 화면.
-      const hasIncoming = new Set(edges.map((e) => e.target.key));
-      const entryScreens = MAP.screens.filter((s) => s.isEntry).map((s) => "s:" + s.id);
-      let roots = entryScreens.length
-        ? entryScreens
-        : nodes.filter((n) => n.type === "screen" && !hasIncoming.has(n.key)).map((n) => n.key);
-      if (!roots.length && nodes.length) roots = [nodes[0].key]; // 순환뿐이면 아무거나
-
-      // BFS depth 부여
-      const depth = new Map();
-      const queue = [];
-      for (const r of roots) { depth.set(r, 0); queue.push(r); }
-      while (queue.length) {
-        const k = queue.shift();
-        for (const nx of outAdj.get(k) || []) {
-          if (!depth.has(nx)) { depth.set(nx, depth.get(k) + 1); queue.push(nx); }
-        }
-      }
-      let maxDepth = 0;
-      for (const d of depth.values()) maxDepth = Math.max(maxDepth, d);
-      // 미연결 노드는 맨 오른쪽 열에.
-      for (const n of nodes) if (!depth.has(n.key)) depth.set(n.key, maxDepth + 1);
-      maxDepth += 1;
-
-      // 열(depth)별 그룹화
-      const byDepth = new Map();
-      for (const n of nodes) {
-        const d = depth.get(n.key);
-        if (!byDepth.has(d)) byDepth.set(d, []);
-        byDepth.get(d).push(n);
+      // 시드 PRNG (mulberry32) — 노드 수로 시드 고정해 항상 같은 결과.
+      let _seed = 0x9e3779b9 ^ nodes.length;
+      function rng() {
+        _seed |= 0; _seed = (_seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(_seed ^ (_seed >>> 15), 1 | _seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
       }
 
-      // ====== 결정론적 계층 레이아웃 (force 없음 — 매번 동일, 안 뭉침) ======
-      // 1) 같은 depth 칸 노드를 barycenter(부모 평균 순번)로 정렬해 직선 교차 최소화.
-      //    여러 패스(좌→우, 우→좌)로 수렴시킨다.
-      const inAdj = new Map(nodes.map((n) => [n.key, []]));
-      const outAdj2 = new Map(nodes.map((n) => [n.key, []]));
-      for (const e of edges) { inAdj.get(e.target.key).push(e.source.key); outAdj2.get(e.source.key).push(e.target.key); }
+      // 진입점(있으면 중앙 근처에 약하게 고정 — 시작점 가늠)
+      const entryKeys = new Set(MAP.screens.filter((s) => s.isEntry).map((s) => "s:" + s.id));
 
-      const cols = [];
-      for (let d = 0; d <= maxDepth; d++) cols[d] = (byDepth.get(d) || []).slice();
-      const orderInCol = new Map();
-      const reindex = (d) => cols[d].forEach((n, i) => orderInCol.set(n.key, i));
-      cols.forEach((_, d) => reindex(d));
+      // 이웃(연결) 인접 — 스프링용
+      const adj = new Map(nodes.map((n) => [n.key, []]));
+      for (const e of edges) { adj.get(e.source.key).push(e.target); adj.get(e.target.key).push(e.source); }
 
-      function sortPass(forward) {
-        const ds = forward ? cols.map((_, d) => d) : cols.map((_, d) => d).reverse();
-        for (const d of ds) {
-          const col = cols[d];
-          if (!col.length) continue;
-          for (const n of col) {
-            const refs = forward ? inAdj.get(n.key) : outAdj2.get(n.key);
-            const known = refs.filter((r) => orderInCol.has(r));
-            n._bary = known.length ? known.reduce((s, r) => s + orderInCol.get(r), 0) / known.length : orderInCol.get(n.key);
-          }
-          col.sort((a, b) => a._bary - b._bary);
-          reindex(d);
-        }
-      }
-      for (let p = 0; p < 4; p++) { sortPass(true); sortPass(false); }
+      // 초기 배치: 원형 + 시드 지터 (force 가 펼칠 출발점)
+      const cx0 = W / 2, cy0 = H / 2, R0 = Math.min(W, H) * 0.42;
+      nodes.forEach((n, i) => {
+        const a = (i / nodes.length) * Math.PI * 2;
+        n.x = cx0 + Math.cos(a) * R0 * (0.6 + rng() * 0.5);
+        n.y = cy0 + Math.sin(a) * R0 * (0.6 + rng() * 0.5);
+        n.vx = 0; n.vy = 0;
+      });
 
-      // 2) 좌표 부여: depth = x열(고정 간격), 칸 안에서는 순번대로 세로 등분. force 없음.
-      const COL_GAP = 200, ROW_GAP = 60, TOP = 70;
-      const colX = (d) => 90 + d * COL_GAP;
-      const bandRange = [];
-      let maxRows = 1;
-      for (let d = 0; d <= maxDepth; d++) maxRows = Math.max(maxRows, cols[d].length);
-      const colHeight = (maxRows - 1) * ROW_GAP;
-      for (let d = 0; d <= maxDepth; d++) {
-        const col = cols[d];
-        if (!col.length) { bandRange[d] = null; continue; }
-        // 칸 노드를 세로 중앙 정렬(짧은 칸은 가운데로 모음)
-        const colTop = TOP + (colHeight - (col.length - 1) * ROW_GAP) / 2;
-        col.forEach((n, i) => {
-          n.depth = d;
-          n.x = colX(d);
-          n.y = colTop + i * ROW_GAP;
-        });
-        bandRange[d] = [colX(d), colX(d)];
-      }
-
-      // ---- 상호작용 상태 ----
+      // ---- 상호작용 상태 (step 이 dragging 참조) ----
       let dragging = null, panStart = null, selected = null;
 
-      // 정적 레이아웃: 시뮬레이션 없음. paint 한 번이면 끝(드래그/리사이즈 시 재호출).
+      // ---- force 시뮬레이션 ----
+      let alpha = 1;
+      const REPULSION = 6000, SPRING = 0.02, SPRING_LEN = 120, GRAVITY = 0.02, DAMP = 0.9;
+      function step() {
+        // 반발(모든 쌍)
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const a = nodes[i], b = nodes[j];
+            let dx = a.x - b.x, dy = a.y - b.y;
+            let d2 = dx * dx + dy * dy || 1;
+            const f = REPULSION / d2, d = Math.sqrt(d2);
+            const fx = (dx / d) * f, fy = (dy / d) * f;
+            a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+          }
+        }
+        // 스프링(엣지)
+        for (const e of edges) {
+          const a = e.source, b = e.target;
+          let dx = b.x - a.x, dy = b.y - a.y;
+          const d = Math.sqrt(dx * dx + dy * dy) || 1;
+          const f = (d - SPRING_LEN) * SPRING;
+          const fx = (dx / d) * f, fy = (dy / d) * f;
+          a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+        }
+        // 중앙 중력
+        for (const n of nodes) {
+          n.vx += (cx0 - n.x) * GRAVITY;
+          n.vy += (cy0 - n.y) * GRAVITY;
+          if (n === dragging) continue;
+          n.vx *= DAMP; n.vy *= DAMP;
+          n.x += n.vx * alpha; n.y += n.vy * alpha;
+        }
+        alpha *= 0.985;
+      }
+
 
       // ---- 렌더 ----
       const gEdges = document.getElementById("edges");
       const gNodes = document.getElementById("nodes");
 
-      // depth 밴드: 홀수 칸 배경 + "시작/depth N" 라벨. 보일 듯 말 듯(CSS opacity).
-      // bandEls 는 paint 에서 세로 길이(y범위)를 노드에 맞춰 갱신.
-      const gBands = document.getElementById("bands");
-      const bandEls = [];
-      const PAD = 26; // 칸 좌우 여백
-      for (let d = 0; d <= maxDepth; d++) {
-        const r = bandRange[d];
-        if (!r) continue;
-        const x0 = r[0] - PAD, w = (r[1] - r[0]) + PAD * 2;
-        const g = document.createElementNS(SVGNS, "g");
-        const rect = document.createElementNS(SVGNS, "rect");
-        rect.setAttribute("x", x0); rect.setAttribute("width", w); rect.setAttribute("rx", 8);
-        if (d % 2 === 1) rect.setAttribute("class", "band-bg"); else rect.setAttribute("fill", "none");
-        const lbl = document.createElementNS(SVGNS, "text");
-        lbl.setAttribute("class", "band-label");
-        lbl.setAttribute("x", x0 + w / 2); lbl.setAttribute("text-anchor", "middle");
-        lbl.textContent = d === 0 ? "시작" : ("depth " + d);
-        g.appendChild(rect); g.appendChild(lbl);
-        gBands.appendChild(g);
-        bandEls.push({ rect, lbl });
-      }
-      // 같은 (source,target) 열쌍에 여러 엣지가 있으면 부채꼴로 벌리기 위한 인덱스
+      // (force 레이아웃엔 depth 밴드 없음 — 열 개념이 없으므로)
+      // 같은 (source,target) 쌍에 여러 엣지가 있으면 부채꼴로 벌리기 위한 인덱스
       const pairCount = new Map();
       for (const e of edges) {
         const key = e.source.key + "|" + e.target.key;
@@ -401,16 +353,16 @@
           e.el.setAttribute("d", "M" + x1 + "," + y1 + " L" + x2 + "," + y2);
         }
         for (const n of nodes) n.el.setAttribute("transform", "translate(" + n.x + "," + n.y + ")");
-        // depth 밴드: 현재 노드 y범위에 맞춰 세로 길이 갱신
-        let minY = Infinity, maxY = -Infinity;
-        for (const n of nodes) { if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y; }
-        const top = minY - 34, bot = maxY + 18;
-        for (const be of bandEls) {
-          be.rect.setAttribute("y", top); be.rect.setAttribute("height", Math.max(0, bot - top));
-          be.lbl.setAttribute("y", top + 4);
-        }
       }
-      // 초기 paint/fit 는 스크립트 끝(fitToView/tx 선언 이후)에서 호출 — TDZ 회피.
+
+      // ---- 시뮬레이션 루프: 정착되면 멈추고 화면 맞춤 ----
+      let fitted = false;
+      function loop() {
+        if (alpha > 0.02) { step(); paint(); }
+        else if (!fitted) { fitted = true; paint(); fitToView(); }
+        requestAnimationFrame(loop);
+      }
+      // loop 시작은 스크립트 끝(fitToView/tx 선언 이후)에서 — TDZ 회피.
 
       // ---- 레이어 토글 ----
       const tTrans = document.getElementById("t-trans"), tCalls = document.getElementById("t-calls");
@@ -562,10 +514,10 @@
         if (!down) return;
         if (!down.moved && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > DRAG_THRESHOLD) {
           down.moved = true;
-          if (down.node) { dragging = down.node; } // 드래그 승격
+          if (down.node) { dragging = down.node; alpha = Math.max(alpha, 0.3); fitted = true; } // 드래그 승격 + 재가열
         }
         if (!down.moved) return;
-        if (dragging) { const w = toWorld(ev.clientX, ev.clientY); dragging.y = w.y; paint(); } // 세로만(열 고정)
+        if (dragging) { const w = toWorld(ev.clientX, ev.clientY); dragging.x = w.x; dragging.y = w.y; dragging.vx = 0; dragging.vy = 0; } // force 라 2D 자유
         else if (panStart) { tx = ev.clientX - panStart.x; ty = ev.clientY - panStart.y; applyTransform(); }
       });
       svg.addEventListener("pointerup", () => {
@@ -588,9 +540,8 @@
       window.addEventListener("resize", () => { W = (svg.clientWidth || 800); H = (svg.clientHeight || 600); fitToView(); });
       applyLayers();
 
-      // ---- 초기 1회 그리기 + 화면 맞춤 (정적 레이아웃) ----
-      paint();
-      fitToView();
+      // ---- 시뮬레이션 시작 (force 정착 후 자동 화면 맞춤) ----
+      loop();
     </script>
   </body>
 </html>
