@@ -6,6 +6,7 @@ import {
   buildMap,
   screenFromRaw,
   resolveTransitions,
+  resolveContains,
   resolveCalls,
   assembleMap,
   isExternalUrl,
@@ -110,7 +111,9 @@ function incrementalBuild(
       reparsed++;
       const raw = adapter.parse(file);
       screens.push(screenFromRaw(file, hashes.get(file.relPath) ?? "", raw));
-      transitions.push(...resolveTransitions(file.id, raw.navs, screenIds, file.relPath));
+      const navTrans = resolveTransitions(file.id, raw.navs, screenIds, file.relPath);
+      transitions.push(...navTrans);
+      transitions.push(...resolveContains(file.id, raw.contains, screenIds, navTrans, file.relPath));
       calls.push(...resolveCalls(file.id, raw.calls, file.relPath, resources));
     }
   }

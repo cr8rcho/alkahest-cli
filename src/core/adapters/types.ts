@@ -18,6 +18,8 @@ export interface ScreenFile {
   route: string;
   /** 사람이 읽는 이름 */
   title: string;
+  /** 앱 진입점 여부 (@main/App 이 띄우는 루트, 또는 "/" 라우트). */
+  isEntry?: boolean;
 }
 
 // ---- parse 단계 원시 신호 (resolve 가 그래프 모델로 변환) ----
@@ -48,6 +50,12 @@ export interface RawScreen {
   calls: RawCall[];
   features: RawFeature[];
   components: string[];
+  /**
+   * 이 화면이 직접 인스턴스화한 다른 화면 후보 (대문자 생성자 호출).
+   * resolve 가 screenIds 와 교집합만 "contains"(구조적 포함) 엣지로 만든다.
+   * 예: SwiftUI TabView 의 Recents()/Assets(), 부모가 박는 자식 View.
+   */
+  contains: string[];
 }
 
 /** 프레임워크 어댑터. */

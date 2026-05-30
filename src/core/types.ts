@@ -50,9 +50,15 @@ export interface Transition {
   from: string; // Screen.id
   /** 대상 Screen.id, 또는 외부 URL, 또는 정적으로 못 푼 경우 null */
   to: string | null;
+  /**
+   * 엣지 종류:
+   *  - "navigate": 사용자가 일으키는 이동 (Link/router.push/.sheet/NavigationLink 등)
+   *  - "contains": 화면이 자식 화면을 포함 (TabView/embed) — 구조적 흐름. 시작점 판별에 사용.
+   */
+  kind: "navigate" | "contains";
   /** 미해결 이동이면 원본 표현식 텍스트 (예: "router.push(path)") */
   rawTarget?: string;
-  /** "<Link href>" | "router.push" | "form action" | "redirect()" | "<a href>" */
+  /** "<Link href>" | "router.push" | "form action" | "redirect()" | "<a href>" | "Tab"/"embed" */
   trigger: string;
   loc: SourceLoc;
 }

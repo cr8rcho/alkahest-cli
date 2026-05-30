@@ -40,6 +40,7 @@ export const nextAppAdapter: FrameworkAdapter = {
         id: route,
         route,
         title: titleFromRoute(route),
+        isEntry: route === "/", // app-router 진입점 = 루트 라우트
       });
     });
     files.sort((a, b) => a.route.localeCompare(b.route));
@@ -157,7 +158,7 @@ function parseScreen(sf: SourceFile): RawScreen {
     }
   }
 
-  return { navs, calls, features, components: [...components].sort() };
+  return { navs, calls, features, components: [...components].sort(), contains: [] };
 }
 
 function snippet(text: string): string {

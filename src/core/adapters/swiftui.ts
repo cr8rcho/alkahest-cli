@@ -33,8 +33,10 @@ export const swiftUiAdapter: FrameworkAdapter = {
 
   discover(projectRoot) {
     const files: ScreenFile[] = [];
+    let entryView: string | null = null;
     walkSwift(projectRoot, (file) => {
       const src = safeRead(file);
+      if (!entryView) entryView = entryViewIn(src); // @main App 이 띄우는 루트 View
       const primary = primaryView(file, src);
       if (!primary) return;
       files.push({
@@ -45,6 +47,10 @@ export const swiftUiAdapter: FrameworkAdapter = {
         title: primary.replace(/View$/, "") || primary,
       });
     });
+    if (entryView) {
+      const e = files.find((f) => f.id === entryView);
+      if (e) e.isEntry = true;
+    }
     files.sort((a, b) => a.id.localeCompare(b.id));
     return files;
   },
@@ -95,6 +101,19 @@ function primaryView(file: string, src: string): string | null {
   return names.includes(stem) ? stem : names[0];
 }
 
+/**
+ * `@main struct X: App` 의 body 에서 처음 인스턴스화하는 View → 앱 진입점.
+ * 예: iobookApp.body → `ContentView()` → "ContentView".
+ */
+function entryViewIn(src: string): string | null {
+  if (!/@main/.test(src) || !/:\s*App\b/.test(src)) return null;
+  const bodyIdx = src.search(/var\s+body\s*:\s*some\s+Scene/);
+  const region = bodyIdx >= 0 ? src.slice(bodyIdx) : src;
+  // WindowGroup { XxxView() } 안의 첫 대문자 생성자
+  const m = region.match(/\b([A-Z]\w*)\s*\(\s*\)/);
+  return m ? m[1] : null;
+}
+
 // ---------- parsing (line heuristics) ----------
 
 const NAV_CONSTRUCTS: Array<{ re: RegExp; trigger: string }> = [
@@ -119,12 +138,25 @@ const DEST_VIEW = /destination:\s*([A-Z]\w*)\s*\(/;
 const URL_STRING = /URL\(string:\s*"([^"]+)"|"(https?:\/\/[^"]+)"/;
 const URL_REQUEST = /URLRequest\(\s*url:/;
 
+/** SwiftUI 내장 컨테이너/요소 — contains 후보에서 제외(노이즈). */
+const SWIFT_BUILTINS = new Set([
+  "VStack","HStack","ZStack","LazyVStack","LazyHStack","LazyVGrid","LazyHGrid","Grid","GridRow",
+  "Text","Image","Button","Label","Link","Spacer","Divider","Group","Section","Form","List",
+  "ForEach","Toggle","Picker","Stepper","Slider","DatePicker","TextField","SecureField","TextEditor",
+  "NavigationStack","NavigationView","NavigationLink","TabView","Tab","ScrollView","ScrollViewReader",
+  "Color","Circle","Rectangle","RoundedRectangle","Capsule","Ellipse","Path","Menu","Chart",
+  "GeometryReader","Canvas","Gauge","ProgressView","Table","DisclosureGroup","ControlGroup","LazyView",
+  "VStackLayout","HStackLayout","AnyView","EmptyView","ViewThatFits","Grid",
+]);
+const CTOR_CALL = /\b([A-Z]\w*)\s*\(/g;
+
 function parseSwift(src: string): RawScreen {
   const lines = src.split("\n");
   const navs: RawNav[] = [];
   const calls: RawCall[] = [];
   const features: RawFeature[] = [];
   const components = new Set<string>();
+  const contains = new Set<string>();
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];

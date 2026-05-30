@@ -28,7 +28,12 @@ export function buildMap(input: ResolveInput): ProductMap {
     const raw = parsed.get(file.relPath);
     if (!raw) continue;
     screens.push(screenFromRaw(file, hashes.get(file.relPath) ?? "", raw));
-    transitions.push(...resolveTransitions(file.id, raw.navs, screenIds, file.relPath));
+    const navTrans = resolveTransitions(file.id, raw.navs, screenIds, file.relPath);
+    transitions.push(...navTrans);
+    // 포함(contains): 이 화면이 직접 인스턴스화한 *다른 화면* → 약한 이동.
+    // 자식 뷰 포함은 .sheet/NavigationLink가 아니라 nav로 안 잡히지만,
+    // 진입점→탭 같은 구조적 흐름을 복원한다 (ALKAHEST.md §11 흐름).
+    transitions.push(...resolveContains(file.id, raw.components, screenIds, navTrans, file.relPath));
     calls.push(...resolveCalls(file.id, raw.calls, file.relPath, resources));
   }
 
@@ -57,12 +62,35 @@ export function screenFromRaw(file: ScreenFile, hash: string, raw: RawScreen): S
     summary: "",
     features: raw.features.map((f) => ({ kind: f.kind, label: f.label, detail: f.detail, loc: { file: file.relPath, line: f.line } })),
     components: raw.components,
+    isEntry: file.isEntry,
   };
 }
 
 /** 한 화면의 navs → Transition[] (화면 id 집합 기준 해석). */
 export function resolveTransitions(from: string, navs: RawNav[], screenIds: Set<string>, file: string): Transition[] {
   return navs.map((nav) => resolveTransition(from, nav, screenIds, file));
+}
+
+/**
+ * 화면이 인스턴스화한 자식 화면 → "contains" 엣지 (구조적 흐름, 시작점 판별용).
+ * contains 후보 중 실제 화면(screenIds)인 것만, 자기 자신·이미 nav 로 연결된 것은 제외.
+ */
+export function resolveContains(
+  from: string,
+  candidates: string[],
+  screenIds: Set<string>,
+  existingNav: Transition[],
+  file: string,
+): Transition[] {
+  const navTargets = new Set(existingNav.map((t) => t.to).filter(Boolean) as string[]);
+  const out: Transition[] = [];
+  const seen = new Set<string>();
+  for (const c of candidates) {
+    if (c === from || !screenIds.has(c) || navTargets.has(c) || seen.has(c)) continue;
+    seen.add(c);
+    out.push({ from, to: c, kind: "contains", trigger: "embed", loc: { file, line: 0 } });
+  }
+  return out;
 }
 
 /** 한 화면의 calls → Call[]. 발견한 Resource 를 resourceMap 에 dedupe 적재. */

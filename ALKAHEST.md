@@ -199,7 +199,9 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 
 ---
 
-_마지막 갱신: 2026-05-30 · 상태: P1~P3 + MCP + 증분/hook + **어댑터 레이어(다중 플랫폼)**. Next(app-router)·SwiftUI 지원 — iobook(순수 SwiftUI) 화면 41·이동 62·호출 6 검증, Next 픽스처 무회귀. 다음: 배포(npm publish) 또는 어댑터 추가(pages-router/Compose 등)·자식 컴포넌트 추적_
+_마지막 갱신: 2026-05-30 · 상태: P1~P3 + MCP + 증분/hook + 어댑터(다중플랫폼) + **흐름/시작점**. 진입점(@main/루트라우트) 표시 + contains 엣지(TabView/embed) + 대시보드 계층 레이아웃(진입점 좌→우 BFS). iobook: 화면 41·이동 62·포함 21·호출 6, entry=ContentView→5탭 검증. 다음: 배포(npm publish) 또는 어댑터 추가·자식 컴포넌트 추적_
+
+**그래프 흐름(§11 보강):** 엣지에 `kind`("navigate" 사용자이동 / "contains" 구조적포함). 어댑터가 진입점(`ScreenFile.isEntry`)과 contains 후보(대문자 생성자 호출)를 내고, `resolveContains`가 screenIds 교집합만 엣지화. 대시보드는 진입점에서 BFS depth로 좌→우 열 배치 + force는 x를 depth열에 고정(COL_PULL)·y만 자유. 시작 노드는 초록 ▶ 강조.
 
 > Phase 3 검증 한계: 컴파일·배선·구조화출력 스키마·키-부재 처리까지 확인. **실제 LLM 왕복은 ANTHROPIC_API_KEY 환경에서 미검증** — 키 셋업 후 `alkahest scan . --summarize` / `alkahest prd <화면>` 로 확인 필요._
 
