@@ -253,49 +253,48 @@
         byDepth.get(d).push(n);
       }
       const colGap = Math.max(160, (W - 120) / (maxDepth + 1));
+      function colX(d) { return 70 + d * colGap; }
       for (const [d, col] of byDepth) {
         const rowGap = H / (col.length + 1);
         col.forEach((n, i) => {
-          n.x = 70 + d * colGap + (Math.random() - 0.5) * 24;
-          n.y = rowGap * (i + 1) + (Math.random() - 0.5) * 24;
-          n.vx = 0; n.vy = 0;
           n.depth = d;
+          n.x = colX(d);                      // x는 열에 고정 (지터 없음 → 오와 열 정렬)
+          n.y = rowGap * (i + 1);
+          n.vx = 0; n.vy = 0;
         });
       }
 
       // ---- 상호작용 상태 (force step 이 참조하므로 루프보다 먼저 선언) ----
       let dragging = null, panStart = null, selected = null;
 
-      // ---- force 시뮬레이션 (계층 유지: x는 depth 열에 고정 인력, y만 자유) ----
+      // ---- force 시뮬레이션 (계층 정렬 유지: x는 depth 열에 완전 고정, y만 시뮬) ----
+      // 같은 열 노드끼리 세로 반발 + 엣지의 세로 스프링으로 겹침만 푼다. 좌→우 격자 유지.
       let alpha = 1;
-      const REPULSION = 4200, SPRING = 0.05, SPRING_LEN = 90, COL_PULL = 0.12, Y_GRAVITY = 0.01, DAMP = 0.85;
-      function colX(n) { return 70 + (n.depth || 0) * colGap; }
+      const Y_REPULSION = 1400, Y_SPRING = 0.04, DAMP = 0.85;
       function step() {
+        // 같은 열(depth) 노드끼리만 세로로 밀어냄
         for (let i = 0; i < nodes.length; i++) {
           for (let j = i + 1; j < nodes.length; j++) {
             const a = nodes[i], b = nodes[j];
-            let dx = a.x - b.x, dy = a.y - b.y;
-            let d2 = dx * dx + dy * dy || 1;
-            const f = REPULSION / d2;
-            const d = Math.sqrt(d2);
-            const fx = (dx / d) * f, fy = (dy / d) * f;
-            a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+            if (a.depth !== b.depth) continue;
+            let dy = a.y - b.y;
+            const sign = dy >= 0 ? 1 : -1;
+            const dist = Math.abs(dy) || 1;
+            const f = Y_REPULSION / dist;
+            a.vy += sign * f; b.vy -= sign * f;
           }
         }
+        // 엣지: y만 끌어당겨 연결된 노드끼리 세로로 가깝게 (x는 안 건드림)
         for (const e of edges) {
           const a = e.source, b = e.target;
-          let dx = b.x - a.x, dy = b.y - a.y;
-          const d = Math.sqrt(dx * dx + dy * dy) || 1;
-          const f = (d - SPRING_LEN) * SPRING;
-          const fx = (dx / d) * f, fy = (dy / d) * f;
-          a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+          const f = (b.y - a.y) * Y_SPRING;
+          a.vy += f; b.vy -= f;
         }
         for (const n of nodes) {
-          n.vx += (colX(n) - n.x) * COL_PULL;   // depth 열로 수평 정렬
-          n.vy += (H / 2 - n.y) * Y_GRAVITY;    // 세로는 약하게 중앙으로
+          n.x = colX(n.depth);                // x 고정 (드래그 중에도 열 유지)
           if (n === dragging) continue;
-          n.vx *= DAMP; n.vy *= DAMP;
-          n.x += n.vx * alpha; n.y += n.vy * alpha;
+          n.vy *= DAMP;
+          n.y += n.vy * alpha;
         }
         alpha *= 0.99;
       }
@@ -343,8 +342,7 @@
         txt.setAttribute("x", n.r + 4); txt.setAttribute("y", 4);
         txt.textContent = n.label.length > 26 ? n.label.slice(0, 25) + "…" : n.label;
         g.appendChild(shape); g.appendChild(txt);
-        g.addEventListener("pointerdown", (ev) => startDrag(ev, n));
-        g.addEventListener("click", (ev) => { ev.stopPropagation(); select(n); });
+        g.addEventListener("pointerdown", (ev) => onNodeDown(ev, n));
         gNodes.appendChild(g);
         n.el = g;
         return g;
@@ -397,7 +395,7 @@
         panel.innerHTML = '<p class="hint">노드를 클릭하면 화면의 기능·이동·호출을 봅니다.</p>';
         document.body.classList.remove("panel-open");
       }
-      svg.addEventListener("click", clearSelection);
+      // svg 빈 곳 탭 → clearSelection 은 pointerup(탭) 핸들러에서 처리.
       document.getElementById("panel-close").addEventListener("click", clearSelection);
 
       // ---- 테마 토글 (라이트 기본 ↔ 다크) ----
@@ -476,21 +474,39 @@
       function applyTransform() { viewport.setAttribute("transform", "translate(" + tx + " " + ty + ") scale(" + k + ")"); }
       function toWorld(cx, cy) { const rect = svg.getBoundingClientRect(); return { x: (cx - rect.left - tx) / k, y: (cy - rect.top - ty) / k }; }
 
-      // dragging, panStart 는 위에서 선언됨
-      function startDrag(ev, n) {
-        ev.stopPropagation(); dragging = n; alpha = Math.max(alpha, 0.5);
+      // dragging, panStart 는 위에서 선언됨.
+      // 탭 vs 드래그 구분: pointerdown 시점만 기록하고, 임계값(4px) 넘게 움직이면 드래그로 승격.
+      const DRAG_THRESHOLD = 4;
+      let down = null; // {node|null, x, y, moved, pointerId}
+
+      function onNodeDown(ev, n) {
+        ev.stopPropagation();
+        down = { node: n, x: ev.clientX, y: ev.clientY, moved: false, pointerId: ev.pointerId };
         svg.setPointerCapture(ev.pointerId);
       }
       svg.addEventListener("pointerdown", (ev) => {
-        if (dragging) return;
+        if (down) return; // 노드에서 이미 시작됨
+        down = { node: null, x: ev.clientX, y: ev.clientY, moved: false, pointerId: ev.pointerId };
         panStart = { x: ev.clientX - tx, y: ev.clientY - ty };
         svg.setPointerCapture(ev.pointerId);
       });
       svg.addEventListener("pointermove", (ev) => {
-        if (dragging) { const w = toWorld(ev.clientX, ev.clientY); dragging.x = w.x; dragging.y = w.y; dragging.vx = 0; dragging.vy = 0; paint(); }
+        if (!down) return;
+        if (!down.moved && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > DRAG_THRESHOLD) {
+          down.moved = true;
+          if (down.node) { dragging = down.node; alpha = Math.max(alpha, 0.5); } // 드래그 승격
+        }
+        if (!down.moved) return;
+        if (dragging) { const w = toWorld(ev.clientX, ev.clientY); dragging.y = w.y; dragging.vy = 0; paint(); } // 세로만(열 고정)
         else if (panStart) { tx = ev.clientX - panStart.x; ty = ev.clientY - panStart.y; applyTransform(); }
       });
-      svg.addEventListener("pointerup", () => { dragging = null; panStart = null; });
+      svg.addEventListener("pointerup", () => {
+        if (down && !down.moved) {       // 안 움직였으면 = 탭
+          if (down.node) select(down.node);
+          else clearSelection();
+        }
+        dragging = null; panStart = null; down = null;
+      });
       svg.addEventListener("wheel", (ev) => {
         ev.preventDefault();
         const rect = svg.getBoundingClientRect();
