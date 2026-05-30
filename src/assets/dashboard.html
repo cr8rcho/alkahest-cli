@@ -31,28 +31,33 @@
       .toolbar {
         display: flex;
         align-items: center;
-        gap: 18px;
-        padding: 10px 16px;
+        flex-wrap: wrap;
+        column-gap: 16px;
+        row-gap: 6px;
+        padding: 8px 14px;
         border-bottom: 1px solid var(--line);
         background: #0b1220;
         flex: 0 0 auto;
       }
-      .brand { font-weight: 700; letter-spacing: 0.3px; }
+      .brand { font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; }
       .brand .sub { color: var(--muted); font-weight: 400; margin-left: 6px; }
-      .counts { color: var(--muted); }
-      .toolbar label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
-      .legend { margin-left: auto; display: flex; gap: 14px; color: var(--muted); align-items: center; }
+      .counts { color: var(--muted); white-space: nowrap; }
+      .toolbar label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; white-space: nowrap; }
+      .legend { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); align-items: center; }
+      .legend span { white-space: nowrap; }
       .legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
       .legend .edge { display: inline-block; width: 22px; border-top: 2px solid; margin-right: 5px; vertical-align: 3px; }
-      main { flex: 1 1 auto; display: flex; min-height: 0; }
-      #graph { flex: 1 1 auto; min-width: 0; cursor: grab; }
+      main { flex: 1 1 auto; display: flex; min-height: 0; position: relative; }
+      #graph { flex: 1 1 auto; min-width: 0; cursor: grab; touch-action: none; }
       #graph:active { cursor: grabbing; }
+      .panel-close { display: none; }
       #panel {
         flex: 0 0 360px;
         border-left: 1px solid var(--line);
         background: var(--panel);
         padding: 16px;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
       #panel h2 { margin: 0 0 2px; font-size: 16px; }
       #panel .route { color: var(--accent); font-family: ui-monospace, monospace; font-size: 12px; margin-bottom: 12px; word-break: break-all; }
@@ -73,6 +78,44 @@
       .edge { opacity: 0.85; }
       .edge.dim { opacity: 0.08; }
       .edge.unresolved { stroke-dasharray: 1 5; }
+
+      /* ---- 모바일: 좁은 화면에서는 패널을 하단 시트로 ---- */
+      @media (max-width: 640px) {
+        body { height: 100dvh; }
+        .toolbar { column-gap: 12px; padding: 8px 12px; font-size: 12px; }
+        .brand .sub { display: none; }
+        .legend { width: 100%; margin-left: 0; justify-content: flex-start; font-size: 11px; }
+        #panel {
+          position: absolute;
+          left: 0; right: 0; bottom: 0;
+          flex: none;
+          width: 100%;
+          max-height: 62%;
+          border-left: none;
+          border-top: 1px solid var(--line);
+          border-radius: 14px 14px 0 0;
+          box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
+          transform: translateY(101%);
+          transition: transform 0.22s ease;
+          padding-top: 30px;
+        }
+        body.panel-open #panel { transform: translateY(0); }
+        .panel-close {
+          display: block;
+          position: absolute;
+          top: 6px; right: 10px;
+          width: 32px; height: 32px;
+          line-height: 30px; text-align: center;
+          font-size: 20px; color: var(--muted);
+          background: none; border: none; cursor: pointer;
+        }
+        /* 시트 손잡이 */
+        #panel::before {
+          content: ""; position: absolute; top: 9px; left: 50%;
+          width: 38px; height: 4px; margin-left: -19px;
+          background: var(--line); border-radius: 2px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -104,7 +147,10 @@
         </g>
       </svg>
       <aside id="panel">
-        <p class="hint">노드를 클릭하면 화면의 기능·이동·호출을 봅니다.<br /><br />드래그로 노드 이동, 휠로 확대/축소, 빈 곳 드래그로 이동.</p>
+        <button class="panel-close" id="panel-close" aria-label="닫기">×</button>
+        <div id="panel-body">
+          <p class="hint">노드를 클릭하면 화면의 기능·이동·호출을 봅니다.<br /><br />드래그로 노드 이동, 휠/핀치로 확대/축소, 빈 곳 드래그로 이동.</p>
+        </div>
       </aside>
     </main>
 
@@ -144,7 +190,7 @@
 
       // ---- 초기 배치 ----
       const svg = document.getElementById("graph");
-      let W = svg.clientWidth, H = svg.clientHeight;
+      let W = (svg.clientWidth || 800), H = (svg.clientHeight || 600);
       nodes.forEach((n, i) => {
         const a = (i / nodes.length) * Math.PI * 2;
         n.x = W / 2 + Math.cos(a) * 180 + (Math.random() - 0.5) * 40;
@@ -257,17 +303,21 @@
         }
         for (const m of nodes) m.el.classList.toggle("dim", !connected.has(m.key));
         for (const e of edges) e.el.classList.toggle("dim", e.source !== n && e.target !== n);
+        document.body.classList.add("panel-open");
         renderPanel(n);
       }
-      svg.addEventListener("click", () => {
+      function clearSelection() {
         selected = null;
         for (const m of nodes) m.el.classList.remove("dim");
         for (const e of edges) e.el.classList.remove("dim");
         panel.innerHTML = '<p class="hint">노드를 클릭하면 화면의 기능·이동·호출을 봅니다.</p>';
-      });
+        document.body.classList.remove("panel-open");
+      }
+      svg.addEventListener("click", clearSelection);
+      document.getElementById("panel-close").addEventListener("click", clearSelection);
 
       // ---- 패널 ----
-      const panel = document.getElementById("panel");
+      const panel = document.getElementById("panel-body"); // 내용 컨테이너(닫기버튼/핸들은 보존)
       const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
       function li(inner, cls) { return "<li" + (cls ? ' class="' + cls + '"' : "") + ">" + inner + "</li>"; }
       function listOr(items, emptyMsg) { return items.length ? "<ul>" + items.join("") + "</ul>" : '<p class="empty">' + emptyMsg + "</p>"; }
@@ -361,7 +411,7 @@
         applyTransform();
       }, { passive: false });
 
-      window.addEventListener("resize", () => { W = svg.clientWidth; H = svg.clientHeight; alpha = Math.max(alpha, 0.3); });
+      window.addEventListener("resize", () => { W = (svg.clientWidth || 800); H = (svg.clientHeight || 600); alpha = Math.max(alpha, 0.3); });
       applyLayers();
     </script>
   </body>
