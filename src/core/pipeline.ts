@@ -1,8 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
-import { discover } from "./discover.js";
-import { createProject, parseScreen, type RawScreen } from "./parse.js";
+import { selectAdapter, type FrameworkAdapter, type ScreenFile, type RawScreen } from "./adapters/index.js";
 import {
   buildMap,
   screenFromRaw,
@@ -13,7 +12,7 @@ import {
 } from "./resolve.js";
 import { emitMap, emitDashboard, OUTPUT_DIR } from "./emit.js";
 import { hashContent } from "./hash.js";
-import type { ProductMap, Resource, Transition, Call } from "./types.js";
+import type { ProductMap, Screen, Resource, Transition, Call } from "./types.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../../package.json") as { version: string };
@@ -26,29 +25,27 @@ export interface ScanOptions {
 export interface ScanResult {
   map: ProductMap;
   outFile: string;
-  /** 증분 통계 (전체 스캔이면 reused=0) */
   stats: { reused: number; reparsed: number; total: number; incremental: boolean };
 }
 
 /**
- * 코어 파이프라인 discover→parse→resolve→emit (콘솔 출력 없음).
- * 기본은 **증분**: `.alkahest/map.json` 이 있으면 해시가 같은 화면은 재파싱하지 않고
- * (LLM 요약 포함) 그대로 재사용, 변경/추가된 화면만 재처리한다 (ALKAHEST.md §10).
+ * 코어 파이프라인 detect→discover→parse→resolve→emit (콘솔 출력 없음).
+ * 프레임워크는 어댑터로 자동 선택(ALKAHEST.md §8). 기본 증분(§10).
  * 화면을 못 찾으면 null. CLI(scan)와 MCP 서버가 공유한다.
  */
 export function runScan(projectRoot: string, options: ScanOptions = {}): ScanResult | null {
-  const discovery = discover(projectRoot);
-  if (!discovery.screenFiles.length) return null;
+  const adapter = selectAdapter(projectRoot);
+  if (!adapter) return null;
+  const files = adapter.discover(projectRoot);
+  if (!files.length) return null;
 
   const hashes = new Map<string, string>();
-  for (const file of discovery.screenFiles) {
-    hashes.set(file.relPath, hashContent(readFileSync(file.absPath, "utf8")));
-  }
+  for (const file of files) hashes.set(file.relPath, hashContent(readFileSync(file.absPath, "utf8")));
 
   const prev = options.full ? null : loadMap(projectRoot);
   const result = prev
-    ? incrementalBuild(projectRoot, discovery, hashes, prev)
-    : fullBuild(projectRoot, discovery, hashes);
+    ? incrementalBuild(adapter, files, hashes, prev, projectRoot)
+    : fullBuild(adapter, files, hashes, projectRoot);
 
   const outFile = emitMap(projectRoot, result.map);
   emitDashboard(projectRoot, result.map);
@@ -56,19 +53,19 @@ export function runScan(projectRoot: string, options: ScanOptions = {}): ScanRes
 }
 
 function fullBuild(
-  projectRoot: string,
-  discovery: ReturnType<typeof discover>,
+  adapter: FrameworkAdapter,
+  files: ScreenFile[],
   hashes: Map<string, string>,
+  projectRoot: string,
 ): Omit<ScanResult, "outFile"> {
-  const project = createProject();
   const parsed = new Map<string, RawScreen>();
-  for (const file of discovery.screenFiles) {
-    parsed.set(file.relPath, parseScreen(project.addSourceFileAtPath(file.absPath)));
-  }
+  for (const file of files) parsed.set(file.relPath, adapter.parse(file));
   const map = buildMap({
-    discovery,
+    files,
     parsed,
     hashes,
+    framework: adapter.id,
+    router: adapter.router,
     projectRoot,
     scannedAt: new Date().toISOString(),
     alkahestVersion: pkg.version,
@@ -77,24 +74,24 @@ function fullBuild(
 }
 
 function incrementalBuild(
-  projectRoot: string,
-  discovery: ReturnType<typeof discover>,
+  adapter: FrameworkAdapter,
+  files: ScreenFile[],
   hashes: Map<string, string>,
   prev: ProductMap,
+  projectRoot: string,
 ): Omit<ScanResult, "outFile"> {
-  const routes = new Set(discovery.screenFiles.map((f) => f.route));
+  const screenIds = new Set(files.map((f) => f.id));
   const prevScreenByFile = new Map(prev.screens.map((s) => [s.sourceFile, s]));
   const prevResById = new Map(prev.resources.map((r) => [r.id, r]));
 
-  const screens: ProductMap["screens"] = [];
+  const screens: Screen[] = [];
   const transitions: Transition[] = [];
   const calls: Call[] = [];
   const resources = new Map<string, Resource>();
-  const project = createProject();
   let reused = 0;
   let reparsed = 0;
 
-  for (const file of discovery.screenFiles) {
+  for (const file of files) {
     const prevScreen = prevScreenByFile.get(file.relPath);
     const unchanged = prevScreen && prev.meta.fileHashes[file.relPath] === hashes.get(file.relPath);
 
@@ -111,16 +108,16 @@ function incrementalBuild(
       }
     } else {
       reparsed++;
-      const raw = parseScreen(project.addSourceFileAtPath(file.absPath));
-      screens.push(screenFromRaw(file.route, file.relPath, hashes.get(file.relPath) ?? "", raw));
-      transitions.push(...resolveTransitions(file.route, raw.navs, routes, file.relPath));
-      calls.push(...resolveCalls(file.route, raw.calls, file.relPath, resources));
+      const raw = adapter.parse(file);
+      screens.push(screenFromRaw(file, hashes.get(file.relPath) ?? "", raw));
+      transitions.push(...resolveTransitions(file.id, raw.navs, screenIds, file.relPath));
+      calls.push(...resolveCalls(file.id, raw.calls, file.relPath, resources));
     }
   }
 
-  // 재사용 엣지를 새 route 집합에 맞춰 가볍게 재해석: 사라진 화면을 가리키는 내부 이동은 미해결로.
+  // 재사용 엣지를 새 화면 집합에 맞춰 재해석: 사라진 화면을 가리키는 내부 이동은 미해결로.
   for (const t of transitions) {
-    if (t.to && !isExternalUrl(t.to) && !routes.has(t.to)) {
+    if (t.to && !isExternalUrl(t.to) && !screenIds.has(t.to)) {
       t.rawTarget = t.rawTarget ?? t.to;
       t.to = null;
     }
@@ -132,7 +129,8 @@ function incrementalBuild(
     calls,
     resources: [...resources.values()],
     hashes,
-    discovery,
+    framework: adapter.id,
+    router: adapter.router,
     projectRoot,
     scannedAt: new Date().toISOString(),
     alkahestVersion: pkg.version,

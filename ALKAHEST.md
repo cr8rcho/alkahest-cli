@@ -8,11 +8,13 @@
 
 ## 1. 한 줄 정의
 
-React/Next 프론트엔드 코드베이스를 정적 분석해 **"제품 지도(Product Map)"** 를 만든다.
+UI 코드베이스를 정적 분석해 **"제품 지도(Product Map)"** 를 만든다.
 화면(screen)을 노드로, 화면 간 이동을 엣지로, 각 화면 안의 기능을 속성으로 뽑아
 인터랙티브 HTML 대시보드로 보여주고, 거기서 **PRD·요구사항 문서를 추출**한다.
 
-대상 사용자: **PM/기획자** (개발자도 부차적). 대상 제품: **웹앱(React / Next.js)**.
+플랫폼은 **어댑터로 확장**한다(§8) — 현재 **Next.js(app-router)** 와 **SwiftUI** 지원. 모델은 플랫폼 무관이라 새 어댑터만 추가하면 된다.
+
+대상 사용자: **PM/기획자** (개발자도 부차적). 대상 제품: **웹/모바일 UI 앱** (React·Next, SwiftUI, …).
 
 ## 2. 포지셔닝 — 왜 다른가
 
@@ -44,12 +46,12 @@ ProductMap {
   transitions: Transition[]  // 1차 엣지: 화면 → 화면 이동
   calls:       Call[]        // 2차 엣지: 화면 → 리소스 호출
   meta:        { framework, router, scannedAt, projectRoot, fileHashes }
-                              // fileHashes: { [path]: hash } — 증분 갱신 기준선 (§10)
+                              // fileHashes: { [path]: hash } — 증분 갱신 기준선 (§11)
 }
 
 Screen {
   id, route, sourceFile
-  sourceHash: string         // 증분 갱신용 파일 해시 — §10
+  sourceHash: string         // 증분 갱신용 파일 해시 — §11
   title, summary             // summary: LLM이 쓴 "사용자가 뭘 하나" (Phase 3)
   features:   Feature[]      // 화면 UI 요소
   components: string[]
@@ -127,7 +129,7 @@ alkahest mcp              # MCP 서버(stdio) — 에이전트가 제품 지도 
 alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (diff 자동 갱신, §10)
 ```
 
-대상은 **단일 프로젝트(코드베이스) 하나**. `scan`은 기본 **증분**(§10).
+대상은 **단일 프로젝트(코드베이스) 하나**. `scan`은 기본 **증분**(§11).
 
 ## 7. 실행 모드 — 키가 필요한가?
 
@@ -143,7 +145,20 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 - 에이전트 통합: **MCP 서버 — 구현 완료** (`alkahest mcp`, stdio). 도구 `scan`/`overview`/`get_screen`/`who_calls` 노출, 추론(요약·PRD)은 호출 에이전트가 수행. 도구 description에 사용법이 담겨 **Skill 없이도 동작** — Skill은 워크플로 방법론이 필요할 때 나중에 얹는 선택적 Claude 전용 보강.
   - 에이전트 MCP 설정: `{ "command": "alkahest", "args": ["mcp"] }` (대상 프로젝트 디렉터리에서 실행).
 
-## 8. 기술 스택
+## 8. 어댑터 레이어 (다중 플랫폼)
+
+플랫폼별로 갈리는 건 **discover + parse 뿐**이고, resolve/emit/dashboard/MCP/증분은 전부 공유한다. 각 어댑터는 공통 `FrameworkAdapter` 인터페이스(`detect`/`discover`/`parse`)를 구현하며, 파싱 방식은 자유(어댑터마다 다름). 새 플랫폼 = 어댑터 하나 추가 + `ADAPTERS` 등록.
+
+| 어댑터 | 화면 | 이동 | 호출 | 파서 |
+|---|---|---|---|---|
+| **next-app** | `app/**/page.tsx` (route) | `<Link>`/`router.push`/`redirect` | `fetch`/query훅 | ts-morph (AST) |
+| **swiftui** | `struct X: View` | `NavigationLink`/`.sheet`/`.fullScreenCover`/`navigationDestination` | `URL(string:)`/`URLRequest` | 정규식 휴리스틱(의존성 0) |
+
+- 어댑터는 `src/core/adapters/`. `selectAdapter()`가 `detect()`로 자동 선택.
+- 파서는 언어 비종속 — Swift은 휴리스틱으로 시작, 정확도 필요 시 tree-sitter로 교체 가능(인터페이스 동일).
+- 검증: iobook(순수 SwiftUI) → 화면 41·이동 62·호출 6, Gemini API/정책 URL 등 리소스 추출. Next 픽스처 무회귀.
+
+## 9. 기술 스택
 
 - **런타임/언어**: Node + TypeScript (ESM). 대상이 JS 생태계라 파싱 친화적.
 - **CLI**: 가벼운 인자 파서 (commander 또는 자체).
@@ -153,7 +168,7 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 
 > octokit 제약(ESM/tsx 깨짐)은 (구) 원격 경로 얘기였고, 신 방향은 **로컬 파일 직접 분석**이라 무관. → [[verify-lib-via-next-route]]
 
-## 9. 단계별 로드맵
+## 10. 단계별 로드맵
 
 - **Phase 0 — Scaffold**: package.json / tsconfig / CLI 엔트리 / `.alkahest/` 규약.
 - **Phase 1 — Screen Graph (정적, LLM 없음)**: Next app-router 화면 발견 + 이동 엣지 + `map.json`. CLI `scan`. 콘솔로 그래프 검증.
@@ -161,7 +176,7 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 - **Phase 3 — LLM**: 화면 요약 + 기능 라벨링 + `prd` 명령.
 - **Phase 4 — 확장**: pages router / React Router / Vite, 그리고 **런타임 스크린샷 보강(Playwright)** — 진짜 렌더 썸네일을 노드에 입힘 (선택).
 
-## 10. 증분 업데이트 (diff-driven)
+## 11. 증분 업데이트 (diff-driven)
 
 대상은 **단일 프로젝트**고, 코드에 diff가 생기면 제품 지도가 따라 갱신돼야 한다.
 전체 재스캔은 비싸므로 `scan`은 **변경된 파일만 재처리**하는 증분 갱신을 1급으로 지원한다.
@@ -176,7 +191,7 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 
 **구현 완료**: `scan`은 기본 증분 — `map.json`의 `fileHashes`와 비교해 **해시가 같은 화면은 재파싱하지 않고 LLM 요약까지 보존**, 변경/추가만 재처리, 삭제된 화면을 가리키던 내부 이동은 미해결로 강등. `--summarize`도 요약이 비어있는(변경된) 화면만 LLM 호출. `--full`로 전체 재스캔. `alkahest hook install`이 git `post-commit`/`post-merge`에 멱등하게 자동 `scan`을 심는다(`uninstall`로 제거). 미구현: `--watch`, Claude Code 하니스 hook 연동.
 
-## 11. 알려진 트레이드오프 / 열린 질문
+## 12. 알려진 트레이드오프 / 열린 질문
 
 - **"눈으로 보는" 한계**: 정적 분석은 실제 렌더 스크린샷을 못 준다. 1차 시각화는 *그래프 + 구조화된 기능 뷰*. 진짜 화면 썸네일은 Phase 4 런타임 보강의 몫. (정적-우선으로 빠르게 가치 확보 → 필요 시 런타임 보강)
 - **이동 해석 정확도**: 동적 href(`router.push(variable)`)는 정적으로 못 풀 수 있음 → "미해결 이동"으로 표시.
@@ -184,7 +199,7 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 
 ---
 
-_마지막 갱신: 2026-05-30 · 상태: P1~P3 + MCP + **§10 증분/hook 완료**. `scan` 증분(재사용 5/0, 1파일수정→4/1 검증)·요약 보존, `alkahest hook install`(멱등, 검증). 다음: Phase 4(타 프레임워크·런타임 스크린샷) 또는 배포(npm publish) 준비_
+_마지막 갱신: 2026-05-30 · 상태: P1~P3 + MCP + 증분/hook + **어댑터 레이어(다중 플랫폼)**. Next(app-router)·SwiftUI 지원 — iobook(순수 SwiftUI) 화면 41·이동 62·호출 6 검증, Next 픽스처 무회귀. 다음: 배포(npm publish) 또는 어댑터 추가(pages-router/Compose 등)·자식 컴포넌트 추적_
 
 > Phase 3 검증 한계: 컴파일·배선·구조화출력 스키마·키-부재 처리까지 확인. **실제 LLM 왕복은 ANTHROPIC_API_KEY 환경에서 미검증** — 키 셋업 후 `alkahest scan . --summarize` / `alkahest prd <화면>` 로 확인 필요._
 
@@ -192,4 +207,4 @@ _마지막 갱신: 2026-05-30 · 상태: P1~P3 + MCP + **§10 증분/hook 완료
 - 페이지 파일 *자체만* 파싱 — 임포트한 컴포넌트 내부의 기능/호출은 미추적.
 - `useQuery`/`useSWR` 등 훅의 URL(queryFn 내부)은 미해결 호출로 표기.
 - 동적 `router.push(변수)`/템플릿 href는 미해결.
-- 증분(§10): 현재 `scan`은 항상 전체 스캔, 기준선 해시만 저장. 변경파일-only 재처리는 Phase 1.x.
+- 증분(§11): 현재 `scan`은 항상 전체 스캔, 기준선 해시만 저장. 변경파일-only 재처리는 Phase 1.x.

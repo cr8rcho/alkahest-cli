@@ -85,8 +85,8 @@ export interface Call {
   loc: SourceLoc;
 }
 
-export type Framework = "next" | "react-router" | "vite-react" | "unknown";
-export type Router = "next-app" | "next-pages" | "react-router" | "unknown";
+export type Framework = "next" | "react-router" | "vite-react" | "swiftui" | "unknown";
+export type Router = "next-app" | "next-pages" | "react-router" | "swiftui-views" | "unknown";
 
 export interface ProductMapMeta {
   framework: Framework;

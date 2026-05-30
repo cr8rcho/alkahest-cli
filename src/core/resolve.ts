@@ -1,34 +1,35 @@
-import type { ProductMap, Screen, Resource, Transition, Call } from "./types.js";
-import type { Discovery } from "./discover.js";
-import type { RawScreen, RawNav, RawCall } from "./parse.js";
+import type { ProductMap, Screen, Resource, Transition, Call, Framework, Router } from "./types.js";
+import type { ScreenFile, RawScreen, RawNav, RawCall } from "./adapters/types.js";
 
 export interface ResolveInput {
-  discovery: Discovery;
+  files: ScreenFile[];
   /** key = ScreenFile.relPath */
   parsed: Map<string, RawScreen>;
   /** key = ScreenFile.relPath → 내용 해시 */
   hashes: Map<string, string>;
+  framework: Framework;
+  router: Router;
   projectRoot: string;
   scannedAt: string;
   alkahestVersion: string;
 }
 
-/** 원시 신호(parse) → 2-레이어 ProductMap (전체 빌드, ALKAHEST.md §3). */
+/** 원시 신호(parse) → 2-레이어 ProductMap (전체 빌드, ALKAHEST.md §3). 어댑터 무관. */
 export function buildMap(input: ResolveInput): ProductMap {
-  const { discovery, parsed, hashes } = input;
-  const routes = new Set(discovery.screenFiles.map((f) => f.route));
+  const { files, parsed, hashes } = input;
+  const screenIds = new Set(files.map((f) => f.id));
 
   const screens: Screen[] = [];
   const transitions: Transition[] = [];
   const calls: Call[] = [];
   const resources = new Map<string, Resource>();
 
-  for (const file of discovery.screenFiles) {
+  for (const file of files) {
     const raw = parsed.get(file.relPath);
     if (!raw) continue;
-    screens.push(screenFromRaw(file.route, file.relPath, hashes.get(file.relPath) ?? "", raw));
-    transitions.push(...resolveTransitions(file.route, raw.navs, routes, file.relPath));
-    calls.push(...resolveCalls(file.route, raw.calls, file.relPath, resources));
+    screens.push(screenFromRaw(file, hashes.get(file.relPath) ?? "", raw));
+    transitions.push(...resolveTransitions(file.id, raw.navs, screenIds, file.relPath));
+    calls.push(...resolveCalls(file.id, raw.calls, file.relPath, resources));
   }
 
   return assembleMap({
@@ -37,30 +38,31 @@ export function buildMap(input: ResolveInput): ProductMap {
     calls,
     resources: [...resources.values()],
     hashes,
-    discovery,
+    framework: input.framework,
+    router: input.router,
     projectRoot: input.projectRoot,
     scannedAt: input.scannedAt,
     alkahestVersion: input.alkahestVersion,
   });
 }
 
-/** 한 화면 파일의 원시 신호 → Screen 노드 (엣지 제외). */
-export function screenFromRaw(route: string, relPath: string, hash: string, raw: RawScreen): Screen {
+/** 한 화면 파일의 원시 신호 → Screen 노드 (엣지 제외). title/id 는 어댑터가 정한 값을 사용. */
+export function screenFromRaw(file: ScreenFile, hash: string, raw: RawScreen): Screen {
   return {
-    id: route,
-    route,
-    sourceFile: relPath,
+    id: file.id,
+    route: file.route,
+    sourceFile: file.relPath,
     sourceHash: hash,
-    title: titleFromRoute(route),
+    title: file.title,
     summary: "",
-    features: raw.features.map((f) => ({ kind: f.kind, label: f.label, detail: f.detail, loc: { file: relPath, line: f.line } })),
+    features: raw.features.map((f) => ({ kind: f.kind, label: f.label, detail: f.detail, loc: { file: file.relPath, line: f.line } })),
     components: raw.components,
   };
 }
 
-/** 한 화면의 navs → Transition[] (route 집합 기준 해석). */
-export function resolveTransitions(from: string, navs: RawNav[], routes: Set<string>, file: string): Transition[] {
-  return navs.map((nav) => resolveTransition(from, nav, routes, file));
+/** 한 화면의 navs → Transition[] (화면 id 집합 기준 해석). */
+export function resolveTransitions(from: string, navs: RawNav[], screenIds: Set<string>, file: string): Transition[] {
+  return navs.map((nav) => resolveTransition(from, nav, screenIds, file));
 }
 
 /** 한 화면의 calls → Call[]. 발견한 Resource 를 resourceMap 에 dedupe 적재. */
@@ -68,7 +70,6 @@ export function resolveCalls(from: string, raw: RawCall[], file: string, resourc
   return raw.map((call) => resolveCall(from, call, resourceMap, file));
 }
 
-/** 외부 URL 여부. */
 export function isExternalUrl(s: string): boolean {
   return /^https?:\/\//.test(s);
 }
@@ -79,7 +80,8 @@ export interface AssembleInput {
   calls: Call[];
   resources: Resource[];
   hashes: Map<string, string>;
-  discovery: Discovery;
+  framework: Framework;
+  router: Router;
   projectRoot: string;
   scannedAt: string;
   alkahestVersion: string;
@@ -93,8 +95,8 @@ export function assembleMap(a: AssembleInput): ProductMap {
     transitions: a.transitions,
     calls: a.calls,
     meta: {
-      framework: a.discovery.framework,
-      router: a.discovery.router,
+      framework: a.framework,
+      router: a.router,
       scannedAt: a.scannedAt,
       projectRoot: a.projectRoot,
       fileHashes: Object.fromEntries(a.hashes),
@@ -105,21 +107,26 @@ export function assembleMap(a: AssembleInput): ProductMap {
 
 // ---------- internals ----------
 
-function resolveTransition(from: string, nav: RawNav, routes: Set<string>, file: string): Transition {
+function resolveTransition(from: string, nav: RawNav, screenIds: Set<string>, file: string): Transition {
   const loc = { file, line: nav.line };
   if (nav.target == null) {
     return { from, to: null, rawTarget: nav.raw, trigger: nav.trigger, loc };
   }
-  const clean = nav.target.split(/[?#]/)[0];
-  if (isExternalUrl(clean)) {
-    return { from, to: clean, trigger: nav.trigger, loc }; // 외부 URL
+  if (isExternalUrl(nav.target)) {
+    return { from, to: nav.target.split(/[?#]/)[0], trigger: nav.trigger, loc };
   }
+  // 내부 대상: route 표기(앞 슬래시 정규화) 또는 식별자 그대로 매칭.
+  const candidates = [nav.target, normalizeRoute(nav.target)];
+  const hit = candidates.find((c) => screenIds.has(c));
+  if (hit) return { from, to: hit, trigger: nav.trigger, loc };
+  return { from, to: null, rawTarget: nav.target, trigger: nav.trigger, loc };
+}
+
+function normalizeRoute(target: string): string {
+  const clean = target.split(/[?#]/)[0];
   let route = clean.startsWith("/") ? clean : "/" + clean;
   if (route.length > 1) route = route.replace(/\/+$/, "");
-  if (routes.has(route)) {
-    return { from, to: route, trigger: nav.trigger, loc };
-  }
-  return { from, to: null, rawTarget: nav.target, trigger: nav.trigger, loc };
+  return route;
 }
 
 function resolveCall(from: string, call: RawCall, resources: Map<string, Resource>, file: string): Call {
@@ -135,14 +142,4 @@ function resolveCall(from: string, call: RawCall, resources: Map<string, Resourc
     resources.set(id, { id, kind: external ? "external" : "endpoint", label: id, method, path });
   }
   return { from, to: id, trigger: call.trigger, loc };
-}
-
-/** 라우트 → 사람이 읽는 화면 이름. */
-function titleFromRoute(route: string): string {
-  if (route === "/") return "Home";
-  const last = route.split("/").filter(Boolean).pop() ?? route;
-  return last
-    .replace(/^\[(\.\.\.)?(.+?)\]$/, "$2")
-    .replace(/[-_]/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
 }

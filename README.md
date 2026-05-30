@@ -2,8 +2,10 @@
 
 > 코드에서 제품을 역으로 복원해, 사람이 제품 결정을 내리게 한다.
 
-React/Next 프론트엔드 코드베이스를 **정적 분석**해 **제품 지도(Product Map)** 를 만드는 CLI입니다.
+UI 코드베이스를 **정적 분석**해 **제품 지도(Product Map)** 를 만드는 CLI입니다.
 화면을 노드로, 화면 간 이동과 화면이 부르는 API/데이터 호출을 엣지로 뽑아내, 인터랙티브 대시보드로 보여주고 PRD·요구사항 작성을 돕습니다.
+
+플랫폼은 **어댑터로 확장**합니다 — 현재 **Next.js (app-router)** 와 **SwiftUI** 지원. 데이터 모델이 플랫폼 무관이라 어댑터만 추가하면 다른 프레임워크도 됩니다.
 
 레퍼런스들(graphify·codegraph·Understand-Anything)이 *코드 심볼* 그래프라면, Alkahest는 한 단계 위 **화면(screen) 레벨의 제품 이해**를 목표로 합니다 — 대상 사용자는 **PM/기획자**.
 
@@ -86,9 +88,15 @@ alkahest mcp               # MCP 서버 실행 (에이전트가 제품 지도를
 
 ## 지원 범위 / 한계
 
-- **현재 지원**: Next.js **app-router** (`app/**/page.tsx`, 라우트 그룹/동적 세그먼트 인식).
-- **한계**: 페이지 파일 자체만 파싱 — 임포트한 자식 컴포넌트 내부의 기능/호출은 아직 미추적. `useQuery` 등 훅의 URL, 동적 `router.push(변수)`는 "미해결"로 표시.
-- pages router / React Router / Vite, 런타임 스크린샷은 수요에 따라 추가 예정.
+현재 어댑터:
+
+| 어댑터 | 화면 | 이동 | 호출 |
+|---|---|---|---|
+| **Next.js app-router** | `app/**/page.tsx` | `<Link>`·`router.push`·`redirect` | `fetch`·query 훅 |
+| **SwiftUI** | `struct X: View` | `NavigationLink`·`.sheet`·`.fullScreenCover`·`navigationDestination` | `URL(string:)`·`URLRequest` |
+
+- **한계**: 파일/뷰 단위로 파싱 — 임포트한 자식 컴포넌트 내부의 기능/호출은 아직 미추적. 동적 대상(`router.push(변수)`, `useQuery` 훅의 URL 등)은 "미해결"로 표시.
+- pages router / React Router / Compose 등 추가 어댑터, 런타임 스크린샷은 수요에 따라 추가 예정 — 새 플랫폼은 `src/core/adapters/`에 어댑터 하나 추가하면 됩니다.
 
 ## 개발
 
