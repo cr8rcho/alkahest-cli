@@ -23,15 +23,16 @@ Screen ──navigate (Link / router.push / redirect)──▶ Screen
 - **Edges**: `Transition` (screen → screen) · `Call` (screen → resource)
 - When several screens call the same resource they share one node — so the graph reveals "which screens use `/api/orders` together" (data dependencies & change impact).
 
-## Two run modes — does it need an LLM key?
+## No API key — the agent reasons
 
-The core output `map.json` is **deterministic and needs no key at all.** The LLM is only used in the *optional layer* (summaries, PRDs), and who that LLM is decides the mode.
+The core output `map.json` is **deterministic and needs no LLM key.** Alkahest never calls an LLM itself. When you want narrative output (summaries, PRDs, requirements), your **agent** does the reasoning: connect Alkahest as an MCP server, and Claude Code / Codex / Cursor query the product map and write the prose themselves — no key, no SDK.
 
-| | **Agent mode** (called as a skill/tool) | **Standalone mode** (a person runs it) |
-|---|---|---|
-| Who reasons | The calling agent (Claude Code / Codex / Cursor) is already an LLM | Alkahest calls the API itself |
-| `ANTHROPIC_API_KEY` | **Not needed** | Required |
-| Entry point | `alkahest mcp` (MCP server) | `scan --summarize` / `prd` |
+```
+You ── "write a PRD for the checkout screen" ──▶ Agent (Claude Code / Codex)
+                                                    │  get_screen / who_calls (MCP)
+                                                    ▼
+                                                 Alkahest  →  map.json (deterministic, no key)
+```
 
 ## Install
 
@@ -52,13 +53,11 @@ After publish: `npm i -g alkahest` or `npx alkahest …`
 Run it from the root of the project you want to analyze; outputs land in that project's `.alkahest/` folder.
 
 ```bash
-alkahest scan              # analyze → .alkahest/map.json + index.html (incremental by default)
-alkahest scan --full       # ignore the baseline and rescan everything
-alkahest view              # open the dashboard via a local server (two-layer graph)
-alkahest scan --summarize  # fill in per-screen LLM summaries (needs ANTHROPIC_API_KEY)
-alkahest prd checkout      # generate a screen's PRD/requirements markdown → .alkahest/prd/checkout.md
-alkahest hook install      # run scan automatically on commit/merge (diff-driven refresh)
-alkahest mcp               # run the MCP server (agents query the product map; no key)
+alkahest scan          # analyze → .alkahest/map.json + index.html (incremental by default)
+alkahest scan --full   # ignore the baseline and rescan everything
+alkahest view          # open the dashboard via a local server (two-layer graph)
+alkahest hook install  # run scan automatically on commit/merge (diff-driven refresh)
+alkahest mcp           # run the MCP server (agents query the product map; no key)
 ```
 
 ### Dashboard interactions
@@ -73,7 +72,7 @@ alkahest mcp               # run the MCP server (agents query the product map; n
 
 ### Agent (MCP) integration
 
-Add it to your agent's MCP config; the agent queries the product map with the `scan` / `overview` / `get_screen` / `who_calls` tools and **writes the summaries/PRDs itself** (no separate key needed).
+Add it to your agent's MCP config; the agent queries the product map with the `scan` / `overview` / `get_screen` / `who_calls` tools and **writes the summaries / PRDs / requirements itself** — no separate key needed.
 
 ```json
 {
@@ -88,15 +87,14 @@ Add it to your agent's MCP config; the agent queries the product map with the `s
 ```
 .alkahest/
 ├─ map.json       # the canonical ProductMap (source of every output)
-├─ index.html     # self-contained interactive dashboard (no external deps / network)
-└─ prd/<screen>.md
+└─ index.html     # self-contained interactive dashboard (no external deps / network)
 ```
 
 `index.html` inlines both the data and the render code, so it's a **self-contained file** you can open in a browser without Alkahest or a server. Add `.alkahest/` to your `.gitignore`.
 
 ## Incremental & auto-refresh
 
-`scan` is **incremental** by default — it compares file hashes against `map.json`, re-parses only the changed screens, and preserves everything else (including LLM summaries). Run `alkahest hook install` to wire a git hook so the map refreshes automatically on every commit/merge.
+`scan` is **incremental** by default — it compares file hashes against `map.json`, re-parses only the changed screens, and preserves everything else. Run `alkahest hook install` to wire a git hook so the map refreshes automatically on every commit/merge.
 
 ## Scope & limitations
 

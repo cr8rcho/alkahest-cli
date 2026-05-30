@@ -40,7 +40,6 @@
   "author": "cr8rcho",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.100.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "commander": "^14.0.3",
     "ts-morph": "^28.0.0",

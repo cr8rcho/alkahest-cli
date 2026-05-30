@@ -92,11 +92,10 @@ Call {  // 호출
  │                (Next app router: app/**/page.tsx, pages router: pages/**/*.tsx)
  ├─ 2. Parse      각 화면 AST 파싱 → JSX/이벤트핸들러/네비게이션/데이터호출 추출
  ├─ 3. Resolve    href→화면 id (Transition), fetch/action 대상→리소스 (Call·dedupe), UI는 Feature 귀속
- ├─ 4. Summarize  (Phase 3) 화면별 LLM 요약 + 기능 라벨링
- └─ 5. Emit       .alkahest/map.json + .alkahest/index.html (자기완결 대시보드)
+ └─ 4. Emit       .alkahest/map.json + .alkahest/index.html (자기완결 대시보드)
 
  view   .alkahest/ 를 로컬 서버로 띄워 그래프 탐색
- prd    선택한 화면(들) → .alkahest/prd/<screen>.md (LLM)
+ (요약·PRD는 LLM이 필요 — Alkahest가 직접 안 하고, MCP로 연결된 에이전트가 작성, §7)
 ```
 
 ## 5. 산출물 — `.alkahest/`
@@ -106,16 +105,15 @@ Call {  // 호출
 ```
 .alkahest/
 ├─ map.json            # 표준 ProductMap (모든 출력의 원천)
-├─ index.html          # 인터랙티브 대시보드 (자기완결, 의존성 인라인)
-└─ prd/
-   └─ <screen>.md      # 화면별 PRD/요구사항 초안 (on demand)
+└─ index.html          # 인터랙티브 대시보드 (자기완결, 데이터+렌더코드 인라인)
 ```
 
-**대시보드 UX** (2-레이어 토글):
-- 좌측: 그래프. **이동 레이어**(화면→화면) + **호출 레이어**(화면→리소스)를 토글/오버레이.
-- 노드 클릭(화면) → 우측 패널: 요약 · 기능 목록 · 나가는/들어오는 이동 · **부르는 리소스 목록** · 소스 링크.
+**대시보드 UX** (force-directed, 미니멀 스타일 F, 라이트/다크):
+- 그래프: 화면(원)·리소스(사각) 노드 + 이동(실선)·포함(짧은 점선)·호출(긴 점선) 엣지. 시작점은 라벨에 `▶`.
+- 호버: 연결 엣지·이웃 색 강조(미리보기). 클릭: 우측 패널에 요약·기능·이동·호출 고정 + 액센트 링.
 - 노드 클릭(리소스) → 그 리소스를 **함께 부르는 화면들** 표시 (데이터 의존성·변경 영향).
-- 패널에서 "PRD 생성" → 해당 화면의 요구사항 마크다운 추출. ("둘 다 — 대시보드에서 PRD 추출")
+- 드래그(이웃 따라옴)·휠/핀치 줌·팬, 🌗 테마, ⤢ 맞춤.
+- `index.html`은 데이터+렌더JS+CSS를 모두 인라인 → alkahest/서버 없이 브라우저로 바로 열림.
 
 ## 6. CLI 표면
 
@@ -124,26 +122,20 @@ alkahest scan [path]      # 분석 → .alkahest/map.json + index.html  (기본:
 alkahest scan --full      # 기준선 무시하고 전체 재스캔
 alkahest scan --open      # scan 후 바로 view
 alkahest view             # .alkahest/ 대시보드를 로컬 서버로 오픈
-alkahest prd <screen...>  # 화면 PRD 마크다운 생성 (스탠드얼론, 키 필요)
 alkahest mcp              # MCP 서버(stdio) — 에이전트가 제품 지도 질의 (키 불필요, §7)
 alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (diff 자동 갱신, §10)
 ```
 
 대상은 **단일 프로젝트(코드베이스) 하나**. `scan`은 기본 **증분**(§11).
 
-## 7. 실행 모드 — 키가 필요한가?
+## 7. 키 불필요 — 추론은 에이전트가
 
-**Alkahest의 핵심 산출물은 결정론적 `map.json`이며, 이건 LLM/키가 전혀 필요 없다.** LLM은 "요약·PRD"라는 *선택적 위층*에서만 쓰이고, 누가 그 LLM이냐가 모드를 가른다.
+**Alkahest의 핵심 산출물은 결정론적 `map.json`이며, LLM/키가 전혀 필요 없다.** Alkahest는 LLM을 직접 호출하지 않는다. 요약·PRD·요구사항 같은 서술형 출력이 필요하면 **호출한 에이전트(Claude Code/Codex/Cursor)가** 추론한다 — 그 에이전트가 이미 LLM이므로.
 
-| | **에이전트 모드** (스킬/도구로 호출) | **스탠드얼론 모드** (사람이 직접) |
-|---|---|---|
-| 누가 추론하나 | **호출한 에이전트(Claude Code/Codex)가 이미 LLM** | 없음 → Alkahest가 자체 호출 |
-| `ANTHROPIC_API_KEY` | **불필요** | 필요 |
-| Alkahest 역할 | `map.json`(+필요시 프롬프트/컨텍스트 팩)만 제공 → **요약·PRD는 에이전트가 작성** | `scan --summarize`/`prd`로 직접 Claude 호출 |
-
-- **핵심 원칙**: scan→`map.json`→view 는 **항상 키 없이 동작**. `--summarize`/`prd`(자체 호출)는 *에이전트가 없는 사람*을 위한 편의이며, 키 없으면 우아하게 스킵.
+- **핵심 원칙**: scan→`map.json`→view 는 전부 결정론적, 키 없음. 서술형 글쓰기는 에이전트의 몫.
 - 에이전트 통합: **MCP 서버 — 구현 완료** (`alkahest mcp`, stdio). 도구 `scan`/`overview`/`get_screen`/`who_calls` 노출, 추론(요약·PRD)은 호출 에이전트가 수행. 도구 description에 사용법이 담겨 **Skill 없이도 동작** — Skill은 워크플로 방법론이 필요할 때 나중에 얹는 선택적 Claude 전용 보강.
   - 에이전트 MCP 설정: `{ "command": "alkahest", "args": ["mcp"] }` (대상 프로젝트 디렉터리에서 실행).
+- **(폐기) 스탠드얼론 키 모드**: 초기엔 `scan --summarize`/`prd`가 Anthropic SDK로 자체 호출했으나, 에이전트(클코/Codex)를 쓰면 잉여라 제거함(2026-05). `@anthropic-ai/sdk`·`llm.ts`·`prd` 명령 삭제. 필요해지면 i18n 메시지 테이블처럼 선택 의존성으로 되살릴 수 있음.
 
 ## 8. 어댑터 레이어 (다중 플랫폼)
 
@@ -163,8 +155,9 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 - **런타임/언어**: Node + TypeScript (ESM). 대상이 JS 생태계라 파싱 친화적.
 - **CLI**: 가벼운 인자 파서 (commander 또는 자체).
 - **파싱**: `ts-morph` (TS 컴파일러 래퍼, TSX·타입 해석에 가장 ergonomic) 1순위. 멀티언어 확장 시 tree-sitter 고려.
-- **LLM (선택)**: Anthropic Claude SDK — **스탠드얼론 모드에서만** 자체 호출(요약·PRD), prompt caching 적용. 에이전트 모드에선 호출 안 함. → `claude-api` 스킬 참조, §7.
-- **대시보드 그래프**: 자체 SVG force-layout (외부 CDN 없이 자기완결 HTML에 인라인).
+- **LLM**: Alkahest는 **직접 호출 안 함**. 요약·PRD는 MCP로 연결된 에이전트가 작성(§7). (구 `@anthropic-ai/sdk` 의존성은 제거됨.)
+- **MCP**: `@modelcontextprotocol/sdk` + `zod`(v3) — 에이전트 모드 서버.
+- **대시보드 그래프**: 자체 SVG force-directed (외부 CDN 없이 자기완결 HTML에 인라인, 시드 고정으로 결정론적).
 
 > octokit 제약(ESM/tsx 깨짐)은 (구) 원격 경로 얘기였고, 신 방향은 **로컬 파일 직접 분석**이라 무관. → [[verify-lib-via-next-route]]
 
@@ -173,7 +166,7 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 - **Phase 0 — Scaffold**: package.json / tsconfig / CLI 엔트리 / `.alkahest/` 규약.
 - **Phase 1 — Screen Graph (정적, LLM 없음)**: Next app-router 화면 발견 + 이동 엣지 + `map.json`. CLI `scan`. 콘솔로 그래프 검증.
 - **Phase 2 — Dashboard**: 자기완결 `index.html` (그래프 + 화면 상세 패널 + 기능 목록). `view`.
-- **Phase 3 — LLM**: 화면 요약 + 기능 라벨링 + `prd` 명령.
+- **Phase 3 — 에이전트 통합(MCP)**: `alkahest mcp` 서버. 요약·PRD는 에이전트가 작성(키 불필요). ~~초기 스탠드얼론 키 모드(scan --summarize/prd)~~ 는 제거됨(§7).
 - **Phase 4 — 확장**: pages router / React Router / Vite, 그리고 **런타임 스크린샷 보강(Playwright)** — 진짜 렌더 썸네일을 노드에 입힘 (선택).
 
 ## 11. 증분 업데이트 (diff-driven)
@@ -182,14 +175,14 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 전체 재스캔은 비싸므로 `scan`은 **변경된 파일만 재처리**하는 증분 갱신을 1급으로 지원한다.
 
 - **기준선**: `map.json`의 `meta.fileHashes`(또는 git tree)와 현재 파일을 비교 → 변경/추가/삭제된 화면 파일 집합 도출.
-- **재처리 범위**: 바뀐 화면만 재파싱하고, 그 화면을 가리키던/가리키는 **엣지만** 재해석. LLM 요약/PRD는 `sourceHash`가 바뀐 화면만 재생성(캐시 무효화).
+- **재처리 범위**: 바뀐 화면만 재파싱하고, 그 화면을 가리키던/가리키는 **엣지만** 재해석. (요약은 에이전트가 채우므로 alkahest 증분 대상 아님.)
 - **트리거 = hook (전달 수단)**: 사람이 매번 치지 않게 hook이 `scan`을 부른다.
   - git `post-commit` / `post-merge` hook, 또는
   - Claude Code 하니스 hook(편집 후), 또는
   - `--watch` 모드(개발 중 파일 감시).
 - 즉 **증분 로직은 `scan` 안에**, **자동 실행은 hook이** 담당. 둘을 분리한다.
 
-**구현 완료**: `scan`은 기본 증분 — `map.json`의 `fileHashes`와 비교해 **해시가 같은 화면은 재파싱하지 않고 LLM 요약까지 보존**, 변경/추가만 재처리, 삭제된 화면을 가리키던 내부 이동은 미해결로 강등. `--summarize`도 요약이 비어있는(변경된) 화면만 LLM 호출. `--full`로 전체 재스캔. `alkahest hook install`이 git `post-commit`/`post-merge`에 멱등하게 자동 `scan`을 심는다(`uninstall`로 제거). 미구현: `--watch`, Claude Code 하니스 hook 연동.
+**구현 완료**: `scan`은 기본 증분 — `map.json`의 `fileHashes`와 비교해 **해시가 같은 화면은 재파싱하지 않고 보존**, 변경/추가만 재처리, 삭제된 화면을 가리키던 내부 이동은 미해결로 강등. `--full`로 전체 재스캔. `alkahest hook install`이 git `post-commit`/`post-merge`에 멱등하게 자동 `scan`을 심는다(`uninstall`로 제거). 미구현: `--watch`, Claude Code 하니스 hook 연동.
 
 ## 12. 알려진 트레이드오프 / 열린 질문
 
@@ -199,14 +192,12 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 
 ---
 
-_마지막 갱신: 2026-05-30 · 상태: P1~P3 + MCP + 증분/hook + 어댑터(다중플랫폼) + **흐름/시작점**. 진입점(@main/루트라우트) 표시 + contains 엣지(TabView/embed) + 대시보드 계층 레이아웃(진입점 좌→우 BFS). iobook: 화면 41·이동 62·포함 21·호출 6, entry=ContentView→5탭 검증. 다음: 배포(npm publish) 또는 어댑터 추가·자식 컴포넌트 추적_
+_마지막 갱신: 2026-05-30 · 상태: P1~P3(MCP) + 증분/hook + 어댑터(Next·SwiftUI) + force 레이아웃 + 미니멀 스타일(라이트/다크) + **소스 전체 영어화 + 키 모드 제거**. CLI: scan/view/mcp/hook. 다음: 배포(npm publish), MCP 실연동, 어댑터 추가·자식 컴포넌트 추적_
 
-**그래프 흐름(§11 보강):** 엣지에 `kind`("navigate" 사용자이동 / "contains" 구조적포함). 어댑터가 진입점(`ScreenFile.isEntry`)과 contains 후보(대문자 생성자 호출)를 내고, `resolveContains`가 screenIds 교집합만 엣지화. 대시보드는 진입점에서 BFS depth로 좌→우 열 배치 + force는 x를 depth열에 고정(COL_PULL)·y만 자유. 시작 노드는 초록 ▶ 강조.
-
-> Phase 3 검증 한계: 컴파일·배선·구조화출력 스키마·키-부재 처리까지 확인. **실제 LLM 왕복은 ANTHROPIC_API_KEY 환경에서 미검증** — 키 셋업 후 `alkahest scan . --summarize` / `alkahest prd <화면>` 로 확인 필요._
+**그래프 모델:** 엣지에 `kind`("navigate" 사용자이동 / "contains" 구조적포함). 어댑터가 진입점(`ScreenFile.isEntry`)과 contains 후보(대문자 생성자 호출)를 내고, `resolveContains`가 screenIds 교집합만 엣지화. 대시보드는 **force-directed**(시드 고정·결정론적, 중력은 초기 정착만), 시작점은 라벨 `▶`, 직선 엣지(이동 실선/포함 짧은점선/호출 긴점선), 호버 미리보기·클릭 선택·세로 무튕김 드래그.
 
 **Phase 1 알려진 한계(다음 보강 대상):**
 - 페이지 파일 *자체만* 파싱 — 임포트한 컴포넌트 내부의 기능/호출은 미추적.
 - `useQuery`/`useSWR` 등 훅의 URL(queryFn 내부)은 미해결 호출로 표기.
 - 동적 `router.push(변수)`/템플릿 href는 미해결.
-- 증분(§11): 현재 `scan`은 항상 전체 스캔, 기준선 해시만 저장. 변경파일-only 재처리는 Phase 1.x.
+- 자식 컴포넌트 미추적이 가장 큰 데이터 품질 갭 — 실제 앱은 페이지가 컴포넌트를 조합하므로.
