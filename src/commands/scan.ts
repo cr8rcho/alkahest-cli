@@ -1,61 +1,49 @@
-import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { createRequire } from "node:module";
-import { discover } from "../core/discover.js";
-import { createProject, parseScreen, type RawScreen } from "../core/parse.js";
-import { buildMap } from "../core/resolve.js";
+import { runScan } from "../core/pipeline.js";
 import { emitMap, emitDashboard } from "../core/emit.js";
 import { serveDashboard } from "../core/serve.js";
-import { hashContent } from "../core/hash.js";
-
-const require = createRequire(import.meta.url);
-const pkg = require("../../package.json") as { version: string };
+import { hasApiKey, summarizeScreens } from "../core/llm.js";
 
 export interface ScanOptions {
-  /** 기준선 무시하고 전체 재스캔 (ALKAHEST.md §9) */
+  /** 기준선 무시하고 전체 재스캔 (ALKAHEST.md §10) */
   full: boolean;
   /** scan 후 바로 대시보드 오픈 */
   open: boolean;
+  /** 화면별 LLM 요약 생성 (Phase 3) — ANTHROPIC_API_KEY 필요 */
+  summarize: boolean;
 }
 
 /**
- * 분석 → `.alkahest/map.json`.
- * 파이프라인: discover → parse → resolve → emit (ALKAHEST.md §4).
+ * 분석 → `.alkahest/map.json` + `index.html` (ALKAHEST.md §4).
+ * 코어 파이프라인은 runScan 에 있고, 여기선 로깅·요약·오픈만 얹는다.
  */
 export async function scan(path: string, options: ScanOptions): Promise<void> {
   const projectRoot = resolve(path);
-  const discovery = discover(projectRoot);
+  const result = runScan(projectRoot);
 
-  if (!discovery.screenFiles.length) {
+  if (!result) {
     console.log(`[alkahest] ${projectRoot}: 화면을 찾지 못했습니다.`);
     console.log("  └─ Phase 1은 Next app-router(app/ 또는 src/app/의 page.*)만 지원합니다.");
     return;
   }
 
+  const { map, outFile } = result;
   console.log(`[alkahest] scan: ${projectRoot}`);
-  console.log(`  framework=${discovery.framework} router=${discovery.router} screens=${discovery.screenFiles.length}`);
+  console.log(`  framework=${map.meta.framework} router=${map.meta.router} screens=${map.screens.length}`);
   if (options.full) console.log("  (--full: 전체 재스캔)");
 
-  const project = createProject();
-  const parsed = new Map<string, RawScreen>();
-  const hashes = new Map<string, string>();
-
-  for (const file of discovery.screenFiles) {
-    hashes.set(file.relPath, hashContent(readFileSync(file.absPath, "utf8")));
-    parsed.set(file.relPath, parseScreen(project.addSourceFileAtPath(file.absPath)));
+  if (options.summarize) {
+    if (!hasApiKey()) {
+      console.log("  ⚠ --summarize: ANTHROPIC_API_KEY 가 없어 요약을 건너뜁니다.");
+    } else {
+      process.stdout.write("  요약 생성 중(LLM)… ");
+      const summaries = await summarizeScreens(map);
+      for (const s of map.screens) s.summary = summaries.get(s.id) ?? "";
+      emitMap(projectRoot, map); // 요약 반영해 재기록
+      emitDashboard(projectRoot, map);
+      console.log(`완료 (${summaries.size}개 화면)`);
+    }
   }
-
-  const map = buildMap({
-    discovery,
-    parsed,
-    hashes,
-    projectRoot,
-    scannedAt: new Date().toISOString(),
-    alkahestVersion: pkg.version,
-  });
-
-  const outFile = emitMap(projectRoot, map);
-  emitDashboard(projectRoot, map);
 
   const unresolvedNav = map.transitions.filter((t) => t.to === null).length;
   const unresolvedCall = map.calls.filter((c) => c.to === null).length;

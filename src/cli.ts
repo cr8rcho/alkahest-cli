@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { scan } from "./commands/scan.js";
 import { view } from "./commands/view.js";
 import { prd } from "./commands/prd.js";
+import { mcp } from "./commands/mcp.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
@@ -21,7 +22,8 @@ program
   .argument("[path]", "분석할 프로젝트 경로", ".")
   .option("--full", "기준선 무시하고 전체 재스캔", false)
   .option("--open", "scan 후 바로 대시보드 오픈", false)
-  .action((path: string, opts: { full: boolean; open: boolean }) => scan(path, opts));
+  .option("--summarize", "화면별 LLM 요약 생성 (ANTHROPIC_API_KEY 필요)", false)
+  .action((path: string, opts: { full: boolean; open: boolean; summarize: boolean }) => scan(path, opts));
 
 program
   .command("view")
@@ -34,6 +36,11 @@ program
   .description("선택한 화면(들)의 PRD/요구사항 마크다운 생성")
   .argument("<screens...>", "PRD를 생성할 화면 id 또는 route")
   .action((screens: string[]) => prd(screens));
+
+program
+  .command("mcp")
+  .description("MCP 서버를 stdio로 실행 (에이전트가 제품 지도를 질의, 키 불필요)")
+  .action(() => mcp());
 
 program.parseAsync().catch((err) => {
   console.error(err instanceof Error ? err.message : err);

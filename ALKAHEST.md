@@ -44,12 +44,12 @@ ProductMap {
   transitions: Transition[]  // 1차 엣지: 화면 → 화면 이동
   calls:       Call[]        // 2차 엣지: 화면 → 리소스 호출
   meta:        { framework, router, scannedAt, projectRoot, fileHashes }
-                              // fileHashes: { [path]: hash } — 증분 갱신 기준선 (§9)
+                              // fileHashes: { [path]: hash } — 증분 갱신 기준선 (§10)
 }
 
 Screen {
   id, route, sourceFile
-  sourceHash: string         // 증분 갱신용 파일 해시 — §9
+  sourceHash: string         // 증분 갱신용 파일 해시 — §10
   title, summary             // summary: LLM이 쓴 "사용자가 뭘 하나" (Phase 3)
   features:   Feature[]      // 화면 UI 요소
   components: string[]
@@ -122,22 +122,37 @@ alkahest scan [path]      # 분석 → .alkahest/map.json + index.html  (기본:
 alkahest scan --full      # 기준선 무시하고 전체 재스캔
 alkahest scan --open      # scan 후 바로 view
 alkahest view             # .alkahest/ 대시보드를 로컬 서버로 오픈
-alkahest prd <screen...>  # 화면 PRD 마크다운 생성
+alkahest prd <screen...>  # 화면 PRD 마크다운 생성 (스탠드얼론, 키 필요)
+alkahest mcp              # MCP 서버(stdio) — 에이전트가 제품 지도 질의 (키 불필요, §7)
 ```
 
 대상은 **단일 프로젝트(코드베이스) 하나**. `scan`은 기본 **증분**(§10).
 
-## 7. 기술 스택
+## 7. 실행 모드 — 키가 필요한가?
+
+**Alkahest의 핵심 산출물은 결정론적 `map.json`이며, 이건 LLM/키가 전혀 필요 없다.** LLM은 "요약·PRD"라는 *선택적 위층*에서만 쓰이고, 누가 그 LLM이냐가 모드를 가른다.
+
+| | **에이전트 모드** (스킬/도구로 호출) | **스탠드얼론 모드** (사람이 직접) |
+|---|---|---|
+| 누가 추론하나 | **호출한 에이전트(Claude Code/Codex)가 이미 LLM** | 없음 → Alkahest가 자체 호출 |
+| `ANTHROPIC_API_KEY` | **불필요** | 필요 |
+| Alkahest 역할 | `map.json`(+필요시 프롬프트/컨텍스트 팩)만 제공 → **요약·PRD는 에이전트가 작성** | `scan --summarize`/`prd`로 직접 Claude 호출 |
+
+- **핵심 원칙**: scan→`map.json`→view 는 **항상 키 없이 동작**. `--summarize`/`prd`(자체 호출)는 *에이전트가 없는 사람*을 위한 편의이며, 키 없으면 우아하게 스킵.
+- 에이전트 통합: **MCP 서버 — 구현 완료** (`alkahest mcp`, stdio). 도구 `scan`/`overview`/`get_screen`/`who_calls` 노출, 추론(요약·PRD)은 호출 에이전트가 수행. 도구 description에 사용법이 담겨 **Skill 없이도 동작** — Skill은 워크플로 방법론이 필요할 때 나중에 얹는 선택적 Claude 전용 보강.
+  - 에이전트 MCP 설정: `{ "command": "alkahest", "args": ["mcp"] }` (대상 프로젝트 디렉터리에서 실행).
+
+## 8. 기술 스택
 
 - **런타임/언어**: Node + TypeScript (ESM). 대상이 JS 생태계라 파싱 친화적.
 - **CLI**: 가벼운 인자 파서 (commander 또는 자체).
 - **파싱**: `ts-morph` (TS 컴파일러 래퍼, TSX·타입 해석에 가장 ergonomic) 1순위. 멀티언어 확장 시 tree-sitter 고려.
-- **LLM**: Anthropic Claude SDK (요약·PRD). prompt caching 적용. → `claude-api` 스킬 참조.
-- **대시보드 그래프**: Cytoscape.js 또는 vis-network (자기완결 HTML에 인라인).
+- **LLM (선택)**: Anthropic Claude SDK — **스탠드얼론 모드에서만** 자체 호출(요약·PRD), prompt caching 적용. 에이전트 모드에선 호출 안 함. → `claude-api` 스킬 참조, §7.
+- **대시보드 그래프**: 자체 SVG force-layout (외부 CDN 없이 자기완결 HTML에 인라인).
 
 > octokit 제약(ESM/tsx 깨짐)은 (구) 원격 경로 얘기였고, 신 방향은 **로컬 파일 직접 분석**이라 무관. → [[verify-lib-via-next-route]]
 
-## 8. 단계별 로드맵
+## 9. 단계별 로드맵
 
 - **Phase 0 — Scaffold**: package.json / tsconfig / CLI 엔트리 / `.alkahest/` 규약.
 - **Phase 1 — Screen Graph (정적, LLM 없음)**: Next app-router 화면 발견 + 이동 엣지 + `map.json`. CLI `scan`. 콘솔로 그래프 검증.
@@ -145,7 +160,7 @@ alkahest prd <screen...>  # 화면 PRD 마크다운 생성
 - **Phase 3 — LLM**: 화면 요약 + 기능 라벨링 + `prd` 명령.
 - **Phase 4 — 확장**: pages router / React Router / Vite, 그리고 **런타임 스크린샷 보강(Playwright)** — 진짜 렌더 썸네일을 노드에 입힘 (선택).
 
-## 9. 증분 업데이트 (diff-driven)
+## 10. 증분 업데이트 (diff-driven)
 
 대상은 **단일 프로젝트**고, 코드에 diff가 생기면 제품 지도가 따라 갱신돼야 한다.
 전체 재스캔은 비싸므로 `scan`은 **변경된 파일만 재처리**하는 증분 갱신을 1급으로 지원한다.
@@ -158,7 +173,7 @@ alkahest prd <screen...>  # 화면 PRD 마크다운 생성
   - `--watch` 모드(개발 중 파일 감시).
 - 즉 **증분 로직은 `scan` 안에**, **자동 실행은 hook이** 담당. 둘을 분리한다. (Phase 1에서 기준선/증분, hook 배선은 Phase 2~3에서)
 
-## 10. 알려진 트레이드오프 / 열린 질문
+## 11. 알려진 트레이드오프 / 열린 질문
 
 - **"눈으로 보는" 한계**: 정적 분석은 실제 렌더 스크린샷을 못 준다. 1차 시각화는 *그래프 + 구조화된 기능 뷰*. 진짜 화면 썸네일은 Phase 4 런타임 보강의 몫. (정적-우선으로 빠르게 가치 확보 → 필요 시 런타임 보강)
 - **이동 해석 정확도**: 동적 href(`router.push(variable)`)는 정적으로 못 풀 수 있음 → "미해결 이동"으로 표시.
@@ -166,10 +181,12 @@ alkahest prd <screen...>  # 화면 PRD 마크다운 생성
 
 ---
 
-_마지막 갱신: 2026-05-30 · 상태: Phase 2 완료 — `scan`이 `map.json`+자기완결 `index.html` 생성, `view`가 로컬 서버로 2-레이어 그래프 대시보드 제공. 다음: Phase 3 LLM 요약·PRD_
+_마지막 갱신: 2026-05-30 · 상태: Phase 3 + MCP 완료 — `scan --summarize`/`prd`(스탠드얼론 LLM, 키 필요) + **`alkahest mcp`(에이전트 모드, 키 불필요)**. MCP 도구 scan/overview/get_screen/who_calls 를 MCP 클라이언트로 end-to-end 검증. 다음: §10 증분+hook · Phase 4(타 프레임워크·런타임 스크린샷)_
+
+> Phase 3 검증 한계: 컴파일·배선·구조화출력 스키마·키-부재 처리까지 확인. **실제 LLM 왕복은 ANTHROPIC_API_KEY 환경에서 미검증** — 키 셋업 후 `alkahest scan . --summarize` / `alkahest prd <화면>` 로 확인 필요._
 
 **Phase 1 알려진 한계(다음 보강 대상):**
 - 페이지 파일 *자체만* 파싱 — 임포트한 컴포넌트 내부의 기능/호출은 미추적.
 - `useQuery`/`useSWR` 등 훅의 URL(queryFn 내부)은 미해결 호출로 표기.
 - 동적 `router.push(변수)`/템플릿 href는 미해결.
-- 증분(§9): 현재 `scan`은 항상 전체 스캔, 기준선 해시만 저장. 변경파일-only 재처리는 Phase 1.x.
+- 증분(§10): 현재 `scan`은 항상 전체 스캔, 기준선 해시만 저장. 변경파일-only 재처리는 Phase 1.x.
