@@ -46,12 +46,13 @@ like SwiftUI does).
 - **fixture:** `examples/pages-mini`.
 - **follow-up:** `getServerSideProps`/`getStaticProps` data deps; treat `pages/api/*` as resource nodes.
 
-### [ ] `react-router` — generic React SPA (Vite / CRA)
-- **detect:** `react-router-dom` in deps; no Next.js.
-- **screen:** route elements — `<Route path element>` (data router `createBrowserRouter` route objects, or JSX routes).
-- **nav:** `<Link>/<NavLink to>`, `useNavigate()`, `<Navigate>`, `redirect()` (loaders).
-- **calls:** `loader`/`action` fns, `fetch`, axios, `useQuery`.
-- **note:** routes are declared, not file-based — `discover` parses the router config, not the filesystem.
+### [x] `react-router` — generic React SPA (Vite / CRA) ✅ shipped
+- **detect:** `react-router-dom`/`react-router` in deps; Next.js adapters take priority (they bow out via `isReactRouterSpa` only when react-router is present and `next` is not).
+- **screen:** route → the component it renders, resolved to that component's source file. Routes are *declared*, so `discover` parses the router config (not the filesystem): `createBrowserRouter`/`createHashRouter`/`createMemoryRouter` route objects **and** JSX `<Routes><Route/>` (nested + `index` routes); `element={<X/>}` / `Component={X}`; `lazy(() => import("…"))`.
+- **nav:** `<Link to>`, `<NavLink to>`, `useNavigate()`, `<Navigate to>` — via shared `react-jsx.ts`.
+- **calls:** `fetch`, query hooks — via shared `react-jsx.ts`.
+- **fixtures:** `examples/spa-mini` (data router + lazy + nested), `examples/spa-jsx-mini` (JSX form + index/nested).
+- **follow-up:** `loader`/`action` data deps; `redirect()` inside loaders; framework-mode (Remix/RR7 file routes) is the separate `remix` adapter below.
 
 ### [x] `vue` — Vue 3 ✅ shipped (two adapters: `nuxt` + `vue-router`)
 First non-React web platform. Can't reuse the JSX parser — an SFC is `<template>` + `<script>`,
@@ -180,8 +181,11 @@ Shipped as two adapters because the routing models — and therefore the `router
 
 ## Suggested order
 
-1. `next-pages` + `react-router` — unlock the rest of the React/web world with the existing parser.
-2. `vue` (Nuxt) and `svelte` — next-biggest web ecosystems.
-3. `react-native` / `expo` — reuses the JSX parser, opens the app market.
-4. `flutter` + `compose` + `uikit` — the native app set (shared non-JS parsing baseline).
-5. Tier 3 server-rendered / static — breadth and a graceful fallback.
+✅ Done: `next-pages` + `react-router` (React/web), `vue`/`nuxt` (Vue), `react-native` (expo-router + react-navigation).
+
+Remaining:
+1. `svelte` — biggest remaining web ecosystem; `.svelte` block-scan (mirror `vue-sfc.ts`).
+2. `remix` + `static-html` — cheapest wins: `remix` reuses the JSX parser (file routes), `static-html` is a regex fallback.
+3. `astro` + `angular` — more web: `.astro` block-scan; Angular reuses ts-morph but needs decorator/DI handling.
+4. `compose` + `uikit` + `flutter` — the native app set (pairs with `swiftui`; pick the non-JS parsing baseline first — tree-sitter vs. per-language regex).
+5. Tier 3 server-rendered (`django`/`flask`, `rails`) — breadth.
