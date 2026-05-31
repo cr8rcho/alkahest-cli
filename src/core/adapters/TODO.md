@@ -3,7 +3,7 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (App Router + Pages Router), `swiftui` (SwiftUI).
+**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `swiftui` (SwiftUI).
 
 React-family adapters share JSX signal extraction via `react-jsx.ts`
 (`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
@@ -147,7 +147,8 @@ like SwiftUI does).
 
 - [ ] **Multi-adapter projects:** `selectAdapter()` returns the *first* match — a mixed
       app (SwiftUI + UIKit, Next `app/` + `pages/`) only gets one. Decide: priority-only,
-      or merge results from all matching adapters.
+      or merge results from all matching adapters. (Next-vs-SPA disambiguation already
+      handled via `isReactRouterSpa()`; see react-router above.)
 - [ ] **Non-JS parsing baseline:** pick one of tree-sitter (Dart/Kotlin/Swift/Python) vs.
       per-language regex heuristics, so Tier 2/3 adapters don't each reinvent it.
 - [ ] **`detect()` cost:** today some adapters walk the whole tree to probe. For more

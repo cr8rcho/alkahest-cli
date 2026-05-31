@@ -1,7 +1,7 @@
 import { statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import type { FrameworkAdapter, ScreenFile } from "./types.js";
-import { project, walk, parseReactScreen } from "./react-jsx.js";
+import { sourceFileFor, walk, parseReactScreen, titleFromRoute, isReactRouterSpa } from "./react-jsx.js";
 
 /**
  * Next.js app-router adapter: treats `app/**​/page.tsx` as screens, parses with ts-morph.
@@ -23,7 +23,7 @@ export const nextAppAdapter: FrameworkAdapter = {
   router: "next-app",
 
   detect(projectRoot) {
-    return appDirOf(projectRoot) !== null;
+    return appDirOf(projectRoot) !== null && !isReactRouterSpa(projectRoot);
   },
 
   discover(projectRoot) {
@@ -48,7 +48,7 @@ export const nextAppAdapter: FrameworkAdapter = {
   },
 
   parse(file) {
-    return parseReactScreen(project().addSourceFileAtPath(file.absPath));
+    return parseReactScreen(sourceFileFor(file.absPath));
   },
 };
 
@@ -60,13 +60,4 @@ function routeFromAppFile(appDir: string, file: string): string {
     .filter((s) => !(s.startsWith("(") && s.endsWith(")")));
   const route = "/" + segs.join("/");
   return route.length > 1 ? route.replace(/\/+$/, "") : "/";
-}
-
-function titleFromRoute(route: string): string {
-  if (route === "/") return "Home";
-  const last = route.split("/").filter(Boolean).pop() ?? route;
-  return last
-    .replace(/^\[(\.\.\.)?(.+?)\]$/, "$2")
-    .replace(/[-_]/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
 }

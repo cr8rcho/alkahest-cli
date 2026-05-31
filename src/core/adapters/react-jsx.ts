@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Project, Node, SyntaxKind, ts } from "ts-morph";
 import type { SourceFile, JsxOpeningElement, JsxSelfClosingElement } from "ts-morph";
@@ -7,8 +7,8 @@ import type { RawScreen } from "./types.js";
 /**
  * Shared React/JSX parsing for all React-family adapters (next-app, next-pages,
  * react-router, …). Only file→screen discovery differs per framework; the JSX
- * signal extraction (Link/<a>, router.push, fetch, query hooks, form/button/input,
- * .map lists) is identical, so it lives here.
+ * signal extraction (Link/NavLink/<a>, router.push, navigate(), fetch, query
+ * hooks, form/button/input, .map lists) is identical, so it lives here.
  */
 
 let _project: Project | null = null;
@@ -23,6 +23,34 @@ export function project(): Project {
   return _project;
 }
 
+/** Add a file to the shared project, reusing it if already added (parse is idempotent). */
+export function sourceFileFor(absPath: string): SourceFile {
+  return project().getSourceFile(absPath) ?? project().addSourceFileAtPath(absPath);
+}
+
+/** True if any of `names` is a (dev)dependency in the project's package.json. */
+export function hasDependency(projectRoot: string, ...names: string[]): boolean {
+  try {
+    const pkg = JSON.parse(readFileSync(join(projectRoot, "package.json"), "utf8")) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    return names.some((n) => n in deps);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A non-Next React SPA that happens to use a `pages/`-style folder shouldn't be read as
+ * Next.js. True when react-router is a dependency and Next.js is not — the Next adapters
+ * bow out in that case (the dependency signal beats the directory-name heuristic).
+ */
+export function isReactRouterSpa(projectRoot: string): boolean {
+  return hasDependency(projectRoot, "react-router-dom", "react-router") && !hasDependency(projectRoot, "next");
+}
+
 /** Recursively visit every file under `dir`, skipping node_modules and dotfiles. */
 export function walk(dir: string, onFile: (file: string) => void): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -33,11 +61,24 @@ export function walk(dir: string, onFile: (file: string) => void): void {
   }
 }
 
+/** Last path segment → Title Case, unwrapping dynamic `[slug]`/`:slug`. Shared route→title. */
+export function titleFromRoute(route: string): string {
+  if (route === "/" || route === "") return "Home";
+  const last = route.split("/").filter(Boolean).pop() ?? route;
+  return last
+    .replace(/^\[(\.\.\.)?(.+?)\]$/, "$2") // [slug] / [...all] → slug / all
+    .replace(/^:(.+)$/, "$1") // :slug → slug (react-router dynamic)
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 // ---------- JSX parsing ----------
 
 const NAV_HOOKS = new Set(["redirect", "permanentRedirect"]);
 const QUERY_HOOKS = new Set(["useQuery", "useMutation", "useSWR", "useSWRMutation", "useInfiniteQuery"]);
 const HTML_INPUTS = new Set(["input", "textarea", "select"]);
+// Capitalized JSX tags that are framework nav primitives, not user components.
+const NAV_COMPONENTS = new Set(["Link", "NavLink", "Navigate"]);
 
 /** Parse one React/JSX screen file into raw nav/call/feature signals. */
 export function parseReactScreen(sf: SourceFile): RawScreen {
@@ -47,7 +88,8 @@ export function parseReactScreen(sf: SourceFile): RawScreen {
   const components = new Set<string>();
 
   const navImports = importedFrom(sf, "next/navigation");
-  const routerVars = collectRouterVars(sf);
+  const routerVars = collectHookVars(sf, "useRouter"); // next: router.push/replace
+  const navigateVars = collectHookVars(sf, "useNavigate"); // react-router: navigate()
 
   const elements = [
     ...sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
@@ -56,13 +98,19 @@ export function parseReactScreen(sf: SourceFile): RawScreen {
   for (const el of elements) {
     const tag = el.getTagNameNode().getText();
     const line = el.getStartLineNumber();
-    if (tag === "Link" || tag === "a") {
+    if (tag === "Link" || tag === "NavLink" || tag === "a") {
+      // Next uses href; react-router uses to. Accept either.
+      const href = attrString(el, "href");
+      const to = attrString(el, "to");
+      const attrName = href !== undefined ? "href" : "to";
       navs.push({
-        target: attrString(el, "href") ?? null,
+        target: href ?? to ?? null,
         raw: snippet(el.getText()),
-        trigger: tag === "Link" ? "<Link href>" : "<a href>",
+        trigger: tag === "a" ? "<a href>" : `<${tag} ${attrName}>`,
         line,
       });
+    } else if (tag === "Navigate") {
+      navs.push({ target: attrString(el, "to") ?? null, raw: snippet(el.getText()), trigger: "<Navigate to>", line });
     } else if (tag === "form") {
       features.push({ kind: "form", label: "Form", detail: "form", line });
     } else if (tag === "button" || tag === "Button") {
@@ -72,7 +120,7 @@ export function parseReactScreen(sf: SourceFile): RawScreen {
       const label = attrString(el, "placeholder") ?? attrString(el, "name") ?? tag;
       features.push({ kind: "input", label, detail: tag, line });
     }
-    if (/^[A-Z]/.test(tag) && tag !== "Link") components.add(tag);
+    if (/^[A-Z]/.test(tag) && !NAV_COMPONENTS.has(tag)) components.add(tag);
   }
 
   for (const ce of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
@@ -91,7 +139,9 @@ export function parseReactScreen(sf: SourceFile): RawScreen {
     }
     if (Node.isIdentifier(expr)) {
       const fn = expr.getText();
-      if (fn === "fetch") {
+      if (navigateVars.has(fn)) {
+        navs.push({ target: literalString(args[0]), raw: snippet(ce.getText()), trigger: "navigate()", line });
+      } else if (fn === "fetch") {
         calls.push({ url: literalString(args[0]), method: fetchMethod(args[1]), raw: snippet(ce.getText()), trigger: "fetch", line });
       } else if (NAV_HOOKS.has(fn) && navImports.has(fn)) {
         navs.push({ target: literalString(args[0]), raw: snippet(ce.getText()), trigger: `${fn}()`, line });
@@ -116,11 +166,12 @@ function importedFrom(sf: SourceFile, moduleSpecifier: string): Set<string> {
   }
   return names;
 }
-function collectRouterVars(sf: SourceFile): Set<string> {
+/** Vars bound to a `const x = useXxx()` call — e.g. useRouter → router, useNavigate → navigate. */
+function collectHookVars(sf: SourceFile, hook: string): Set<string> {
   const vars = new Set<string>();
   for (const decl of sf.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
     const init = decl.getInitializer();
-    if (init && Node.isCallExpression(init) && init.getExpression().getText() === "useRouter") {
+    if (init && Node.isCallExpression(init) && init.getExpression().getText() === hook) {
       vars.add(decl.getName());
     }
   }
