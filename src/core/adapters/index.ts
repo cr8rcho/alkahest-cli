@@ -4,6 +4,8 @@ import { nextPagesAdapter } from "./next-pages.js";
 import { reactRouterAdapter } from "./react-router.js";
 import { expoRouterAdapter } from "./expo-router.js";
 import { reactNavigationAdapter } from "./react-navigation.js";
+import { nuxtAdapter } from "./nuxt.js";
+import { vueRouterAdapter } from "./vue-router.js";
 import { swiftUiAdapter } from "./swiftui.js";
 
 export type { FrameworkAdapter, ScreenFile, RawScreen, RawNav, RawCall, RawFeature } from "./types.js";
@@ -22,6 +24,8 @@ export const ADAPTERS: FrameworkAdapter[] = [
   reactRouterAdapter,
   expoRouterAdapter,
   reactNavigationAdapter,
+  nuxtAdapter,
+  vueRouterAdapter,
   swiftUiAdapter,
 ];
 

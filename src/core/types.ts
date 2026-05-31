@@ -96,13 +96,23 @@ export interface Call {
   loc: SourceLoc;
 }
 
-export type Framework = "next" | "react-router" | "vite-react" | "react-native" | "swiftui" | "unknown";
+export type Framework =
+  | "next"
+  | "react-router"
+  | "vite-react"
+  | "react-native"
+  | "vue"
+  | "nuxt"
+  | "swiftui"
+  | "unknown";
 export type Router =
   | "next-app"
   | "next-pages"
   | "react-router"
   | "expo-router"
   | "react-navigation"
+  | "vue-router"
+  | "nuxt-pages"
   | "swiftui-views"
   | "unknown";
 

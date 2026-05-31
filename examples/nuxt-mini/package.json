@@ -1,0 +1,8 @@
+{
+  "name": "nuxt-mini",
+  "private": true,
+  "dependencies": {
+    "nuxt": "^3.0.0",
+    "vue": "^3.4.0"
+  }
+}

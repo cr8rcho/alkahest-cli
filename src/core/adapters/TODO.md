@@ -3,7 +3,7 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `react-native` (Expo Router + React Navigation), `swiftui` (SwiftUI).
+**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `react-native` (Expo Router + React Navigation), `vue`/`nuxt` (Vue Router + Nuxt), `swiftui` (SwiftUI).
 
 React-family adapters share JSX signal extraction via `react-jsx.ts`
 (`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
@@ -53,12 +53,22 @@ like SwiftUI does).
 - **calls:** `loader`/`action` fns, `fetch`, axios, `useQuery`.
 - **note:** routes are declared, not file-based — `discover` parses the router config, not the filesystem.
 
-### [ ] `vue` — Vue 3 + Vue Router (and Nuxt)
-- **detect:** `vue` + `vue-router` in deps; Nuxt = `nuxt` dep or `pages/` with `.vue`.
-- **screen:** Nuxt = file-based `pages/**/*.vue`; plain Vue = `vue-router` route config.
-- **nav:** `<router-link to>`, `<NuxtLink>`, `router.push`, `navigateTo` (Nuxt).
-- **calls:** `useFetch`/`useAsyncData` (Nuxt), `fetch`, `axios`, Pinia actions.
-- **parse:** SFC `<script>`/`<template>` — needs a `.vue` block splitter before AST.
+### [x] `vue` — Vue 3 ✅ shipped (two adapters: `nuxt` + `vue-router`)
+First non-React web platform. Can't reuse the JSX parser — an SFC is `<template>` + `<script>`,
+not JSX — so `vue-sfc.ts` is a zero-dependency block-split + regex line-scan (SwiftUI's style).
+- **`nuxt`** (`nuxt.ts`, file-based): `detect` = `nuxt` dep + `pages/` dir. Screen = `pages/**/*.vue`
+  → route; `index.vue` collapses to its dir; `[id]`/`[...slug]` dynamic. Entry = "/".
+- **`vue-router`** (`vue-router.ts`, config-based): `detect` = `vue-router` dep, not Nuxt. Routes are
+  declared in a TS/JS config, so discover parses `routes:` arrays / `createRouter({routes})` with
+  ts-morph, maps each route's `component` (static import **or** `() => import('…')`) to a `.vue` file
+  (incl. `@/`,`~/` aliases → src root); nested `children` join through parent paths. Entry = "/".
+- **shared SFC signals (`vue-sfc.ts`):** nav = `<router-link/NuxtLink to>`, `<a href>`,
+  `router.push/replace`, `navigateTo()`; calls = `fetch`/`$fetch`/`useFetch`/`useAsyncData`/`axios`;
+  features = `<button>`, `<input|textarea|select>`, `<form>`, `v-for` (list).
+- **fixtures:** `examples/nuxt-mini` (file routes + NuxtLink + navigateTo + useFetch/useAsyncData),
+  `examples/vue-spa-mini` (createRouter config, static+lazy components, nested children).
+- **follow-up:** Pinia store actions as calls; named views (`components: {}`); `<script setup>` macro
+  edge cases; route `name`-based nav (`router.push({name})`).
 
 ### [ ] `svelte` — SvelteKit
 - **detect:** `@sveltejs/kit` in deps; `src/routes/` dir.
