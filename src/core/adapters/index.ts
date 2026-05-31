@@ -7,6 +7,7 @@ import { reactNavigationAdapter } from "./react-navigation.js";
 import { nuxtAdapter } from "./nuxt.js";
 import { vueRouterAdapter } from "./vue-router.js";
 import { swiftUiAdapter } from "./swiftui.js";
+import { composeAdapter } from "./compose.js";
 
 export type { FrameworkAdapter, ScreenFile, RawScreen, RawNav, RawCall, RawFeature } from "./types.js";
 
@@ -27,6 +28,7 @@ export const ADAPTERS: FrameworkAdapter[] = [
   nuxtAdapter,
   vueRouterAdapter,
   swiftUiAdapter,
+  composeAdapter,
 ];
 
 /** First adapter that matches the project. Null if none. */

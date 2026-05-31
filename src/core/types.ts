@@ -104,6 +104,7 @@ export type Framework =
   | "vue"
   | "nuxt"
   | "swiftui"
+  | "compose"
   | "unknown";
 export type Router =
   | "next-app"
@@ -114,6 +115,7 @@ export type Router =
   | "vue-router"
   | "nuxt-pages"
   | "swiftui-views"
+  | "compose-nav"
   | "unknown";
 
 export interface ProductMapMeta {

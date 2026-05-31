@@ -67,6 +67,22 @@ export function isVueApp(projectRoot: string): boolean {
   return hasDependency(projectRoot, "vue", "nuxt");
 }
 
+/**
+ * An Android/Compose project. Gradle's `app/` module dir collides with Next's app-router
+ * convention, so the Next adapters must bow out. Android projects have no package.json, so
+ * detect by Gradle build files (build.gradle / build.gradle.kts / settings.gradle*).
+ */
+export function isAndroidApp(projectRoot: string): boolean {
+  return (
+    existsSync(join(projectRoot, "build.gradle.kts")) ||
+    existsSync(join(projectRoot, "build.gradle")) ||
+    existsSync(join(projectRoot, "settings.gradle.kts")) ||
+    existsSync(join(projectRoot, "settings.gradle")) ||
+    existsSync(join(projectRoot, "app", "build.gradle.kts")) ||
+    existsSync(join(projectRoot, "app", "build.gradle"))
+  );
+}
+
 // ---------- component → source-file resolution (shared by config-driven adapters) ----------
 
 /** React/JS source extensions, in resolution-priority order. */
