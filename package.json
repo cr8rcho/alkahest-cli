@@ -16,6 +16,7 @@
     "build": "tsc && node scripts/copy-assets.mjs",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
