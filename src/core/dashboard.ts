@@ -13,3 +13,12 @@ export function renderDashboard(map: ProductMap): string {
   const json = JSON.stringify(map).replace(/</g, "\\u003c"); // prevent </script> injection
   return TEMPLATE.replace(PLACEHOLDER, () => json);
 }
+
+/**
+ * Dashboard shell with no data inlined — for the hosted viewer (Vercel).
+ * At runtime it fetches the map from a sibling `map.json` or `?src=<url>`,
+ * so the same HTML serves any project. See dashboard.html's loadMap().
+ */
+export function renderShell(): string {
+  return TEMPLATE.replace(PLACEHOLDER, "");
+}

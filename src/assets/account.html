@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alkahest — Account</title>
+    <!-- Config injected at build time by scripts/build-viewer.mjs -->
+    <meta name="alkahest:supabase-url" content="/*__SUPABASE_URL__*/" />
+    <meta name="alkahest:supabase-key" content="/*__SUPABASE_KEY__*/" />
+    <meta name="alkahest:functions-base" content="/*__FUNCTIONS_BASE__*/" />
+    <meta name="alkahest:viewer-base" content="/*__VIEWER_BASE__*/" />
+    <style>
+      :root { --bg:#fff; --ink:#111; --soft:#666; --line:#e5e5e5; --accent:#2563eb; --panel:#f7f7f8; --danger:#b00; }
+      * { box-sizing: border-box; }
+      body { margin:0; font:14px/1.55 system-ui, sans-serif; color:var(--ink); background:var(--bg); }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 40px 20px; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      h2 { font-size: 15px; margin: 28px 0 10px; }
+      .sub { color: var(--soft); margin: 0 0 24px; }
+      button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel);
+               border-radius: 8px; padding: 8px 14px; }
+      button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+      button.link { border: none; background: none; color: var(--accent); padding: 2px 4px; }
+      button.danger { color: var(--danger); }
+      .card { border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0;
+             border-bottom: 1px solid var(--line); }
+      .row:last-child { border-bottom: none; }
+      .muted { color: var(--soft); font-size: 12px; }
+      code { background: var(--panel); padding: 2px 6px; border-radius: 6px; font-size: 12.5px; word-break: break-all; }
+      .token-box { background:#fffbe6; border:1px solid #f0d000; border-radius:10px; padding:14px; margin:12px 0; }
+      .hidden { display: none; }
+      input { font: inherit; padding: 7px 10px; border:1px solid var(--line); border-radius:8px; }
+      a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Alkahest</h1>
+      <p class="sub">Account &amp; publish tokens</p>
+
+      <!-- Signed out -->
+      <div id="signedOut" class="hidden">
+        <div class="card">
+          <p>Sign in to create a publish token. The token lets the <code>alkahest</code> CLI / MCP
+             publish product maps to your account.</p>
+          <button class="primary" id="loginBtn">Sign in with GitHub</button>
+        </div>
+      </div>
+
+      <!-- Signed in -->
+      <div id="signedIn" class="hidden">
+        <div class="row">
+          <span class="muted">Signed in as <strong id="userEmail"></strong></span>
+          <button class="link" id="logoutBtn">Sign out</button>
+        </div>
+
+        <h2>Publish tokens</h2>
+        <p class="muted">Use a token with <code>alkahest login --token &lt;token&gt;</code>, or put it in your MCP
+           config as <code>ALKAHEST_TOKEN</code>. A token is shown only once.</p>
+        <div style="display:flex; gap:8px; margin:10px 0;">
+          <input id="tokenName" placeholder="label (e.g. laptop, ci)" />
+          <button class="primary" id="createTokenBtn">Create token</button>
+        </div>
+        <div id="newToken" class="token-box hidden"></div>
+        <div id="tokenList"></div>
+
+        <h2>Your projects</h2>
+        <div id="projectList"></div>
+      </div>
+
+      <p id="status" class="muted"></p>
+    </div>
+
+    <script type="module">
+      import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+      const meta = (n) => document.querySelector(`meta[name="${n}"]`)?.content || "";
+      const SUPABASE_URL = meta("alkahest:supabase-url");
+      const SUPABASE_KEY = meta("alkahest:supabase-key");
+      const FUNCTIONS_BASE = meta("alkahest:functions-base");
+      const VIEWER_BASE = meta("alkahest:viewer-base");
+
+      const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+      const $ = (id) => document.getElementById(id);
+      const setStatus = (m) => ($("status").textContent = m || "");
+
+      $("loginBtn").onclick = () =>
+        sb.auth.signInWithOAuth({ provider: "github", options: { redirectTo: location.href.split("#")[0] } });
+      $("logoutBtn").onclick = async () => { await sb.auth.signOut(); render(); };
+      $("createTokenBtn").onclick = createToken;
+
+      async function createToken() {
+        setStatus("Creating token…");
+        const { data: { session } } = await sb.auth.getSession();
+        const res = await fetch(`${FUNCTIONS_BASE}/create-token`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ name: $("tokenName").value || null }),
+        });
+        const body = await res.json();
+        if (!res.ok) { setStatus("Error: " + (body.message || body.error)); return; }
+        setStatus("");
+        $("tokenName").value = "";
+        const box = $("newToken");
+        box.classList.remove("hidden");
+        box.innerHTML =
+          `<strong>New token (copy now — shown once):</strong><br/><code>${body.token}</code>`;
+        loadTokens();
+      }
+
+      async function loadTokens() {
+        const { data, error } = await sb
+          .from("api_tokens")
+          .select("id, name, created_at, last_used_at, revoked_at")
+          .order("created_at", { ascending: false });
+        const el = $("tokenList");
+        if (error) { el.innerHTML = `<p class="muted">Couldn't load tokens.</p>`; return; }
+        const active = (data || []).filter((t) => !t.revoked_at);
+        if (!active.length) { el.innerHTML = `<p class="muted">No tokens yet.</p>`; return; }
+        el.innerHTML = `<div class="card">` + active.map((t) => {
+          const used = t.last_used_at ? `last used ${new Date(t.last_used_at).toLocaleDateString()}` : "never used";
+          return `<div class="row"><span>${t.name || "(unnamed)"} <span class="muted">· ${used}</span></span>
+                  <button class="link danger" data-revoke="${t.id}">Revoke</button></div>`;
+        }).join("") + `</div>`;
+        el.querySelectorAll("[data-revoke]").forEach((b) =>
+          (b.onclick = async () => {
+            await sb.from("api_tokens").delete().eq("id", b.dataset.revoke);
+            loadTokens();
+          }),
+        );
+      }
+
+      async function loadProjects() {
+        const { data, error } = await sb
+          .from("projects")
+          .select("slug, name, updated_at")
+          .order("updated_at", { ascending: false });
+        const el = $("projectList");
+        if (error) { el.innerHTML = `<p class="muted">Couldn't load projects.</p>`; return; }
+        if (!data || !data.length) { el.innerHTML = `<p class="muted">No projects yet — run <code>alkahest publish</code>.</p>`; return; }
+        el.innerHTML = `<div class="card">` + data.map((p) => {
+          const link = VIEWER_BASE ? `${VIEWER_BASE}/p/${p.slug}` : `/p/${p.slug}`;
+          return `<div class="row"><span>${p.name || p.slug}<br/><span class="muted">${p.slug}</span></span>
+                  <a href="${link}" target="_blank">Open ↗</a></div>`;
+        }).join("") + `</div>`;
+      }
+
+      async function render() {
+        const { data: { session } } = await sb.auth.getSession();
+        if (session) {
+          $("signedOut").classList.add("hidden");
+          $("signedIn").classList.remove("hidden");
+          $("userEmail").textContent = session.user.email || session.user.user_metadata?.user_name || "you";
+          loadTokens();
+          loadProjects();
+        } else {
+          $("signedIn").classList.add("hidden");
+          $("signedOut").classList.remove("hidden");
+        }
+      }
+
+      sb.auth.onAuthStateChange(() => render());
+      render();
+    </script>
+  </body>
+</html>

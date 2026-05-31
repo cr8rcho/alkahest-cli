@@ -1,5 +1,6 @@
 node_modules/
 dist/
+viewer/
 *.tsbuildinfo
 
 # Alkahest 산출물 (분석 대상 프로젝트에 생성되는 폴더 — 이 저장소엔 보통 없지만 안전망)
@@ -9,3 +10,11 @@ dist/
 .env
 .env.local
 .DS_Store
+
+# MCP 설정 (개발자별 project_ref — 환경마다 다르므로 제외)
+.mcp.json
+
+# 호스팅 백엔드 (open-core: CLI는 공개 MIT, 백엔드는 비공개로 분리)
+# Supabase 스키마/엣지함수 — 유료 로직 포함이라 공개 repo에서 제외
+supabase/
+.claude/settings.local.json

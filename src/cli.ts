@@ -5,6 +5,8 @@ import { scan } from "./commands/scan.js";
 import { view } from "./commands/view.js";
 import { mcp } from "./commands/mcp.js";
 import { hook } from "./commands/hook.js";
+import { publish } from "./commands/publish.js";
+import { login } from "./commands/login.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
@@ -29,6 +31,21 @@ program
   .description("open the .alkahest/ dashboard via a local server")
   .argument("[path]", "project path", ".")
   .action((path: string) => view(path));
+
+program
+  .command("login")
+  .description("save your personal publish token (from the web app) so 'publish' can authenticate")
+  .option("--token <token>", "alk_… token from the web app (Account → Create token)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((opts: { token?: string; api?: string }) => login(opts));
+
+program
+  .command("publish")
+  .description("upload .alkahest/map.json to the hosted viewer → shareable link (no login to view)")
+  .argument("[path]", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .option("--name <name>", "project name (first publish only)")
+  .action((path: string, opts: { api?: string; name?: string }) => publish(path, opts));
 
 program
   .command("mcp")

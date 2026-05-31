@@ -185,8 +185,39 @@
     </main>
 
     <script id="alkahest-data" type="application/json">/*__ALKAHEST_MAP__*/</script>
-    <script>
-      const MAP = JSON.parse(document.getElementById("alkahest-data").textContent);
+    <script type="module">
+      // The map is either inlined (self-contained local index.html) or fetched at
+      // runtime (hosted viewer). Same dashboard code renders both.
+      let MAP;
+      try {
+        MAP = await loadMap();
+      } catch (err) {
+        document.body.innerHTML =
+          '<div style="font:14px system-ui;padding:40px;color:#b00">Failed to load the product map: ' +
+          (err && err.message ? err.message : err) +
+          "</div>";
+        throw err;
+      }
+      async function loadMap() {
+        const raw = document.getElementById("alkahest-data").textContent.trim();
+        if (raw && raw[0] === "{") return JSON.parse(raw); // self-contained (local)
+        const url = mapUrl();
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status + " for " + url);
+        return res.json();
+      }
+      // Resolve where to fetch the map from, in priority order:
+      //   1. ?src=<url>                      explicit override
+      //   2. <meta name="alkahest:map-base"> + /p/{slug}  hosted viewer
+      //   3. ./map.json                      sibling file (plain static hosting)
+      function mapUrl() {
+        const explicit = new URLSearchParams(location.search).get("src");
+        if (explicit) return explicit;
+        const base = document.querySelector('meta[name="alkahest:map-base"]')?.content;
+        const slug = (location.pathname.match(/\/p\/([^/]+)/) || [])[1];
+        if (base && slug) return base.replace(/\/+$/, "") + "/" + slug + "/map.json";
+        return "./map.json";
+      }
       const SVGNS = "http://www.w3.org/2000/svg";
 
       // ---- indexes ----
