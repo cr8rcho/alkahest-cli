@@ -18,3 +18,5 @@ viewer/
 # Supabase 스키마/엣지함수 — 유료 로직 포함이라 공개 repo에서 제외
 supabase/
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/*.lock
