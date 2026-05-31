@@ -14,7 +14,6 @@
   },
   "scripts": {
     "build": "tsc && node scripts/copy-assets.mjs",
-    "build:viewer": "node scripts/build-viewer.mjs",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
