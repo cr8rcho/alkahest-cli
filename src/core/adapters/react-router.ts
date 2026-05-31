@@ -1,9 +1,17 @@
 import { readFileSync, existsSync, statSync } from "node:fs";
-import { join, relative, sep, dirname, resolve } from "node:path";
+import { join, relative, sep, dirname } from "node:path";
 import { Node, SyntaxKind } from "ts-morph";
 import type { SourceFile, ObjectLiteralExpression, JsxElement, JsxSelfClosingElement } from "ts-morph";
 import type { FrameworkAdapter, ScreenFile } from "./types.js";
-import { walk, sourceFileFor, parseReactScreen, titleFromRoute, hasDependency } from "./react-jsx.js";
+import {
+  walk,
+  sourceFileFor,
+  parseReactScreen,
+  titleFromRoute,
+  hasDependency,
+  importMap,
+  resolveComponentFile,
+} from "./react-jsx.js";
 
 /**
  * React Router adapter (generic React SPA: Vite / CRA). Routes are *declared*, not
@@ -21,7 +29,6 @@ import { walk, sourceFileFor, parseReactScreen, titleFromRoute, hasDependency } 
 const ROUTER_CALLS = new Set(["createBrowserRouter", "createHashRouter", "createMemoryRouter"]);
 const SOURCE_RE = /\.(tsx|jsx|ts|js)$/;
 const CONFIG_HINT = /create(Browser|Hash|Memory)Router|createRoutesFromElements|<Routes[\s>]|<Route[\s/>]/;
-const EXTS = [".tsx", ".ts", ".jsx", ".js"];
 
 function srcRootOf(projectRoot: string): string {
   const src = join(projectRoot, "src");
@@ -145,38 +152,6 @@ function walkRouteJsx(el: JsxElement | JsxSelfClosingElement, parentPath: string
   }
 }
 
-// ---------- component → file resolution ----------
-
-/** import name → module specifier (static default/named imports + `lazy(() => import("…"))`). */
-function importMap(sf: SourceFile): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const imp of sf.getImportDeclarations()) {
-    const spec = imp.getModuleSpecifierValue();
-    const def = imp.getDefaultImport();
-    if (def) map.set(def.getText(), spec);
-    for (const n of imp.getNamedImports()) map.set(n.getName(), spec);
-  }
-  for (const decl of sf.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
-    const init = decl.getInitializer();
-    if (init && Node.isCallExpression(init) && init.getExpression().getText() === "lazy") {
-      const spec = dynamicImportSpecifier(init.getArguments()[0]);
-      if (spec) map.set(decl.getName(), spec);
-    }
-  }
-  return map;
-}
-
-function resolveComponentFile(configDir: string, spec: string | undefined): string | null {
-  if (!spec || !spec.startsWith(".")) return null; // only resolve local files
-  const base = resolve(configDir, spec);
-  const candidates = [
-    ...EXTS.map((e) => base + e),
-    ...EXTS.map((e) => join(base, "index" + e)),
-  ];
-  if (SOURCE_RE.test(base)) candidates.unshift(base);
-  return candidates.find((c) => existsSync(c) && statSync(c).isFile()) ?? null;
-}
-
 // ---------- small ts-morph helpers ----------
 
 function tagName(el: JsxElement | JsxSelfClosingElement): string {
@@ -267,17 +242,6 @@ function jsxBoolAttr(el: JsxElement | JsxSelfClosingElement, name: string): bool
   if (!init) return true; // bare `index`
   if (Node.isJsxExpression(init)) return init.getExpression()?.getText() === "true";
   return false;
-}
-
-function dynamicImportSpecifier(arrowOrCall: Node | undefined): string | null {
-  if (!arrowOrCall) return null;
-  for (const ce of arrowOrCall.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (ce.getExpression().getKind() === SyntaxKind.ImportKeyword) {
-      const a = ce.getArguments()[0];
-      if (a && Node.isStringLiteral(a)) return a.getLiteralValue();
-    }
-  }
-  return null;
 }
 
 /** Join a child route segment onto a parent path (react-router relative semantics). */

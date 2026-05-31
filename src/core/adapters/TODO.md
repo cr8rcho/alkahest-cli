@@ -3,7 +3,7 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `swiftui` (SwiftUI).
+**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `react-native` (Expo Router + React Navigation), `swiftui` (SwiftUI).
 
 React-family adapters share JSX signal extraction via `react-jsx.ts`
 (`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
@@ -83,12 +83,23 @@ like SwiftUI does).
 
 ## Tier 2 — native & cross-platform apps
 
-### [ ] `react-native` — React Native (incl. Expo Router)
-- **detect:** `react-native` in deps; Expo Router = `expo-router` + `app/` dir.
-- **screen:** Expo = file-based `app/**`; React Navigation = `Stack.Screen`/`Tab.Screen` registrations.
-- **nav:** `navigation.navigate()`, `<Link>` (Expo), `router.push`.
-- **calls:** `fetch`, axios, `useQuery`.
-- **shares:** JSX/ts-morph parser with the React adapters.
+### [x] `react-native` — React Native ✅ shipped (two adapters, both id `react-native`)
+Shipped as two adapters because the routing models — and therefore the `router` label — differ:
+- **`expo-router`** (file-based, `expo-router.ts`): `detect` = `expo-router` dep + `app/` dir.
+  Screen = `app/**/*.{tsx,jsx,ts,js}` → route, excluding `_layout` and Expo `+`-prefixed files;
+  route groups `(x)` stripped, `index` collapses to its dir, `[slug]`/`[...all]` dynamic.
+  Nav: `<Link href>`, `useRouter().push/replace/navigate`, and the global `router` from `expo-router`.
+- **`react-navigation`** (config-based, `react-navigation.ts`): `detect` = `@react-navigation/native` dep.
+  Screen = `<*.Screen name component>` registrations (Stack/Tab/Drawer); name→component resolved to a
+  source file via shared `importMap`/`resolveComponentFile`. Entry = nearest `<*.Navigator initialRouteName>`,
+  else first registered. Nav: `navigation.navigate/push/replace("ScreenName")` — targets the route name.
+- **shares:** the react-jsx parser; `navigation.*` + expo `router` nav primitives were added there.
+- **detection:** Next adapters bow out for RN via `isReactNativeApp()` (Expo's `app/` dir would otherwise
+  look like Next app-router); `expo-router` is registered before `react-navigation` (Expo pulls in
+  @react-navigation transitively).
+- **fixtures:** `examples/expo-mini` (file routes, route group, `+not-found`/`_layout` excluded),
+  `examples/rn-nav-mini` (Stack.Navigator + initialRouteName + component refs).
+- **follow-up:** dynamic `Stack.Screen` children (render-prop screens); `getComponent` lazy form; deep links.
 
 ### [ ] `flutter` — Flutter (Dart)
 - **detect:** `pubspec.yaml` with `flutter:` SDK.

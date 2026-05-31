@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { Project, Node, SyntaxKind, ts } from "ts-morph";
 import type { SourceFile, JsxOpeningElement, JsxSelfClosingElement } from "ts-morph";
 import type { RawScreen } from "./types.js";
@@ -51,6 +51,63 @@ export function isReactRouterSpa(projectRoot: string): boolean {
   return hasDependency(projectRoot, "react-router-dom", "react-router") && !hasDependency(projectRoot, "next");
 }
 
+/**
+ * A React Native / Expo project. Expo Router uses an `app/` dir just like Next's app-router,
+ * so the Next adapters must bow out when this is true (the dependency signal disambiguates).
+ */
+export function isReactNativeApp(projectRoot: string): boolean {
+  return hasDependency(projectRoot, "react-native", "expo");
+}
+
+// ---------- component → source-file resolution (shared by config-driven adapters) ----------
+
+/** React/JS source extensions, in resolution-priority order. */
+export const SOURCE_EXTS = [".tsx", ".ts", ".jsx", ".js"];
+const SOURCE_RE = /\.(tsx|jsx|ts|js)$/;
+
+/**
+ * Map each importable name in a file to its module specifier — covers default and named
+ * static imports plus `const X = lazy(() => import("…"))`. Used to turn a route's referenced
+ * component identifier back into the file it lives in.
+ */
+export function importMap(sf: SourceFile): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const imp of sf.getImportDeclarations()) {
+    const spec = imp.getModuleSpecifierValue();
+    const def = imp.getDefaultImport();
+    if (def) map.set(def.getText(), spec);
+    for (const n of imp.getNamedImports()) map.set(n.getName(), spec);
+  }
+  for (const decl of sf.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const init = decl.getInitializer();
+    if (init && Node.isCallExpression(init) && init.getExpression().getText() === "lazy") {
+      const spec = dynamicImportSpecifier(init.getArguments()[0]);
+      if (spec) map.set(decl.getName(), spec);
+    }
+  }
+  return map;
+}
+
+/** Resolve a relative module specifier (from `configDir`) to an on-disk source file, or null. */
+export function resolveComponentFile(configDir: string, spec: string | undefined): string | null {
+  if (!spec || !spec.startsWith(".")) return null; // only resolve local files
+  const base = resolve(configDir, spec);
+  const candidates = [...SOURCE_EXTS.map((e) => base + e), ...SOURCE_EXTS.map((e) => join(base, "index" + e))];
+  if (SOURCE_RE.test(base)) candidates.unshift(base);
+  return candidates.find((c) => existsSync(c) && statSync(c).isFile()) ?? null;
+}
+
+function dynamicImportSpecifier(arrowOrCall: Node | undefined): string | null {
+  if (!arrowOrCall) return null;
+  for (const ce of arrowOrCall.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (ce.getExpression().getKind() === SyntaxKind.ImportKeyword) {
+      const a = ce.getArguments()[0];
+      if (a && Node.isStringLiteral(a)) return a.getLiteralValue();
+    }
+  }
+  return null;
+}
+
 /** Recursively visit every file under `dir`, skipping node_modules and dotfiles. */
 export function walk(dir: string, onFile: (file: string) => void): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -88,8 +145,16 @@ export function parseReactScreen(sf: SourceFile): RawScreen {
   const components = new Set<string>();
 
   const navImports = importedFrom(sf, "next/navigation");
-  const routerVars = collectHookVars(sf, "useRouter"); // next: router.push/replace
+  const routerVars = collectHookVars(sf, "useRouter"); // next / expo-router: router.push/replace/navigate
   const navigateVars = collectHookVars(sf, "useNavigate"); // react-router: navigate()
+  const navigationVars = collectHookVars(sf, "useNavigation"); // react-navigation: navigation.navigate(...)
+  navigationVars.add("navigation"); // react-navigation passes `navigation` as a screen prop by convention
+  // expo-router exposes a global `router` (import { router } from "expo-router") — treat like a useRouter() var.
+  for (const imp of sf.getImportDeclarations()) {
+    if (imp.getModuleSpecifierValue() === "expo-router") {
+      for (const n of imp.getNamedImports()) if (n.getName() === "router") routerVars.add("router");
+    }
+  }
 
   const elements = [
     ...sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
@@ -130,8 +195,10 @@ export function parseReactScreen(sf: SourceFile): RawScreen {
     if (Node.isPropertyAccessExpression(expr)) {
       const obj = expr.getExpression().getText();
       const name = expr.getName();
-      if (routerVars.has(obj) && (name === "push" || name === "replace")) {
+      if (routerVars.has(obj) && (name === "push" || name === "replace" || name === "navigate")) {
         navs.push({ target: literalString(args[0]), raw: snippet(ce.getText()), trigger: `router.${name}`, line });
+      } else if (navigationVars.has(obj) && (name === "navigate" || name === "push" || name === "replace")) {
+        navs.push({ target: literalString(args[0]), raw: snippet(ce.getText()), trigger: `navigation.${name}`, line });
       } else if (name === "map" && callbackReturnsJsx(args)) {
         features.push({ kind: "list", label: "List", detail: `${obj}.map`, line });
       }

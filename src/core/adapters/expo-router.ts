@@ -1,14 +1,16 @@
 import { statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import type { FrameworkAdapter, ScreenFile } from "./types.js";
-import { sourceFileFor, walk, parseReactScreen, titleFromRoute, isReactRouterSpa, isReactNativeApp } from "./react-jsx.js";
+import { sourceFileFor, walk, parseReactScreen, titleFromRoute, hasDependency } from "./react-jsx.js";
 
 /**
- * Next.js app-router adapter: treats `app/**​/page.tsx` as screens, parses with ts-morph.
- * Screen id = route ("/dashboard/settings"). Entry point = root route "/".
- * JSX signal extraction is shared via react-jsx.ts.
+ * Expo Router adapter (React Native, file-based). Like Next's app-router but every route
+ * file is a screen: `app/**​/*.{tsx,jsx,ts,js}` → route, excluding layouts (`_layout`) and
+ * Expo's special `+`-prefixed files (`+html`, `+not-found`, `+native-intent`).
+ * Screen id = route; route groups `(x)` are stripped; `index` collapses to its dir.
+ * JSX signal extraction (incl. <Link href>, router.push, navigation.navigate) is shared.
  */
-const PAGE_RE = /^page\.(tsx|jsx|ts|js)$/;
+const ROUTE_RE = /\.(tsx|jsx|ts|js)$/;
 
 function appDirOf(projectRoot: string): string | null {
   return (
@@ -18,12 +20,12 @@ function appDirOf(projectRoot: string): string | null {
   );
 }
 
-export const nextAppAdapter: FrameworkAdapter = {
-  id: "next",
-  router: "next-app",
+export const expoRouterAdapter: FrameworkAdapter = {
+  id: "react-native",
+  router: "expo-router",
 
   detect(projectRoot) {
-    return appDirOf(projectRoot) !== null && !isReactRouterSpa(projectRoot) && !isReactNativeApp(projectRoot);
+    return hasDependency(projectRoot, "expo-router") && appDirOf(projectRoot) !== null;
   },
 
   discover(projectRoot) {
@@ -31,8 +33,9 @@ export const nextAppAdapter: FrameworkAdapter = {
     if (!appDir) return [];
     const files: ScreenFile[] = [];
     walk(appDir, (file) => {
-      const base = file.slice(file.lastIndexOf(sep) + 1);
-      if (!PAGE_RE.test(base)) return;
+      if (!ROUTE_RE.test(file)) return;
+      const base = file.slice(file.lastIndexOf(sep) + 1).replace(ROUTE_RE, "");
+      if (base === "_layout" || base.startsWith("+")) return; // layouts & Expo special files
       const route = routeFromAppFile(appDir, file);
       files.push({
         absPath: file,
@@ -40,7 +43,7 @@ export const nextAppAdapter: FrameworkAdapter = {
         id: route,
         route,
         title: titleFromRoute(route),
-        isEntry: route === "/", // app-router entry point = root route
+        isEntry: route === "/", // app/index → "/"
       });
     });
     files.sort((a, b) => a.route.localeCompare(b.route));
@@ -52,12 +55,13 @@ export const nextAppAdapter: FrameworkAdapter = {
   },
 };
 
-/** app-router file path → route. Strips route groups `(x)`, keeps dynamic `[slug]`. */
+/** Expo route file → route. Strips route groups `(x)`, collapses `index`, keeps dynamic `[slug]`/`[...all]`. */
 function routeFromAppFile(appDir: string, file: string): string {
   const segs = relative(appDir, file)
+    .replace(ROUTE_RE, "")
     .split(sep)
-    .slice(0, -1)
     .filter((s) => !(s.startsWith("(") && s.endsWith(")")));
+  if (segs[segs.length - 1] === "index") segs.pop();
   const route = "/" + segs.join("/");
   return route.length > 1 ? route.replace(/\/+$/, "") : "/";
 }

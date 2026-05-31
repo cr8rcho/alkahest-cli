@@ -1,0 +1,10 @@
+{
+  "name": "rn-nav-mini",
+  "private": true,
+  "dependencies": {
+    "@react-navigation/native": "^6.0.0",
+    "@react-navigation/native-stack": "^6.0.0",
+    "react": "^18.0.0",
+    "react-native": "^0.74.0"
+  }
+}

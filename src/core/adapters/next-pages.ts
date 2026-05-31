@@ -1,7 +1,7 @@
 import { statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import type { FrameworkAdapter, ScreenFile } from "./types.js";
-import { sourceFileFor, walk, parseReactScreen, titleFromRoute, isReactRouterSpa } from "./react-jsx.js";
+import { sourceFileFor, walk, parseReactScreen, titleFromRoute, isReactRouterSpa, isReactNativeApp } from "./react-jsx.js";
 
 /**
  * Next.js pages-router adapter: treats `pages/**​/*.tsx` as screens (one file = one
@@ -25,7 +25,7 @@ export const nextPagesAdapter: FrameworkAdapter = {
   router: "next-pages",
 
   detect(projectRoot) {
-    return pagesDirOf(projectRoot) !== null && !isReactRouterSpa(projectRoot);
+    return pagesDirOf(projectRoot) !== null && !isReactRouterSpa(projectRoot) && !isReactNativeApp(projectRoot);
   },
 
   discover(projectRoot) {
