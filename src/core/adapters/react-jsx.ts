@@ -59,6 +59,14 @@ export function isReactNativeApp(projectRoot: string): boolean {
   return hasDependency(projectRoot, "react-native", "expo");
 }
 
+/**
+ * A Vue/Nuxt project. Nuxt also uses a `pages/` dir, which would otherwise make the Next
+ * pages-router adapter claim it — so the Next adapters bow out when this is true.
+ */
+export function isVueApp(projectRoot: string): boolean {
+  return hasDependency(projectRoot, "vue", "nuxt");
+}
+
 // ---------- component → source-file resolution (shared by config-driven adapters) ----------
 
 /** React/JS source extensions, in resolution-priority order. */

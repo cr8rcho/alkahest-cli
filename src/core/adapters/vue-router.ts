@@ -103,15 +103,31 @@ export const vueRouterAdapter: FrameworkAdapter = {
 
 // ---------- route extraction (ts-morph) ----------
 
-/** Walk every `routes:` array and `createRouter({ routes })` in the file → flattened routes. */
+/**
+ * Walk every route array in the file → flattened routes. Handles the common shapes:
+ *  - inline `routes: [...]` property
+ *  - `const routes = [...]` then `createRouter({ routes })` (shorthand) — the most common form
+ *  - `createRouter({ routes: [...] })`
+ */
 function routesFromConfig(sf: SourceFile): RouteEntry[] {
   const out: RouteEntry[] = [];
   const imports = importSpecs(sf);
-  // Any array assigned to a `routes` property, or the routes arg of createRouter.
+  const seen = new Set<Node>();
+
+  const handleArray = (arr: Node | undefined) => {
+    if (arr && Node.isArrayLiteralExpression(arr) && !seen.has(arr)) {
+      seen.add(arr);
+      walkRouteArray(arr, "/", out, imports);
+    }
+  };
+
+  // (a) inline `routes: [...]` property assignment
   for (const pa of sf.getDescendantsOfKind(SyntaxKind.PropertyAssignment)) {
-    if (pa.getName() !== "routes") continue;
-    const init = pa.getInitializer();
-    if (init && Node.isArrayLiteralExpression(init)) walkRouteArray(init, "/", out, imports);
+    if (pa.getName() === "routes") handleArray(pa.getInitializer());
+  }
+  // (b) `const routes = [...]` variable declaration (referenced via shorthand or by name)
+  for (const decl of sf.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    if (decl.getName() === "routes") handleArray(decl.getInitializer());
   }
   return out;
 }
