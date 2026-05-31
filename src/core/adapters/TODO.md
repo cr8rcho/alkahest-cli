@@ -3,7 +3,10 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (Next.js App Router), `swiftui` (SwiftUI).
+**Shipping today:** `next` (App Router + Pages Router), `swiftui` (SwiftUI).
+
+React-family adapters share JSX signal extraction via `react-jsx.ts`
+(`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
 
 ## How an adapter is defined (recap — see ALKAHEST.md §8)
 
@@ -35,12 +38,13 @@ like SwiftUI does).
 
 ## Tier 1 — web frameworks (highest reach, JS/TS, reuse the ts-morph parser)
 
-### [ ] `next-pages` — Next.js Pages Router
-- **detect:** `pages/` or `src/pages/` dir (and no `app/`, else `next` wins).
-- **screen:** each `pages/**/*.tsx` (except `_app`, `_document`, `api/`) → route.
-- **nav:** `<Link href>`, `router.push/replace`, `redirect`.
-- **calls:** `getServerSideProps`/`getStaticProps`, `fetch`, `useSWR`, `useQuery`; `pages/api/*` as resources.
-- **why first:** huge installed base; can share most route/JSX helpers with the existing `next` adapter.
+### [x] `next-pages` — Next.js Pages Router ✅ shipped
+- **detect:** `pages/` or `src/pages/` dir. (app-router is registered first, so a hybrid project maps as app-router.)
+- **screen:** each `pages/**/*.{tsx,jsx,ts,js}` (except `_app`/`_document`/`_error`, `api/`) → route; `index` → its dir.
+- **nav:** `<Link href>`, `<a href>`, `router.push/replace` — via shared `react-jsx.ts`.
+- **calls:** `fetch`, query hooks — via shared `react-jsx.ts`. (`getServerSideProps`/`getStaticProps` not yet extracted.)
+- **fixture:** `examples/pages-mini`.
+- **follow-up:** `getServerSideProps`/`getStaticProps` data deps; treat `pages/api/*` as resource nodes.
 
 ### [ ] `react-router` — generic React SPA (Vite / CRA)
 - **detect:** `react-router-dom` in deps; no Next.js.
