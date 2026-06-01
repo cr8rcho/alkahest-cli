@@ -20,7 +20,7 @@ export interface PublishOptions {
 }
 
 export async function publish(path: string, options: PublishOptions): Promise<void> {
-  const res = await publishMap(path, options);
+  const res = await publishMap(path, { ...options, source: "cli" });
   if (!res.ok) {
     if (res.code === "no_map") {
       console.error(`[alkahest] no .alkahest/map.json found — run 'alkahest scan' first.`);
@@ -29,6 +29,8 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
       console.error("  Upgrade to Pro, or 'alkahest view' still works locally for free.");
     } else if (res.code === "invalid_token") {
       console.error("[alkahest] ✗ Token invalid or revoked. Run 'alkahest login' again.");
+    } else if (res.code === "client_too_old") {
+      console.error(`[alkahest] ✗ ${res.message}`);
     } else {
       console.error(`[alkahest] publish failed: ${res.message}`);
     }
@@ -38,4 +40,5 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
 
   console.log(`[alkahest] published ${res.slug}`);
   console.log(`  → ${res.viewerUrl ?? res.mapUrl}`);
+  if (res.warning) console.error(`[alkahest] ⚠ ${res.warning}`);
 }

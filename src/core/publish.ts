@@ -1,7 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { createRequire } from "node:module";
 import { OUTPUT_DIR } from "./emit.js";
 import { loadCredentials, resolveApiUrl, resolveToken, saveCredentials } from "./credentials.js";
+
+const require = createRequire(import.meta.url);
+const pkg = require("../../package.json") as { version: string };
 
 /**
  * Shared publish logic used by both the `alkahest publish` CLI command and the MCP
@@ -18,6 +22,8 @@ export interface PublishParams {
   name?: string;
   /** Publish token (else env ALKAHEST_TOKEN / saved creds). */
   token?: string;
+  /** Which surface initiated this — sent to the server for version/compat handling. */
+  source?: "cli" | "mcp";
 }
 
 export interface PublishResult {
@@ -27,6 +33,8 @@ export interface PublishResult {
   mapUrl?: string;
   /** Whether this was the project's first publish (a new slug was created). */
   created?: boolean;
+  /** Non-blocking server message (e.g. a newer version is available). */
+  warning?: string;
   /** Machine-readable failure code: no_map | no_api | no_token | network | <server error>. */
   code?: string;
   /** Human-readable failure message. */
@@ -86,7 +94,10 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
 
   // Known project → send its slug (update). New project → omit slug (server creates it).
   const known = creds.projects?.[projectRoot];
-  const reqBody: Record<string, unknown> = { map };
+  const reqBody: Record<string, unknown> = {
+    map,
+    client: { source: params.source ?? "cli", version: pkg.version },
+  };
   if (known) reqBody.slug = known.slug;
   else reqBody.name = params.name || basename(projectRoot);
 
@@ -113,5 +124,6 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     viewerUrl: pub.body.viewerUrl ?? null,
     mapUrl: pub.body.mapUrl,
     created,
+    warning: typeof pub.body.warning === "string" ? pub.body.warning : undefined,
   };
 }

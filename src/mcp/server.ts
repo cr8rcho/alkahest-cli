@@ -172,7 +172,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ path, name }) => {
-      const res = await publishMap(rootOf(path), { name });
+      const res = await publishMap(rootOf(path), { name, source: "mcp" });
       if (!res.ok) {
         const hints: Record<string, string> = {
           no_map: "Run the scan tool first to build .alkahest/map.json.",
@@ -180,6 +180,7 @@ export function buildServer(): McpServer {
           no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
           plan_limit: "Free plan project limit reached — upgrade to Pro for more.",
           invalid_token: "The publish token is invalid or revoked — create a new one at alkahest.app → Account.",
+          client_too_old: "This alkahest is too old to publish — run 'alkahest update'.",
         };
         const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
         return text(`Publish failed (${res.code}): ${res.message}.${hint}`);
@@ -189,6 +190,7 @@ export function buildServer(): McpServer {
         slug: res.slug,
         url: res.viewerUrl ?? res.mapUrl,
         created: res.created,
+        ...(res.warning ? { warning: res.warning } : {}),
       });
     },
   );

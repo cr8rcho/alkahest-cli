@@ -7,6 +7,7 @@ import { mcp } from "./commands/mcp.js";
 import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
+import { update } from "./commands/update.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
@@ -57,6 +58,11 @@ program
   .description("install/remove git hooks — run scan on commit/merge (diff-driven refresh)")
   .argument("<action>", "install | uninstall")
   .action((action: string) => hook(action));
+
+program
+  .command("update")
+  .description("update alkahest to the latest version")
+  .action(() => update());
 
 program.parseAsync().catch((err) => {
   console.error(err instanceof Error ? err.message : err);

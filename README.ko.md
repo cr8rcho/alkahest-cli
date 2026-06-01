@@ -91,6 +91,9 @@ alkahest scan --full   # 기준선 무시하고 전체 재스캔
 alkahest view          # 대시보드를 로컬 서버로 열기 (2-레이어 그래프)
 alkahest hook install  # 커밋·머지 시 scan 자동 실행 (diff 자동 갱신)
 alkahest mcp           # MCP 서버 실행 (에이전트가 제품 지도를 질의, 키 불필요)
+alkahest login         # publish 토큰 저장 (alkahest.app → Account → Create token)
+alkahest publish       # 지도를 hosted 뷰어에 업로드 → 공유 링크
+alkahest update        # alkahest 최신 버전으로 업데이트
 ```
 
 ### 대시보드 조작
