@@ -19,7 +19,7 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
 ## Architecture (open-core)
 
 - **CLI** (`src/`) — public, MIT. Commands: `scan`, `view`, `publish`, `login`,
-  `mcp`, `hook`. Output goes to `<project>/.alkahest/` (`map.json` + `index.html`).
+  `mcp`, `hook`, `update`. Output goes to `<project>/.alkahest/` (`map.json` + `index.html`).
 - **Hosted backend** (`supabase/`) — **gitignored / kept private.** Edge functions
   (`publish`, `create-token`, deprecated `register`) + schema. Holds paid-plan logic,
   so it lives outside the public repo (open-core split).
@@ -47,3 +47,30 @@ npm run build:viewer  # generate viewer/ for Vercel
 
 Run `npm run typecheck` before committing. Match the surrounding code style;
 keep comments at the existing density.
+
+## Releases / versioning
+
+Version channel is **GitHub Releases** (not npm). `alkahest update` reads the repo's
+`releases/latest` and compares it to the installed `package.json` version
+(`alkahest update --check` reports only; it updates via `git pull` + rebuild for a git
+checkout, else prints the reinstall command).
+
+**SemVer is keyed to the `map.json` schema contract** — the structure the CLI emits and
+the hosted viewer renders — not to internal refactors:
+- **patch** — no schema change.
+- **minor** — additive *optional* fields (old maps still render fine).
+- **major / breaking** — renamed / removed / restructured fields.
+
+**Cut a release:**
+1. Bump `package.json` `version` per the rule above. (`files` already ships `dist/`;
+   `prepare` / `prepublishOnly` build it — nothing else to package.)
+2. `gh release create vX.Y.Z --target main --title vX.Y.Z --notes "…"` — tag is `v` +
+   the package version. This is exactly what `alkahest update` picks up.
+3. **Only if the `map.json` schema changed:** also bump the `publish` edge function's
+   version gate — `LATEST_CLI_VERSION` (nudge) and, for a breaking change,
+   `MIN_CLI_VERSION` (hard floor) — then redeploy it, so old clients get a clear
+   "run `alkahest update`" instead of silently breaking. That constant + the full policy
+   live in the **alkahest-cloud** repo (`supabase/functions/publish/index.ts`).
+
+`MIN_CLI_VERSION` locks out everyone below it — raise it only for genuine
+incompatibility; prefer additive schema changes so it rarely moves.
