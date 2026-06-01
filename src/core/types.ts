@@ -103,6 +103,7 @@ export type Framework =
   | "react-native"
   | "vue"
   | "nuxt"
+  | "svelte"
   | "swiftui"
   | "compose"
   | "unknown";
@@ -114,6 +115,7 @@ export type Router =
   | "react-navigation"
   | "vue-router"
   | "nuxt-pages"
+  | "sveltekit"
   | "swiftui-views"
   | "compose-nav"
   | "unknown";

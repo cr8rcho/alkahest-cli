@@ -6,6 +6,7 @@ import { expoRouterAdapter } from "./expo-router.js";
 import { reactNavigationAdapter } from "./react-navigation.js";
 import { nuxtAdapter } from "./nuxt.js";
 import { vueRouterAdapter } from "./vue-router.js";
+import { svelteKitAdapter } from "./sveltekit.js";
 import { swiftUiAdapter } from "./swiftui.js";
 import { composeAdapter } from "./compose.js";
 
@@ -27,6 +28,7 @@ export const ADAPTERS: FrameworkAdapter[] = [
   reactNavigationAdapter,
   nuxtAdapter,
   vueRouterAdapter,
+  svelteKitAdapter,
   swiftUiAdapter,
   composeAdapter,
 ];

@@ -71,12 +71,14 @@ not JSX — so `vue-sfc.ts` is a zero-dependency block-split + regex line-scan (
 - **follow-up:** Pinia store actions as calls; named views (`components: {}`); `<script setup>` macro
   edge cases; route `name`-based nav (`router.push({name})`).
 
-### [ ] `svelte` — SvelteKit
-- **detect:** `@sveltejs/kit` in deps; `src/routes/` dir.
-- **screen:** file-based `src/routes/**/+page.svelte` → route.
-- **nav:** `<a href>` (SvelteKit intercepts), `goto()`.
-- **calls:** `+page.(server.)ts` `load`, `fetch`, form actions.
-
+### [x] `svelte` — SvelteKit ✅ shipped (`sveltekit.ts`)
+- **detect:** `@sveltejs/kit` in deps + a `src/routes/` (or `routes/`) dir.
+- **screen:** `src/routes/**/+page.svelte` → route (file-based). Route groups `(x)` stripped, `[id]`/`[...rest]` kept, `index`-less; `+layout`/`+page.server.ts` etc. excluded. id = route, entry = "/".
+- **parse:** `.svelte` can't reuse the JSX or Vue parsers (it's `<script>` + Svelte markup) — zero-dependency line/regex scan (SwiftUI/Vue-SFC style).
+- **nav:** `<a href="/x">` (markup), `goto("/x")` from `$app/navigation` (script).
+- **calls:** `fetch("…")`. **features:** `<button>`, `<input|textarea|select>`, `<form>`, `{#each}` (list).
+- **fixture:** `examples/svelte-mini` (4 routes incl. nested `blog/[slug]`, `+layout` excluded, goto + a-href nav, fetch call). Deterministic 5/5.
+- **follow-up:** `load()` data deps in `+page(.server).ts`; form actions; `<svelte:component>`; route `name` params.
 ### [ ] `angular` — Angular Router
 - **detect:** `@angular/core` in deps; `angular.json`.
 - **screen:** routes from `RouterModule.forRoot([...])` / standalone `provideRouter`.
