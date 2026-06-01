@@ -3,7 +3,7 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `react-native` (Expo Router + React Navigation), `vue`/`nuxt` (Vue Router + Nuxt), `swiftui` (SwiftUI).
+**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `react-native` (Expo Router + React Navigation), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `swiftui` (SwiftUI), `compose` (Jetpack Compose).
 
 React-family adapters share JSX signal extraction via `react-jsx.ts`
 (`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
@@ -121,12 +121,16 @@ Shipped as two adapters because the routing models — and therefore the `router
 - **calls:** `http`/`dio` calls, `FutureBuilder`.
 - **parse:** Dart — tree-sitter-dart or regex line-scan (mirror the SwiftUI heuristic approach).
 
-### [ ] `compose` — Android Jetpack Compose (Kotlin)
-- **detect:** `*.kt` with `androidx.compose` imports; `build.gradle` Compose plugin.
-- **screen:** `@Composable` functions used as `NavHost` destinations (`composable("route") { ... }`).
+### [x] `compose` — Android Jetpack Compose (Kotlin) ✅ shipped (`compose.ts`)
+- **detect:** any `.kt` importing `androidx.compose` / `androidx.navigation.compose`.
+- **screen:** `composable("route") { Foo(...) }` NavHost destinations — id = the route string (so `navigate("route")` resolves). Pass 1 indexes every `@Composable fun` → its file (whole-source match: `@Composable` and `fun` sit on separate lines); pass 2 maps each destination's first composable call to that file. Entry = NavHost `startDestination`.
 - **nav:** `navController.navigate("route")`.
-- **calls:** Retrofit/Ktor client calls, `ViewModel` repository calls.
-- **parse:** Kotlin — tree-sitter-kotlin or regex; pairs naturally with the SwiftUI adapter as the "native mobile" set.
+- **calls:** `URL("…")` / `client.get|post|…("url")` / Retrofit/Ktor/OkHttp client construction.
+- **features:** Button family, TextField family, Checkbox/Switch/RadioButton/Slider, Lazy* lists.
+- **parse:** Kotlin — zero-dependency regex line-scan (SwiftUI's style), no tree-sitter. Pairs with `swiftui` as the native-mobile set.
+- **detection guard:** Gradle's `app/` module dir collides with Next app-router, so the Next adapters bow out for Android via `isAndroidApp()` (build.gradle[.kts]/settings.gradle[.kts] — Android has no package.json).
+- **fixture:** `examples/compose-mini` (NavHost startDestination + 3 destinations across files).
+- **follow-up:** typed nav routes (Kotlin Serialization); nested `navigation("graph")`; `ViewModel` repository calls as data deps; deep links.
 
 ### [ ] `uikit` — iOS UIKit (Swift, storyboard + programmatic)
 - **detect:** Swift project, `import UIKit`, `UIViewController` subclasses / `.storyboard`.
@@ -183,11 +187,10 @@ Shipped as two adapters because the routing models — and therefore the `router
 
 ## Suggested order
 
-✅ Done: `next-pages` + `react-router` (React/web), `vue`/`nuxt` (Vue), `react-native` (expo-router + react-navigation).
+✅ Done: `next-pages` + `react-router` (React/web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `react-native` (expo-router + react-navigation), `swiftui` (iOS) + `compose` (Android) — the native set.
 
 Remaining:
-1. `svelte` — biggest remaining web ecosystem; `.svelte` block-scan (mirror `vue-sfc.ts`).
-2. `remix` + `static-html` — cheapest wins: `remix` reuses the JSX parser (file routes), `static-html` is a regex fallback.
-3. `astro` + `angular` — more web: `.astro` block-scan; Angular reuses ts-morph but needs decorator/DI handling.
-4. `compose` + `uikit` + `flutter` — the native app set (pairs with `swiftui`; pick the non-JS parsing baseline first — tree-sitter vs. per-language regex).
-5. Tier 3 server-rendered (`django`/`flask`, `rails`) — breadth.
+1. `remix` + `static-html` — cheapest wins: `remix` reuses the JSX parser (file routes), `static-html` is a regex fallback.
+2. `astro` + `angular` — more web: `.astro` block-scan; Angular reuses ts-morph but needs decorator/DI handling.
+3. `uikit` + `flutter` — round out native: `uikit` is regex like swiftui/compose; `flutter`/Dart needs the same kind of line-scan.
+4. Tier 3 server-rendered (`django`/`flask`, `rails`) — breadth.
