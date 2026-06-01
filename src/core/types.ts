@@ -112,6 +112,7 @@ export type Framework =
   | "uikit"
   | "compose"
   | "flutter"
+  | "django"
   | "unknown";
 export type Router =
   | "next-app"
@@ -130,6 +131,7 @@ export type Router =
   | "uikit-vc"
   | "compose-nav"
   | "flutter-nav"
+  | "django-urls"
   | "unknown";
 
 export interface ProductMapMeta {

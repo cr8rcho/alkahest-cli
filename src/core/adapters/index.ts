@@ -14,6 +14,7 @@ import { swiftUiAdapter } from "./swiftui.js";
 import { uikitAdapter } from "./uikit.js";
 import { composeAdapter } from "./compose.js";
 import { flutterAdapter } from "./flutter.js";
+import { djangoAdapter } from "./django.js";
 import { staticHtmlAdapter } from "./static-html.js";
 
 export type { FrameworkAdapter, ScreenFile, RawScreen, RawNav, RawCall, RawFeature } from "./types.js";
@@ -48,6 +49,7 @@ export const ADAPTERS: FrameworkAdapter[] = [
   uikitAdapter,
   composeAdapter,
   flutterAdapter,
+  djangoAdapter,
   staticHtmlAdapter,
 ];
 
