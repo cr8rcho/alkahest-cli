@@ -9,6 +9,7 @@ import { nuxtAdapter } from "./nuxt.js";
 import { vueRouterAdapter } from "./vue-router.js";
 import { svelteKitAdapter } from "./sveltekit.js";
 import { astroAdapter } from "./astro.js";
+import { angularAdapter } from "./angular.js";
 import { swiftUiAdapter } from "./swiftui.js";
 import { uikitAdapter } from "./uikit.js";
 import { composeAdapter } from "./compose.js";
@@ -41,6 +42,7 @@ export const ADAPTERS: FrameworkAdapter[] = [
   vueRouterAdapter,
   svelteKitAdapter,
   astroAdapter,
+  angularAdapter,
   swiftUiAdapter,
   uikitAdapter,
   composeAdapter,

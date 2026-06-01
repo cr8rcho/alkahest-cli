@@ -3,7 +3,7 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `astro` (Astro), `react-native` (Expo Router + React Navigation), `swiftui` (iOS) + `uikit` (iOS UIKit), `compose` (Android), `static-html` (plain HTML).
+**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `astro` (Astro), `angular` (Angular Router), `react-native` (Expo Router + React Navigation), `swiftui` (iOS) + `uikit` (iOS UIKit), `compose` (Android), `static-html` (plain HTML).
 
 React-family adapters share JSX signal extraction via `react-jsx.ts`
 (`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
@@ -79,12 +79,13 @@ not JSX — so `vue-sfc.ts` is a zero-dependency block-split + regex line-scan (
 - **calls:** `fetch("…")`. **features:** `<button>`, `<input|textarea|select>`, `<form>`, `{#each}` (list).
 - **fixture:** `examples/svelte-mini` (4 routes incl. nested `blog/[slug]`, `+layout` excluded, goto + a-href nav, fetch call). Deterministic 5/5.
 - **follow-up:** `load()` data deps in `+page(.server).ts`; form actions; `<svelte:component>`; route `name` params.
-### [ ] `angular` — Angular Router
-- **detect:** `@angular/core` in deps; `angular.json`.
-- **screen:** routes from `RouterModule.forRoot([...])` / standalone `provideRouter`.
-- **nav:** `routerLink`, `Router.navigate()`.
-- **calls:** `HttpClient` (`http.get/post`), resolvers.
-- **note:** decorators + DI — heavier parse; AST over `.ts`, component templates may be inline or `.html`.
+### [x] `angular` — Angular Router ✅ shipped (`angular.ts`)
+- **detect:** `@angular/core`/`@angular/router` in deps (else `angular.json`).
+- **screen:** routes are *declared*, so `discover` parses the config with ts-morph: `RouterModule.forRoot/forChild([...])`, standalone `provideRouter([...])`, and `const routes: Routes = [...]`. Maps each route's `component` (static import) or `loadComponent: () => import('…')` (lazy) to its `.ts` file; nested `children` join through parent paths. id = route, entry = "/".
+- **parse:** a component's signals come from its `@Component` template — inline `template:` (scanned in the TS source) or external `templateUrl` html — plus the TS body. nav = `routerLink="/x"`/`[routerLink]="['/x']"` (template) + `router.navigate(['/x'])`/`navigateByUrl('/x')` (TS); calls = `http.get|post|…('url')`; features = button/input/form/`*ngFor`.
+- **detection guard:** Angular's conventional `src/app/` dir collides with Next app-router, so the Next adapters bow out via `isAngularApp()`.
+- **fixture:** `examples/angular-mini` (4 routes incl. nested `dashboard/settings`, static + lazy components, inline + external template, routerLink + navigate + http).
+- **follow-up:** route `data`/resolvers as deps; module-based (non-standalone) `declarations`; `RouterLink` with bound arrays of segments.
 
 ### [x] `remix` — Remix / React Router 7 (framework mode) ✅ shipped (`remix.ts`)
 - **detect:** `@remix-run/react|node|dev` or `@react-router/dev` in deps + an `app/routes/` (or `src/app/routes/`) dir.
@@ -147,11 +148,12 @@ Shipped as two adapters because the routing models — and therefore the `router
 
 ## Tier 3 — server-rendered / template / no-build sites
 
-### [ ] `astro` — Astro
-- **detect:** `astro` in deps; `src/pages/**/*.astro`.
-- **screen:** file-based `src/pages/**` → route (`.astro`, `.md`, `.mdx`).
-- **nav:** `<a href>` (mostly static links).
-- **calls:** frontmatter `fetch`, content collections, `src/pages/api/*`.
+### [x] `astro` — Astro ✅ shipped (`astro.ts`)
+- **detect:** `astro` in deps + a `src/pages/` (or `pages/`) dir. The Next pages-router adapter bows out for Astro via `isAstroApp()`.
+- **screen:** `src/pages/**/*.{astro,md,mdx,html}` → route (file-based); `index` collapses to its dir, `[slug]`/`[...rest]` dynamic; `.js`/`.ts` under pages/ are API endpoints, not screens. id = route, entry = "/".
+- **parse:** an `.astro` file is a `---` frontmatter fence + HTML markup, not JSX/Vue — zero-dependency regex scan. nav = `<a href="/x">` (markup); calls = `fetch("…")` (frontmatter or script); features = button/input/form.
+- **fixture:** `examples/astro-mini` (4 routes incl. nested `blog/[slug]`, frontmatter `fetch` on two pages, `<a href>` nav).
+- **follow-up:** content collections; component-island fetches; `src/pages/api/*` as resource nodes.
 
 ### [ ] `django` / `flask` — Python server-rendered
 - **detect:** `manage.py` + `urls.py` (Django); `Flask(__name__)` + `@app.route` (Flask).
@@ -192,9 +194,8 @@ Shipped as two adapters because the routing models — and therefore the `router
 
 ## Suggested order
 
-✅ Done: `next-pages` + `react-router` + `remix` (React/web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `astro` (Astro), `react-native` (expo-router + react-navigation), `swiftui` + `uikit` (iOS) + `compose` (Android) — the native set, `static-html` (plain HTML fallback).
+✅ Done: `next-pages` + `react-router` + `remix` + `angular` (web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `astro` (Astro), `react-native` (expo-router + react-navigation), `swiftui` + `uikit` (iOS) + `compose` (Android) — the native set, `static-html` (plain HTML fallback).
 
 Remaining:
-1. `angular` — more web; reuses ts-morph but needs decorator/DI handling.
-2. `flutter` — round out native; Dart needs a regex line-scan like swiftui/uikit/compose.
-3. Tier 3 server-rendered (`django`/`flask`, `rails`) — breadth.
+1. `flutter` — round out native; Dart needs a regex line-scan like swiftui/uikit/compose.
+2. Tier 3 server-rendered (`django`/`flask`, `rails`) — breadth.

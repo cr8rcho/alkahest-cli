@@ -85,6 +85,14 @@ export function isAstroApp(projectRoot: string): boolean {
 }
 
 /**
+ * An Angular project. Angular's conventional `src/app/` dir collides with Next's app-router,
+ * so the Next adapters bow out when `@angular/core`/`@angular/router` is a dependency.
+ */
+export function isAngularApp(projectRoot: string): boolean {
+  return hasDependency(projectRoot, "@angular/core", "@angular/router");
+}
+
+/**
  * An Android/Compose project. Gradle's `app/` module dir collides with Next's app-router
  * convention, so the Next adapters must bow out. Android projects have no package.json, so
  * detect by Gradle build files (build.gradle / build.gradle.kts / settings.gradle*).
