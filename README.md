@@ -132,8 +132,35 @@ Or add it to any MCP-capable agent's config directly:
 | `who_calls` | which screens call a given API/resource (impact analysis) |
 | `set_summary` | save a one-line summary onto a screen → shown in the dashboard panel |
 | `set_prd` | save a PRD/requirements markdown onto a screen → rendered in the panel |
+| `publish` | upload the map to the hosted viewer → shareable link (needs a token, see below) |
 
 The agent reads with `get_screen` / `who_calls` and writes back with `set_summary` / `set_prd`; both write into `map.json` and re-render `index.html`, so the dashboard always reflects the latest.
+
+**Publishing from the agent (optional).** `scan` / read / write-back need no key. `publish` does — it uploads the map to your account on the hosted viewer. Get a token at **alkahest.app → Account → Create token**, then put it in the MCP config so the server can authenticate:
+
+```bash
+claude mcp add alkahest -s project \
+  -e ALKAHEST_TOKEN=alk_xxxxx \
+  -e ALKAHEST_API_URL=https://<ref>.supabase.co/functions/v1 \
+  -- alkahest mcp
+```
+
+```json
+{
+  "mcpServers": {
+    "alkahest": {
+      "command": "alkahest",
+      "args": ["mcp"],
+      "env": {
+        "ALKAHEST_TOKEN": "alk_xxxxx",
+        "ALKAHEST_API_URL": "https://<ref>.supabase.co/functions/v1"
+      }
+    }
+  }
+}
+```
+
+If you've already run `alkahest login`, the saved credentials are used as a fallback — no env needed. Then just ask the agent to *"publish this"* and it returns the link.
 
 ## Output — `.alkahest/`
 

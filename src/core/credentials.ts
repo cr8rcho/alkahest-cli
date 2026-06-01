@@ -35,3 +35,12 @@ export function saveCredentials(creds: Credentials): void {
 export function resolveApiUrl(flag: string | undefined, creds: Credentials): string {
   return (flag || creds.apiUrl || process.env.ALKAHEST_API_URL || "").replace(/\/+$/, "");
 }
+
+/**
+ * Publish token resolved from arg → saved creds → env.
+ * The env fallback (ALKAHEST_TOKEN) lets the MCP server authenticate from its config
+ * without a prior `alkahest login`, mirroring resolveApiUrl's ALKAHEST_API_URL fallback.
+ */
+export function resolveToken(arg: string | undefined, creds: Credentials): string {
+  return (arg || creds.token || process.env.ALKAHEST_TOKEN || "").trim();
+}

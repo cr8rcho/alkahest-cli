@@ -132,8 +132,35 @@ claude mcp add alkahest -s project -- alkahest mcp
 | `who_calls` | 특정 API/리소스를 부르는 화면들 (변경 영향) |
 | `set_summary` | 화면에 한 줄 요약 저장 → 대시보드 패널에 표시 |
 | `set_prd` | 화면에 PRD/요구사항 마크다운 저장 → 패널에 렌더 |
+| `publish` | 지도를 hosted 뷰어에 올려 공유 링크 생성 (토큰 필요, 아래 참고) |
 
 에이전트는 `get_screen` / `who_calls` 로 읽고 `set_summary` / `set_prd` 로 써넣습니다. 둘 다 `map.json`에 기록하고 `index.html`을 재생성하므로 대시보드가 항상 최신입니다.
+
+**에이전트에서 publish (선택).** `scan`·읽기·쓰기는 키가 필요 없지만, `publish`는 지도를 계정에 업로드하므로 토큰이 필요합니다. **alkahest.app → Account → Create token** 에서 토큰을 받아 MCP 설정에 넣어주세요:
+
+```bash
+claude mcp add alkahest -s project \
+  -e ALKAHEST_TOKEN=alk_xxxxx \
+  -e ALKAHEST_API_URL=https://<ref>.supabase.co/functions/v1 \
+  -- alkahest mcp
+```
+
+```json
+{
+  "mcpServers": {
+    "alkahest": {
+      "command": "alkahest",
+      "args": ["mcp"],
+      "env": {
+        "ALKAHEST_TOKEN": "alk_xxxxx",
+        "ALKAHEST_API_URL": "https://<ref>.supabase.co/functions/v1"
+      }
+    }
+  }
+}
+```
+
+이미 `alkahest login` 을 했다면 저장된 자격증명이 fallback으로 쓰여서 env 없이도 됩니다. 그다음 에이전트에게 *"이거 publish 해줘"* 라고만 하면 링크를 돌려줍니다.
 
 ## 산출물 — `.alkahest/`
 

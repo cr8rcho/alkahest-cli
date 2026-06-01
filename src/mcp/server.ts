@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
 import { emitMap, emitDashboard } from "../core/emit.js";
+import { publishMap } from "../core/publish.js";
 import type { ProductMap, Screen } from "../core/types.js";
 
 const require = createRequire(import.meta.url);
@@ -152,6 +153,44 @@ export function buildServer(): McpServer {
       },
     },
     async ({ screen, prd, path }) => writeField(rootOf(path), screen, (s) => { s.prd = prd; }),
+  );
+
+  // ---- publish: upload the map to the hosted viewer for a shareable link ----
+
+  server.registerTool(
+    "publish",
+    {
+      title: "Publish to hosted viewer",
+      description:
+        "Upload this project's product map (.alkahest/map.json) to the hosted viewer (alkahest.app) and return a " +
+        "shareable link anyone can open — no install, no login to view. Only map.json is uploaded; source code never " +
+        "leaves the machine. Run 'scan' first if the map is missing. Auth uses a publish token from the ALKAHEST_TOKEN " +
+        "env var (set it in this server's MCP config) or a prior 'alkahest login'.",
+      inputSchema: {
+        path: z.string().optional().describe("Project root (default: cwd)"),
+        name: z.string().optional().describe("Project name for the link (first publish only; defaults to folder name)"),
+      },
+    },
+    async ({ path, name }) => {
+      const res = await publishMap(rootOf(path), { name });
+      if (!res.ok) {
+        const hints: Record<string, string> = {
+          no_map: "Run the scan tool first to build .alkahest/map.json.",
+          no_token: "Set ALKAHEST_TOKEN in this MCP server's config (get a token at alkahest.app → Account).",
+          no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
+          plan_limit: "Free plan project limit reached — upgrade to Pro for more.",
+          invalid_token: "The publish token is invalid or revoked — create a new one at alkahest.app → Account.",
+        };
+        const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
+        return text(`Publish failed (${res.code}): ${res.message}.${hint}`);
+      }
+      return json({
+        ok: true,
+        slug: res.slug,
+        url: res.viewerUrl ?? res.mapUrl,
+        created: res.created,
+      });
+    },
   );
 
   return server;
