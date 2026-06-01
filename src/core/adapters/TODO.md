@@ -3,7 +3,7 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `astro` (Astro), `angular` (Angular Router), `react-native` (Expo Router + React Navigation), `swiftui` (iOS) + `uikit` (iOS UIKit), `compose` (Android), `flutter` (Flutter), `django` + `flask` (Python), `static-html` (plain HTML).
+**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `astro` (Astro), `angular` (Angular Router), `react-native` (Expo Router + React Navigation), `swiftui` (iOS) + `uikit` (iOS UIKit), `compose` (Android), `flutter` (Flutter), `django` + `flask` (Python), `rails` (Ruby), `static-html` (plain HTML).
 
 React-family adapters share JSX signal extraction via `react-jsx.ts`
 (`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
@@ -174,11 +174,13 @@ Shipped as two adapters because the routing models — and therefore the `router
 - **fixture:** `examples/flask-mini` (`@app.route` + a `Blueprint(url_prefix='/blog')`, Jinja templates; `url_for` incl. blueprint-qualified, `redirect(url_for)`, requests + `Model.query` — all 7 transitions + 3 calls resolved, each screen on its own template).
 - **follow-up:** `@app.route(methods=[...])`; app-factory pattern; nested blueprints.
 
-### [ ] `rails` — Ruby on Rails
-- **detect:** `config/routes.rb`, `Gemfile` with `rails`.
-- **screen:** `routes.rb` entries → controller actions → views (`app/views/**`).
-- **nav:** `link_to`, `redirect_to`, path helpers.
-- **calls:** ActiveRecord / external HTTP in controllers.
+### [x] `rails` — Ruby on Rails ✅ shipped (`rails.ts`)
+- **detect:** `config/routes.rb`, else a `Gemfile` with `gem "rails"`. (Rails' `app/` dir would otherwise read as Next app-router, so the Next adapters bow out via `isRailsApp()`.)
+- **screen:** a URL route from `config/routes.rb`. Handles explicit `get '/x', to: 'c#a'` / `=> 'c#a'`, `root 'c#a'`, and `resources :posts` — **expanded to the RESTful routes** (index/new/show/edit) with their path helpers (`posts`, `new_post`, `post`, `edit_post`) — plus singular `resource`. The view is `app/views/<controller>/<action>.html.erb`. id = route, entry = "/".
+- **nav (resolved via a helper→route map built in discover):** view `link_to 'x', posts_path` (incl. `post_path`, `edit_post_path`) and `<a href>`; controller `redirect_to posts_path | '/path'`. **calls:** controller ActiveRecord `Model.all|where|find|create…` + `Net::HTTP`/`HTTParty`. **features:** view `form_with`/`form_for`/`<form>`, `text_field`/`submit`, button/input.
+- **like django/flask:** each screen takes its ERB view as its file (1:1 with the route); the action body + view ERB are parsed per route.
+- **fixture:** `examples/rails-mini` (`root`, explicit `get`, `resources :posts`; ERB views with path-helper `link_to`, `form_with`, ActiveRecord — all 10 transitions + 3 calls resolved, `resources` expanded to 4 screens each on its own view).
+- **follow-up:** nested `resources`/namespaces; `member`/`collection` routes; `scope`/`constraints`; Slim/HAML views.
 
 ### [x] `static-html` — plain multi-page HTML sites ✅ shipped (`static-html.ts`)
 - **detect:** any `.html`/`.htm` file (skipping node_modules/dist/build/out/coverage). Registered **last**, so it only runs when no framework matched — "a folder of pages" still yields a map.
@@ -204,9 +206,15 @@ Shipped as two adapters because the routing models — and therefore the `router
       `../types.ts`; keep the dashboard legend in the `alkahest` renderer in sync.
 - [ ] **Fixtures:** each adapter needs an `examples/` project so `scan` output is testable.
 
-## Suggested order
+## Roadmap complete 🎉
 
-✅ Done: `next-pages` + `react-router` + `remix` + `angular` (web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `astro` (Astro), `react-native` (expo-router + react-navigation), `swiftui` + `uikit` (iOS) + `compose` (Android) + `flutter` (Dart) — native set complete, `django` + `flask` (Python server-rendered), `static-html` (plain HTML fallback).
+Every adapter on the original roadmap is shipped — 19 adapters across 16 platform families:
+- **Web/React:** next-app, next-pages, react-router, remix
+- **Web/Vue:** nuxt, vue-router · **Web:** angular, sveltekit, astro
+- **Native:** expo-router, react-navigation (RN), swiftui, uikit (iOS), compose (Android), flutter
+- **Server-rendered:** django, flask (Python), rails (Ruby)
+- **Fallback:** static-html
 
-Remaining:
-1. `rails` (Ruby) — `routes.rb` → controllers → views. Last on the roadmap; a new Ruby front end over the same template/route-name machinery as django/flask.
+Future work lives in each adapter's **follow-up** notes above (deeper data deps, nested
+routes/namespaces, non-standalone modules, alternate template languages) and the
+cross-cutting items below — not new platforms.

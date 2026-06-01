@@ -1,0 +1,8 @@
+<main>
+  <h1>About</h1>
+  <%= form_with url: "/subscribe" do |f| %>
+    <%= f.email_field :email %>
+    <%= f.submit "Subscribe" %>
+  <% end %>
+  <%= link_to "Home", root_path %>
+</main>

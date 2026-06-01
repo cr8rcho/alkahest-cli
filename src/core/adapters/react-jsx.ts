@@ -93,6 +93,20 @@ export function isAngularApp(projectRoot: string): boolean {
 }
 
 /**
+ * A Rails project. Rails' `app/` dir collides with Next's app-router; detect by `config/routes.rb`
+ * (Rails has no package.json) or a Gemfile that pulls in rails, so the Next adapters bow out.
+ */
+export function isRailsApp(projectRoot: string): boolean {
+  if (existsSync(join(projectRoot, "config", "routes.rb"))) return true;
+  const gemfile = join(projectRoot, "Gemfile");
+  try {
+    return existsSync(gemfile) && /\bgem\s+["']rails["']/.test(readFileSync(gemfile, "utf8"));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * An Android/Compose project. Gradle's `app/` module dir collides with Next's app-router
  * convention, so the Next adapters must bow out. Android projects have no package.json, so
  * detect by Gradle build files (build.gradle / build.gradle.kts / settings.gradle*).
