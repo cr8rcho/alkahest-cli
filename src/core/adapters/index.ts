@@ -1,6 +1,7 @@
 import type { FrameworkAdapter } from "./types.js";
 import { nextAppAdapter } from "./next-app.js";
 import { nextPagesAdapter } from "./next-pages.js";
+import { remixAdapter } from "./remix.js";
 import { reactRouterAdapter } from "./react-router.js";
 import { expoRouterAdapter } from "./expo-router.js";
 import { reactNavigationAdapter } from "./react-navigation.js";
@@ -9,6 +10,7 @@ import { vueRouterAdapter } from "./vue-router.js";
 import { svelteKitAdapter } from "./sveltekit.js";
 import { swiftUiAdapter } from "./swiftui.js";
 import { composeAdapter } from "./compose.js";
+import { staticHtmlAdapter } from "./static-html.js";
 
 export type { FrameworkAdapter, ScreenFile, RawScreen, RawNav, RawCall, RawFeature } from "./types.js";
 
@@ -19,10 +21,15 @@ export type { FrameworkAdapter, ScreenFile, RawScreen, RawNav, RawCall, RawFeatu
  *   react-native projects (Expo Router shares the `app/` dir convention).
  * - expo-router (file-based, needs `expo-router` dep) before react-navigation (config-based),
  *   since an Expo app pulls in @react-navigation transitively.
+ * - remix before react-router: RR7 framework mode shares the `react-router` dependency, so the
+ *   plain-SPA adapter would otherwise claim a Remix app.
+ * - static-html is the LAST fallback: by the time it runs the project matched no framework, so
+ *   "a folder of .html files" still yields a map.
  */
 export const ADAPTERS: FrameworkAdapter[] = [
   nextAppAdapter,
   nextPagesAdapter,
+  remixAdapter,
   reactRouterAdapter,
   expoRouterAdapter,
   reactNavigationAdapter,
@@ -31,6 +38,7 @@ export const ADAPTERS: FrameworkAdapter[] = [
   svelteKitAdapter,
   swiftUiAdapter,
   composeAdapter,
+  staticHtmlAdapter,
 ];
 
 /** First adapter that matches the project. Null if none. */

@@ -104,6 +104,8 @@ export type Framework =
   | "vue"
   | "nuxt"
   | "svelte"
+  | "remix"
+  | "static"
   | "swiftui"
   | "compose"
   | "unknown";
@@ -116,6 +118,8 @@ export type Router =
   | "vue-router"
   | "nuxt-pages"
   | "sveltekit"
+  | "remix-routes"
+  | "static-html"
   | "swiftui-views"
   | "compose-nav"
   | "unknown";

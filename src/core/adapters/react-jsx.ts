@@ -60,6 +60,15 @@ export function isReactNativeApp(projectRoot: string): boolean {
 }
 
 /**
+ * A Remix / React Router 7 (framework mode) project. Routes live in `app/routes/`, so the
+ * `app/` dir would otherwise make the Next app-router adapter claim it — the dependency signal
+ * (`@remix-run/*` or `@react-router/dev`) disambiguates, so the Next adapters bow out.
+ */
+export function isRemixApp(projectRoot: string): boolean {
+  return hasDependency(projectRoot, "@remix-run/react", "@remix-run/node", "@remix-run/dev", "@react-router/dev");
+}
+
+/**
  * A Vue/Nuxt project. Nuxt also uses a `pages/` dir, which would otherwise make the Next
  * pages-router adapter claim it — so the Next adapters bow out when this is true.
  */

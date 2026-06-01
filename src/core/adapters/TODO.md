@@ -3,7 +3,7 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `react-native` (Expo Router + React Navigation), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `swiftui` (SwiftUI), `compose` (Jetpack Compose).
+**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `react-native` (Expo Router + React Navigation), `swiftui` (SwiftUI), `compose` (Jetpack Compose), `static-html` (plain HTML).
 
 React-family adapters share JSX signal extraction via `react-jsx.ts`
 (`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
@@ -86,11 +86,13 @@ not JSX — so `vue-sfc.ts` is a zero-dependency block-split + regex line-scan (
 - **calls:** `HttpClient` (`http.get/post`), resolvers.
 - **note:** decorators + DI — heavier parse; AST over `.ts`, component templates may be inline or `.html`.
 
-### [ ] `remix` — Remix / React Router 7 (framework mode)
-- **detect:** `@remix-run/*` or RR7 framework config; `app/routes/`.
-- **screen:** file-based `app/routes/*` → route.
-- **nav:** `<Link>`, `useNavigate`, `redirect`.
-- **calls:** route `loader`/`action`, `fetch`.
+### [x] `remix` — Remix / React Router 7 (framework mode) ✅ shipped (`remix.ts`)
+- **detect:** `@remix-run/react|node|dev` or `@react-router/dev` in deps + an `app/routes/` (or `src/app/routes/`) dir.
+- **screen:** file-based flat routes → route, parsed with the shared React JSX parser. `.` = path separator (`blog.$slug.tsx` → `/blog/:slug`), `_index` collapses to parent, leading-underscore segment is a pathless layout (dropped: `_auth.login.tsx` → `/login`), `$param` → `:param`, bare `$` → splat; folder form `routes/x/route.tsx` supported; `root` excluded. id = route, entry = "/".
+- **nav:** `<Link to>`, `useNavigate()` (shared parser). **calls:** `fetch`, query hooks.
+- **detection guard:** Remix's `app/` dir collides with Next app-router, and RR7 shares the `react-router` dep — so remix is registered before react-router and the Next adapters bow out via `isRemixApp()`.
+- **fixture:** `examples/remix-mini` (5 routes incl. `_index`, `blog._index`, `blog.$slug`, pathless `_auth.login`, excluded `root`).
+- **follow-up:** `loader`/`action` data deps; `redirect()` in loaders; nested layout `<Outlet>` containment.
 
 ---
 
@@ -162,12 +164,13 @@ Shipped as two adapters because the routing models — and therefore the `router
 - **nav:** `link_to`, `redirect_to`, path helpers.
 - **calls:** ActiveRecord / external HTTP in controllers.
 
-### [ ] `static-html` — plain multi-page HTML sites
-- **detect:** loose `*.html` files with `<a href>` cross-links, no framework deps.
-- **screen:** each `.html` file → page.
-- **nav:** `<a href="other.html">`.
-- **calls:** `<script>` `fetch`/XHR, `<form action>`.
-- **note:** lowest-fidelity fallback; useful so "any folder of pages" still yields a map.
+### [x] `static-html` — plain multi-page HTML sites ✅ shipped (`static-html.ts`)
+- **detect:** any `.html`/`.htm` file (skipping node_modules/dist/build/out/coverage). Registered **last**, so it only runs when no framework matched — "a folder of pages" still yields a map.
+- **screen:** each `.html` → page; `index.html` collapses to its dir, `.html` stripped. Title from the page's `<title>`. id = route, entry = "/".
+- **nav:** `<a href>` — relative links are resolved against the page's own route to an absolute id, so cross-page transitions match (`../index.html` → `/`, `docs/intro.html` → `/docs/intro`); external/mailto/tel pass through.
+- **calls:** `<form action>` (POST) + `<script>` `fetch()`. **features:** `<button>`, `<input|textarea|select>`, `<form>`.
+- **fixture:** `examples/static-mini` (4 pages incl. nested `docs/`, relative + external links, form action, fetch).
+- **note:** lowest-fidelity fallback; zero-dependency regex scan.
 
 ---
 
@@ -187,10 +190,9 @@ Shipped as two adapters because the routing models — and therefore the `router
 
 ## Suggested order
 
-✅ Done: `next-pages` + `react-router` (React/web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `react-native` (expo-router + react-navigation), `swiftui` (iOS) + `compose` (Android) — the native set.
+✅ Done: `next-pages` + `react-router` + `remix` (React/web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `react-native` (expo-router + react-navigation), `swiftui` (iOS) + `compose` (Android) — the native set, `static-html` (plain HTML fallback).
 
 Remaining:
-1. `remix` + `static-html` — cheapest wins: `remix` reuses the JSX parser (file routes), `static-html` is a regex fallback.
-2. `astro` + `angular` — more web: `.astro` block-scan; Angular reuses ts-morph but needs decorator/DI handling.
-3. `uikit` + `flutter` — round out native: `uikit` is regex like swiftui/compose; `flutter`/Dart needs the same kind of line-scan.
-4. Tier 3 server-rendered (`django`/`flask`, `rails`) — breadth.
+1. `astro` + `angular` — more web: `.astro` block-scan; Angular reuses ts-morph but needs decorator/DI handling.
+2. `uikit` + `flutter` — round out native: `uikit` is regex like swiftui/compose; `flutter`/Dart needs the same kind of line-scan.
+3. Tier 3 server-rendered (`django`/`flask`, `rails`) — breadth.
