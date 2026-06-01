@@ -113,6 +113,7 @@ export type Framework =
   | "compose"
   | "flutter"
   | "django"
+  | "flask"
   | "unknown";
 export type Router =
   | "next-app"
@@ -132,6 +133,7 @@ export type Router =
   | "compose-nav"
   | "flutter-nav"
   | "django-urls"
+  | "flask-routes"
   | "unknown";
 
 export interface ProductMapMeta {

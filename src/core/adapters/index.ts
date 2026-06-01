@@ -15,6 +15,7 @@ import { uikitAdapter } from "./uikit.js";
 import { composeAdapter } from "./compose.js";
 import { flutterAdapter } from "./flutter.js";
 import { djangoAdapter } from "./django.js";
+import { flaskAdapter } from "./flask.js";
 import { staticHtmlAdapter } from "./static-html.js";
 
 export type { FrameworkAdapter, ScreenFile, RawScreen, RawNav, RawCall, RawFeature } from "./types.js";
@@ -50,6 +51,7 @@ export const ADAPTERS: FrameworkAdapter[] = [
   composeAdapter,
   flutterAdapter,
   djangoAdapter,
+  flaskAdapter,
   staticHtmlAdapter,
 ];
 

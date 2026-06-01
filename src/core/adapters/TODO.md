@@ -3,7 +3,7 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `astro` (Astro), `angular` (Angular Router), `react-native` (Expo Router + React Navigation), `swiftui` (iOS) + `uikit` (iOS UIKit), `compose` (Android), `flutter` (Flutter), `django` (Python/Django), `static-html` (plain HTML).
+**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `astro` (Astro), `angular` (Angular Router), `react-native` (Expo Router + React Navigation), `swiftui` (iOS) + `uikit` (iOS UIKit), `compose` (Android), `flutter` (Flutter), `django` + `flask` (Python), `static-html` (plain HTML).
 
 React-family adapters share JSX signal extraction via `react-jsx.ts`
 (`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
@@ -166,11 +166,13 @@ Shipped as two adapters because the routing models — and therefore the `router
 - **fixture:** `examples/django-mini` (project `urls.py` with `include('blog.urls')`, app urls, two `views.py`, Jinja/DTL templates; `{% url %}` name links, redirect, ORM + requests calls — all 7 transitions + 3 calls resolved).
 - **follow-up:** `url_for`-style reverse in views; CBV `template_name`/`get_context_data`; namespaced URLs (`app:name`).
 
-### [ ] `flask` — Python server-rendered (Flask)
-- **detect:** `Flask(__name__)` + `@app.route` / blueprint `@bp.route`.
-- **screen:** `@app.route('/path')` decorated view fn → `render_template('x.html')`.
-- **nav:** template `{{ url_for('endpoint') }}` / `<a href>`; view `redirect(url_for(...))`. **calls:** `requests` / SQLAlchemy queries.
-- **note:** shares the template/regex machinery with `django.ts` — mostly a different route-discovery front end (decorators instead of `urlpatterns`).
+### [x] `flask` — Python server-rendered (Flask) ✅ shipped (`flask.ts`)
+- **detect:** `Flask(__name__)` or any `@x.route(` decorator. (Django is registered first; a `manage.py`/`urlpatterns` project goes to django.)
+- **screen:** an `@app.route('/path')` / `@bp.route('/path')` view fn → `render_template('x.html')`. Blueprints add their `url_prefix` to the route and a `<blueprint>.<fn>` endpoint (how `url_for` refers to them). id = full route, entry = "/".
+- **nav (resolved via an endpoint→route map built in discover):** template `{{ url_for('endpoint') }}` (incl. `blog.detail`) and `<a href>`; view `redirect(url_for('e'))` / `redirect('/path')`. **calls:** view `requests.get|post` + SQLAlchemy `Model.query.…`; template `<form action>`. **features:** template button/input/form.
+- **like django:** each screen takes its template as its file (1:1 with the route), resolved eagerly so it's the pipeline's relPath key; collisions disambiguated with the route.
+- **fixture:** `examples/flask-mini` (`@app.route` + a `Blueprint(url_prefix='/blog')`, Jinja templates; `url_for` incl. blueprint-qualified, `redirect(url_for)`, requests + `Model.query` — all 7 transitions + 3 calls resolved, each screen on its own template).
+- **follow-up:** `@app.route(methods=[...])`; app-factory pattern; nested blueprints.
 
 ### [ ] `rails` — Ruby on Rails
 - **detect:** `config/routes.rb`, `Gemfile` with `rails`.
@@ -204,8 +206,7 @@ Shipped as two adapters because the routing models — and therefore the `router
 
 ## Suggested order
 
-✅ Done: `next-pages` + `react-router` + `remix` + `angular` (web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `astro` (Astro), `react-native` (expo-router + react-navigation), `swiftui` + `uikit` (iOS) + `compose` (Android) + `flutter` (Dart) — native set complete, `django` (Python server-rendered), `static-html` (plain HTML fallback).
+✅ Done: `next-pages` + `react-router` + `remix` + `angular` (web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `astro` (Astro), `react-native` (expo-router + react-navigation), `swiftui` + `uikit` (iOS) + `compose` (Android) + `flutter` (Dart) — native set complete, `django` + `flask` (Python server-rendered), `static-html` (plain HTML fallback).
 
-Remaining — Tier 3 server-rendered, breadth:
-1. `flask` (Python) — shares django's template/regex machinery; mostly a decorator-based route front end.
-2. `rails` (Ruby) — `routes.rb` → controllers → views.
+Remaining:
+1. `rails` (Ruby) — `routes.rb` → controllers → views. Last on the roadmap; a new Ruby front end over the same template/route-name machinery as django/flask.
