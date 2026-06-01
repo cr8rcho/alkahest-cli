@@ -8,7 +8,9 @@ import { reactNavigationAdapter } from "./react-navigation.js";
 import { nuxtAdapter } from "./nuxt.js";
 import { vueRouterAdapter } from "./vue-router.js";
 import { svelteKitAdapter } from "./sveltekit.js";
+import { astroAdapter } from "./astro.js";
 import { swiftUiAdapter } from "./swiftui.js";
+import { uikitAdapter } from "./uikit.js";
 import { composeAdapter } from "./compose.js";
 import { staticHtmlAdapter } from "./static-html.js";
 
@@ -23,6 +25,8 @@ export type { FrameworkAdapter, ScreenFile, RawScreen, RawNav, RawCall, RawFeatu
  *   since an Expo app pulls in @react-navigation transitively.
  * - remix before react-router: RR7 framework mode shares the `react-router` dependency, so the
  *   plain-SPA adapter would otherwise claim a Remix app.
+ * - swiftui before uikit: a SwiftUI app may import UIKit, so it's claimed by swiftui first;
+ *   only pure-UIKit apps fall to the uikit adapter.
  * - static-html is the LAST fallback: by the time it runs the project matched no framework, so
  *   "a folder of .html files" still yields a map.
  */
@@ -36,7 +40,9 @@ export const ADAPTERS: FrameworkAdapter[] = [
   nuxtAdapter,
   vueRouterAdapter,
   svelteKitAdapter,
+  astroAdapter,
   swiftUiAdapter,
+  uikitAdapter,
   composeAdapter,
   staticHtmlAdapter,
 ];

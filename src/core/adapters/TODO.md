@@ -3,7 +3,7 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `react-native` (Expo Router + React Navigation), `swiftui` (SwiftUI), `compose` (Jetpack Compose), `static-html` (plain HTML).
+**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `astro` (Astro), `react-native` (Expo Router + React Navigation), `swiftui` (iOS) + `uikit` (iOS UIKit), `compose` (Android), `static-html` (plain HTML).
 
 React-family adapters share JSX signal extraction via `react-jsx.ts`
 (`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
@@ -134,12 +134,14 @@ Shipped as two adapters because the routing models — and therefore the `router
 - **fixture:** `examples/compose-mini` (NavHost startDestination + 3 destinations across files).
 - **follow-up:** typed nav routes (Kotlin Serialization); nested `navigation("graph")`; `ViewModel` repository calls as data deps; deep links.
 
-### [ ] `uikit` — iOS UIKit (Swift, storyboard + programmatic)
-- **detect:** Swift project, `import UIKit`, `UIViewController` subclasses / `.storyboard`.
-- **screen:** each `UIViewController` subclass; storyboard scenes.
-- **nav:** `pushViewController`, `present`, segues (`performSegue`, storyboard segue defs).
-- **calls:** `URLSession`, Alamofire.
-- **note:** complements `swiftui`; many apps are mixed — consider letting both run and merge.
+### [x] `uikit` — iOS UIKit (Swift, programmatic) ✅ shipped (`uikit.ts`)
+- **detect:** a `.swift` file `import UIKit` + a `class X: UIViewController` (or UITableView/Collection/Navigation/TabBar/Page/SplitViewController). Registered after `swiftui`, so a SwiftUI app that also imports UIKit is claimed by swiftui first; only pure-UIKit apps fall here.
+- **screen:** each VC subclass (prefer the one matching the filename). id = class name.
+- **nav:** `pushViewController` / `present` / `show` / `instantiateViewController` → target VC. Resolves an inline `XxxViewController(` **and** a bound `let vc = XxxViewController(); push(vc)` (tracks `let/var` → VC bindings in the function).
+- **calls:** `URL(string:)` / `"https://…"` / `URLRequest(url:)`. **features:** UIButton, UITextField family, UISwitch/Slider/Stepper/SegmentedControl/Picker/DatePicker, UITableView/UICollectionView.
+- **parse:** zero-dependency line scan (swiftui's style). Storyboard `.storyboard` XML segues not parsed yet — programmatic nav covered.
+- **fixture:** `examples/uikit-mini` (3 VCs: push via bound var, present inline, show via bound var — all resolved).
+- **follow-up:** storyboard segues; `instantiateViewController(withIdentifier:)` string ids; Alamofire calls.
 
 ---
 
@@ -190,9 +192,9 @@ Shipped as two adapters because the routing models — and therefore the `router
 
 ## Suggested order
 
-✅ Done: `next-pages` + `react-router` + `remix` (React/web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `react-native` (expo-router + react-navigation), `swiftui` (iOS) + `compose` (Android) — the native set, `static-html` (plain HTML fallback).
+✅ Done: `next-pages` + `react-router` + `remix` (React/web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `astro` (Astro), `react-native` (expo-router + react-navigation), `swiftui` + `uikit` (iOS) + `compose` (Android) — the native set, `static-html` (plain HTML fallback).
 
 Remaining:
-1. `astro` + `angular` — more web: `.astro` block-scan; Angular reuses ts-morph but needs decorator/DI handling.
-2. `uikit` + `flutter` — round out native: `uikit` is regex like swiftui/compose; `flutter`/Dart needs the same kind of line-scan.
+1. `angular` — more web; reuses ts-morph but needs decorator/DI handling.
+2. `flutter` — round out native; Dart needs a regex line-scan like swiftui/uikit/compose.
 3. Tier 3 server-rendered (`django`/`flask`, `rails`) — breadth.

@@ -77,6 +77,14 @@ export function isVueApp(projectRoot: string): boolean {
 }
 
 /**
+ * An Astro project. Astro uses `src/pages/`, which the Next pages-router adapter would otherwise
+ * claim — so the Next adapters bow out when `astro` is a dependency.
+ */
+export function isAstroApp(projectRoot: string): boolean {
+  return hasDependency(projectRoot, "astro");
+}
+
+/**
  * An Android/Compose project. Gradle's `app/` module dir collides with Next's app-router
  * convention, so the Next adapters must bow out. Android projects have no package.json, so
  * detect by Gradle build files (build.gradle / build.gradle.kts / settings.gradle*).

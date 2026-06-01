@@ -1,0 +1,11 @@
+---
+const featured = await fetch("/api/featured").then((r) => r.json());
+---
+
+<html>
+  <body>
+    <h1>Home</h1>
+    <a href="/about">About</a>
+    <a href="/blog">Blog</a>
+  </body>
+</html>

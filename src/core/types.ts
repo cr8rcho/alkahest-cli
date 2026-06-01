@@ -105,8 +105,10 @@ export type Framework =
   | "nuxt"
   | "svelte"
   | "remix"
+  | "astro"
   | "static"
   | "swiftui"
+  | "uikit"
   | "compose"
   | "unknown";
 export type Router =
@@ -119,8 +121,10 @@ export type Router =
   | "nuxt-pages"
   | "sveltekit"
   | "remix-routes"
+  | "astro-pages"
   | "static-html"
   | "swiftui-views"
+  | "uikit-vc"
   | "compose-nav"
   | "unknown";
 
