@@ -93,7 +93,7 @@ alkahest hook install  # run scan automatically on commit/merge (diff-driven ref
 alkahest mcp           # run the MCP server (agents query the product map; no key)
 alkahest login         # save your publish token (Account → Create token on alkahest.app)
 alkahest publish       # upload the map to the hosted viewer → shareable link
-alkahest update        # update alkahest to the latest version
+alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 
 ### Dashboard interactions

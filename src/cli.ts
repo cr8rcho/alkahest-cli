@@ -61,8 +61,9 @@ program
 
 program
   .command("update")
-  .description("update alkahest to the latest version")
-  .action(() => update());
+  .description("update alkahest to the latest GitHub release (--check: only report)")
+  .option("--check", "only report current vs latest, don't change anything", false)
+  .action((opts: { check: boolean }) => update(opts));
 
 program.parseAsync().catch((err) => {
   console.error(err instanceof Error ? err.message : err);
