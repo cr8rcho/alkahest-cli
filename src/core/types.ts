@@ -111,6 +111,7 @@ export type Framework =
   | "swiftui"
   | "uikit"
   | "compose"
+  | "flutter"
   | "unknown";
 export type Router =
   | "next-app"
@@ -128,6 +129,7 @@ export type Router =
   | "swiftui-views"
   | "uikit-vc"
   | "compose-nav"
+  | "flutter-nav"
   | "unknown";
 
 export interface ProductMapMeta {

@@ -3,7 +3,7 @@
 Planning doc for which platforms become `FrameworkAdapter`s. The goal is to cover
 the stacks people actually reach for when building a website or an app.
 
-**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `astro` (Astro), `angular` (Angular Router), `react-native` (Expo Router + React Navigation), `swiftui` (iOS) + `uikit` (iOS UIKit), `compose` (Android), `static-html` (plain HTML).
+**Shipping today:** `next` (App Router + Pages Router), `react-router` (Vite/CRA SPA), `remix` (Remix / RR7), `vue`/`nuxt` (Vue Router + Nuxt), `svelte` (SvelteKit), `astro` (Astro), `angular` (Angular Router), `react-native` (Expo Router + React Navigation), `swiftui` (iOS) + `uikit` (iOS UIKit), `compose` (Android), `flutter` (Flutter), `static-html` (plain HTML).
 
 React-family adapters share JSX signal extraction via `react-jsx.ts`
 (`parseReactScreen` + `walk`/`project`); only file→screen discovery differs per adapter.
@@ -117,12 +117,14 @@ Shipped as two adapters because the routing models — and therefore the `router
   `examples/rn-nav-mini` (Stack.Navigator + initialRouteName + component refs).
 - **follow-up:** dynamic `Stack.Screen` children (render-prop screens); `getComponent` lazy form; deep links.
 
-### [ ] `flutter` — Flutter (Dart)
-- **detect:** `pubspec.yaml` with `flutter:` SDK.
-- **screen:** `Widget`/`StatelessWidget`/`StatefulWidget` that are full pages; or GoRouter `GoRoute` config.
-- **nav:** `Navigator.push/pushNamed`, `context.go/push` (go_router).
-- **calls:** `http`/`dio` calls, `FutureBuilder`.
-- **parse:** Dart — tree-sitter-dart or regex line-scan (mirror the SwiftUI heuristic approach).
+### [x] `flutter` — Flutter (Dart) ✅ shipped (`flutter.ts`)
+- **detect:** `pubspec.yaml` with the `flutter:` SDK (else a `.dart` file with a Widget class).
+- **screen:** a page-level widget `class X extends StatelessWidget|StatefulWidget` (id = class name). The app-shell widget (build returns `MaterialApp`/`CupertinoApp`/`WidgetsApp`) is excluded. Entry = the `'/'` named-route widget, else `MaterialApp(home: X())`.
+- **nav (3 flavours, all resolved to a target screen):** imperative `Navigator.push(…, MaterialPageRoute(builder: (_) => DetailsScreen()))`; named `Navigator.pushNamed(ctx, '/details')` resolved via the `routes:` table; go_router `context.go/push('/details')` and `GoRoute(path:'/details', builder: … Widget)`. The route→widget map (named table + GoRoute) is built across all files in discover so parse can turn a string route into the widget screen id.
+- **calls:** `http`/`dio` `.get|post|…('url')` + `Uri.parse('url')`. **features:** ElevatedButton family, TextField family, Switch/Checkbox/Slider, ListView/GridView.
+- **parse:** Dart — zero-dependency regex line-scan (swiftui's style), no tree-sitter.
+- **fixture:** `examples/flutter-mini` (MaterialApp routes table + 3 page widgets; imperative push, pushNamed, http call — all resolved; MyApp shell excluded, HomePage is entry).
+- **follow-up:** GoRouter sub-routes; `FutureBuilder`/repository calls; tab/bottom-nav containment.
 
 ### [x] `compose` — Android Jetpack Compose (Kotlin) ✅ shipped (`compose.ts`)
 - **detect:** any `.kt` importing `androidx.compose` / `androidx.navigation.compose`.
@@ -194,8 +196,8 @@ Shipped as two adapters because the routing models — and therefore the `router
 
 ## Suggested order
 
-✅ Done: `next-pages` + `react-router` + `remix` + `angular` (web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `astro` (Astro), `react-native` (expo-router + react-navigation), `swiftui` + `uikit` (iOS) + `compose` (Android) — the native set, `static-html` (plain HTML fallback).
+✅ Done: `next-pages` + `react-router` + `remix` + `angular` (web), `vue`/`nuxt` (Vue), `svelte` (SvelteKit), `astro` (Astro), `react-native` (expo-router + react-navigation), `swiftui` + `uikit` (iOS) + `compose` (Android) + `flutter` (Dart) — the native set complete, `static-html` (plain HTML fallback).
 
-Remaining:
-1. `flutter` — round out native; Dart needs a regex line-scan like swiftui/uikit/compose.
-2. Tier 3 server-rendered (`django`/`flask`, `rails`) — breadth.
+Remaining — Tier 3 server-rendered, breadth (each needs a new non-JS parser):
+1. `django` / `flask` (Python) — URL patterns → views → templates.
+2. `rails` (Ruby) — `routes.rb` → controllers → views.
