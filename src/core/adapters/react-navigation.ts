@@ -13,6 +13,10 @@ import { sourceFileFor, walk, parseReactScreen, titleFromRoute, hasDependency, i
  *
  * Screen id = the route `name` (what `navigation.navigate("Home")` targets, so transitions
  * resolve). Entry = the nearest `<*.Navigator initialRouteName>`, else the first registered.
+ *
+ * Containment: a screen whose component renders a navigator (e.g. a Tab/Drawer navigator)
+ * "contains" that navigator's child `*.Screen`s — surfaced as contains edges (parent → tabs),
+ * mirroring the SwiftUI TabView behaviour.
  */
 const SOURCE_RE = /\.(tsx|jsx|ts|js)$/;
 const CONFIG_HINT = /\.Screen[\s/>]|\.Navigator[\s>]|create\w*Navigator/;
@@ -71,7 +75,16 @@ export const reactNavigationAdapter: FrameworkAdapter = {
   },
 
   parse(file) {
-    return parseReactScreen(sourceFileFor(file.absPath));
+    const sf = sourceFileFor(file.absPath);
+    const signals = parseReactScreen(sf);
+    // If this screen's component renders a navigator (Tab/Drawer/Stack), its child
+    // `<*.Screen name>` entries are structurally contained by this screen → contains edges
+    // (e.g. a Tab navigator's tabs). resolve.ts keeps only those that are real screens and
+    // aren't already navigate targets, so this is safe to over-supply.
+    const children = collectRegistrations(sf).registrations
+      .map((r) => r.name)
+      .filter((name) => name !== file.id);
+    return { ...signals, contains: [...new Set([...signals.contains, ...children])] };
   },
 };
 
