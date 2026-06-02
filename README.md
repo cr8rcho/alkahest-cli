@@ -136,6 +136,7 @@ Or add it to any MCP-capable agent's config directly:
 | `set_summary` | save a one-line summary onto a screen → shown in the dashboard panel |
 | `set_prd` | save a PRD/requirements markdown onto a screen → rendered in the panel |
 | `publish` | upload the map to the hosted viewer → shareable link (needs a token, see below) |
+| `check_version` | report installed vs latest GitHub release (so the agent can suggest `alkahest update`) |
 
 The agent reads with `get_screen` / `who_calls` and writes back with `set_summary` / `set_prd`; both write into `map.json` and re-render `index.html`, so the dashboard always reflects the latest.
 

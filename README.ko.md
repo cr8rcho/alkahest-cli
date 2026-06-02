@@ -136,6 +136,7 @@ claude mcp add alkahest -s project -- alkahest mcp
 | `set_summary` | 화면에 한 줄 요약 저장 → 대시보드 패널에 표시 |
 | `set_prd` | 화면에 PRD/요구사항 마크다운 저장 → 패널에 렌더 |
 | `publish` | 지도를 hosted 뷰어에 올려 공유 링크 생성 (토큰 필요, 아래 참고) |
+| `check_version` | 설치 버전 vs 최신 GitHub 릴리스 보고 (에이전트가 `alkahest update` 안내 가능) |
 
 에이전트는 `get_screen` / `who_calls` 로 읽고 `set_summary` / `set_prd` 로 써넣습니다. 둘 다 `map.json`에 기록하고 `index.html`을 재생성하므로 대시보드가 항상 최신입니다.
 

@@ -40,5 +40,4 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
 
   console.log(`[alkahest] published ${res.slug}`);
   console.log(`  → ${res.viewerUrl ?? res.mapUrl}`);
-  if (res.warning) console.error(`[alkahest] ⚠ ${res.warning}`);
 }

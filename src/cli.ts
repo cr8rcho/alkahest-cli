@@ -8,6 +8,7 @@ import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { update } from "./commands/update.js";
+import { maybeNotifyUpdate } from "./core/version.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
@@ -25,7 +26,10 @@ program
   .argument("[path]", "project path to analyze", ".")
   .option("--full", "ignore the baseline and rescan everything", false)
   .option("--open", "open the dashboard right after scanning", false)
-  .action((path: string, opts: { full: boolean; open: boolean }) => scan(path, opts));
+  .action(async (path: string, opts: { full: boolean; open: boolean }) => {
+    await scan(path, opts);
+    await maybeNotifyUpdate();
+  });
 
 program
   .command("view")
@@ -46,7 +50,10 @@ program
   .argument("[path]", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .option("--name <name>", "project name (first publish only)")
-  .action((path: string, opts: { api?: string; name?: string }) => publish(path, opts));
+  .action(async (path: string, opts: { api?: string; name?: string }) => {
+    await publish(path, opts);
+    await maybeNotifyUpdate();
+  });
 
 program
   .command("mcp")

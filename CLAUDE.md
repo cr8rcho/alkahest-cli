@@ -66,11 +66,18 @@ the hosted viewer renders — not to internal refactors:
    `prepare` / `prepublishOnly` build it — nothing else to package.)
 2. `gh release create vX.Y.Z --target main --title vX.Y.Z --notes "…"` — tag is `v` +
    the package version. This is exactly what `alkahest update` picks up.
-3. **Only if the `map.json` schema changed:** also bump the `publish` edge function's
-   version gate — `LATEST_CLI_VERSION` (nudge) and, for a breaking change,
-   `MIN_CLI_VERSION` (hard floor) — then redeploy it, so old clients get a clear
-   "run `alkahest update`" instead of silently breaking. That constant + the full policy
-   live in the **alkahest-cloud** repo (`supabase/functions/publish/index.ts`).
+3. **Only for a *breaking* `map.json` schema change:** bump `MIN_CLI_VERSION` in the
+   `publish` edge function and redeploy it, so old clients get a clear 426
+   "run `alkahest update`" instead of uploading a map the viewer can't render. That
+   constant lives in the **alkahest-cloud** repo (`supabase/functions/publish/index.ts`).
+   `MIN` locks out everyone below it — raise it only for genuine incompatibility; prefer
+   additive schema changes so it rarely moves. (There is no `LATEST` constant — "a newer
+   version exists" is detected client-side from GitHub Releases, so cutting the release in
+   step 2 is all the nudge needs.)
 
-`MIN_CLI_VERSION` locks out everyone below it — raise it only for genuine
-incompatibility; prefer additive schema changes so it rarely moves.
+How users find out they're behind (all read GitHub Releases, fail-soft):
+- ambient one-line stderr notice after `scan` / `publish` (cached ~24h; opt out with
+  `ALKAHEST_NO_UPDATE_NOTIFIER`),
+- the MCP `check_version` tool (and the `publish` tool's result) — for agent-driven users,
+- `alkahest update` / `alkahest update --check` on demand.
+Shared logic: `src/core/version.ts`.

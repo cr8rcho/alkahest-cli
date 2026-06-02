@@ -33,8 +33,6 @@ export interface PublishResult {
   mapUrl?: string;
   /** Whether this was the project's first publish (a new slug was created). */
   created?: boolean;
-  /** Non-blocking server message (e.g. a newer version is available). */
-  warning?: string;
   /** Machine-readable failure code: no_map | no_api | no_token | network | <server error>. */
   code?: string;
   /** Human-readable failure message. */
@@ -124,6 +122,5 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     viewerUrl: pub.body.viewerUrl ?? null,
     mapUrl: pub.body.mapUrl,
     created,
-    warning: typeof pub.body.warning === "string" ? pub.body.warning : undefined,
   };
 }

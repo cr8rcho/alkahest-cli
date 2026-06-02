@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
 import { emitMap, emitDashboard } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
+import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
 import type { ProductMap, Screen } from "../core/types.js";
 
 const require = createRequire(import.meta.url);
@@ -185,12 +186,42 @@ export function buildServer(): McpServer {
         const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
         return text(`Publish failed (${res.code}): ${res.message}.${hint}`);
       }
+      const v = await cachedUpdateStatus().catch(() => null);
       return json({
         ok: true,
         slug: res.slug,
         url: res.viewerUrl ?? res.mapUrl,
         created: res.created,
-        ...(res.warning ? { warning: res.warning } : {}),
+        ...(v?.behind
+          ? { updateAvailable: `${v.current} → ${v.latest}`, updateHint: "Tell the user to run: alkahest update" }
+          : {}),
+      });
+    },
+  );
+
+  // ---- check_version: let the agent tell the user whether to update ----
+
+  server.registerTool(
+    "check_version",
+    {
+      title: "Check for alkahest updates",
+      description:
+        "Report the installed alkahest version vs the latest GitHub release, so you can tell the user whether their " +
+        "alkahest is current. If behind, tell them to run 'alkahest update' — you can't update through MCP (the CLI " +
+        "updates itself and this MCP server must be restarted to pick it up). No project access; just a version check.",
+      inputSchema: {},
+    },
+    async () => {
+      const s = await checkForUpdate();
+      return json({
+        current: s.current,
+        latest: s.latest,
+        behind: s.behind,
+        action: s.behind
+          ? "Out of date — tell the user to run: alkahest update (then restart this MCP server)."
+          : s.latest
+            ? "Up to date."
+            : "No published GitHub release to compare against yet.",
       });
     },
   );
