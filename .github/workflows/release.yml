@@ -1,0 +1,39 @@
+name: Publish to npm
+
+# Fires when a GitHub Release is published (Releases is the version channel for
+# `alkahest update`; this job mirrors the same release out to the npm registry).
+on:
+  release:
+    types: [published]
+
+jobs:
+  npm-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      # Guard: the release tag (vX.Y.Z) must match package.json version, so we
+      # never publish a mismatched build.
+      - name: Verify tag matches package version
+        run: |
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$PKG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME != package.json $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - run: npm ci
+      - run: npm run build
+
+      # access=public comes from publishConfig in package.json; the automation
+      # token bypasses 2FA so no OTP is needed here.
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
