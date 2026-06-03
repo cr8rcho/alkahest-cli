@@ -46,14 +46,14 @@ npm run build
 npm link          # 'alkahest' 명령을 전역에 연결 (선택)
 ```
 
-배포 후에는: `npm i -g alkahest` 또는 `npx alkahest …`
+배포 후에는: `npm i -g @cr8rcho/alkahest` 또는 `npx @cr8rcho/alkahest …` (실행 명령은 그대로 `alkahest`)
 
 ## 빠른 시작 (Claude Code)
 
 Claude Code 사용자가 0부터 대시보드에서 그래프 + PRD를 보기까지:
 
 ```bash
-# 1. alkahest 설치 (npm 배포 전까진 위처럼 소스 빌드 후 `npm link`)
+# 1. alkahest 설치:  npm i -g @cr8rcho/alkahest   (또는 위처럼 소스 빌드 후 `npm link`)
 
 # 2. 내 프로젝트 루트에서 제품 지도 생성
 cd ~/my-next-app

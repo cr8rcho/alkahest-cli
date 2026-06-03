@@ -46,14 +46,14 @@ npm run build
 npm link          # link the 'alkahest' command globally (optional)
 ```
 
-After publish: `npm i -g alkahest` or `npx alkahest …`
+After publish: `npm i -g @cr8rcho/alkahest` or `npx @cr8rcho/alkahest …` (the command stays `alkahest`)
 
 ## Quickstart (Claude Code)
 
 The full flow for a Claude Code user, from zero to a graph + PRDs in the dashboard:
 
 ```bash
-# 1. Install alkahest (until npm publish: build from source above, then `npm link`)
+# 1. Install alkahest:  npm i -g @cr8rcho/alkahest   (or build from source above + `npm link`)
 
 # 2. In your project root, build the product map
 cd ~/my-next-app

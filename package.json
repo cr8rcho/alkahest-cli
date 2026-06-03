@@ -1,5 +1,5 @@
 {
-  "name": "alkahest",
+  "name": "@cr8rcho/alkahest",
   "version": "0.1.1",
   "description": "Screen-graph CLI that reverse-engineers a product from code (React/Next static analysis → product map)",
   "type": "module",
