@@ -50,10 +50,10 @@ keep comments at the existing density.
 
 ## Releases / versioning
 
-Version channel is **GitHub Releases** (not npm). `alkahest update` reads the repo's
-`releases/latest` and compares it to the installed `package.json` version
-(`alkahest update --check` reports only; it updates via `git pull` + rebuild for a git
-checkout, else prints the reinstall command).
+Distribution is **npm** (`@cr8rcho/alkahest`); latest-version **detection** is **GitHub
+Releases**. `alkahest update` reads the repo's `releases/latest`, compares it to the installed
+`package.json` version (`--check` reports only), then updates: `git pull` + rebuild for a git
+checkout, else `npm i -g @cr8rcho/alkahest@latest`.
 
 **SemVer is keyed to the `map.json` schema contract** — the structure the CLI emits and
 the hosted viewer renders — not to internal refactors:
@@ -65,7 +65,8 @@ the hosted viewer renders — not to internal refactors:
 1. Bump `package.json` `version` per the rule above. (`files` already ships `dist/`;
    `prepare` / `prepublishOnly` build it — nothing else to package.)
 2. `gh release create vX.Y.Z --target main --title vX.Y.Z --notes "…"` — tag is `v` +
-   the package version. This is exactly what `alkahest update` picks up.
+   the package version. The release triggers CI to publish `@cr8rcho/alkahest` to npm
+   (Trusted Publishing / OIDC), and `alkahest update` picks the tag up.
 3. **Only for a *breaking* `map.json` schema change:** bump `MIN_CLI_VERSION` in the
    `publish` edge function and redeploy it, so old clients get a clear 426
    "run `alkahest update`" instead of uploading a map the viewer can't render. That

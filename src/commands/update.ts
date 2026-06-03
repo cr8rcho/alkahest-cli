@@ -2,16 +2,15 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { checkForUpdate, repoSlug } from "../core/version.js";
+import { checkForUpdate } from "../core/version.js";
 
 /**
  * Update the installed alkahest to the latest version.
  *
- * Version source is GitHub Releases (no npm) — see core/version.ts. The update mechanism
+ * Latest-version detection uses GitHub Releases (see core/version.ts). The update mechanism
  * adapts to the install:
- *  - git checkout (`git clone` + `npm link`): `git pull` + reinstall in place (`npm install`
- *    re-runs the `prepare` build), so the linked `alkahest` updates.
- *  - anything else (e.g. `npm i -g github:…`, which strips .git): print the reinstall command.
+ *  - git checkout (`git clone` + `npm link`): `git pull` + rebuild in place.
+ *  - npm global install (no .git): reinstall the latest from npm.
  *
  * `--check` only reports current-vs-latest and changes nothing.
  */
@@ -22,6 +21,7 @@ export interface UpdateOptions {
 export async function update(options: UpdateOptions = {}): Promise<void> {
   const require = createRequire(import.meta.url);
   const pkgRoot = dirname(require.resolve("../../package.json"));
+  const pkgName = (require("../../package.json") as { name: string }).name;
 
   const { current, latest, behind } = await checkForUpdate();
   console.log(`[alkahest] current version ${current}`);
@@ -35,8 +35,8 @@ export async function update(options: UpdateOptions = {}): Promise<void> {
   if (options.check) return; // report-only
 
   if (!existsSync(join(pkgRoot, ".git"))) {
-    console.log("[alkahest] this install isn't a git checkout — update by reinstalling:");
-    console.log(`  npm install -g github:${repoSlug()}`);
+    console.log("[alkahest] update by reinstalling the latest from npm:");
+    console.log(`  npm install -g ${pkgName}@latest`);
     return;
   }
 

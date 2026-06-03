@@ -36,17 +36,17 @@ You ── "write a PRD for the checkout screen" ──▶ Agent (Claude Code / 
 
 ## Install
 
-> npm publish is planned. For now, build from source.
+```bash
+npm i -g @cr8rcho/alkahest      # the command is `alkahest`
+# or run without installing:  npx @cr8rcho/alkahest <command>
+```
+
+From source (contributors):
 
 ```bash
 git clone https://github.com/cr8rcho/alkahest.git
-cd alkahest
-npm install
-npm run build
-npm link          # link the 'alkahest' command globally (optional)
+cd alkahest && npm install && npm run build && npm link
 ```
-
-After publish: `npm i -g @cr8rcho/alkahest` or `npx @cr8rcho/alkahest …` (the command stays `alkahest`)
 
 ## Quickstart (Claude Code)
 
