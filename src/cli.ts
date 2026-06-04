@@ -7,6 +7,7 @@ import { mcp } from "./commands/mcp.js";
 import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
+import { commentsPull } from "./commands/comments.js";
 import { update } from "./commands/update.js";
 import { maybeNotifyUpdate } from "./core/version.js";
 
@@ -52,6 +53,22 @@ program
   .option("--name <name>", "project name (first publish only)")
   .action(async (path: string, opts: { api?: string; name?: string }) => {
     await publish(path, opts);
+    await maybeNotifyUpdate();
+  });
+
+const comments = program
+  .command("comments")
+  .description("work with comments left on this project's published map (hosted viewer)");
+comments
+  .command("pull")
+  .description("pull map comments into .alkahest/comments.json for use during development")
+  .argument("[path]", "project path", ".")
+  .option("--open", "only unresolved comments", false)
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .option("--to-issues", "open each unresolved comment as a GitHub issue (requires gh)", false)
+  .action(async (path: string, opts: { open?: boolean; slug?: string; api?: string; toIssues?: boolean }) => {
+    await commentsPull(path, opts);
     await maybeNotifyUpdate();
   });
 
