@@ -3,6 +3,7 @@ import { basename, join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { OUTPUT_DIR } from "./emit.js";
 import { loadCredentials, resolveApiUrl, resolveToken, saveCredentials } from "./credentials.js";
+import { resolveProject } from "./project.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../../package.json") as { version: string };
@@ -24,6 +25,8 @@ export interface PublishParams {
   token?: string;
   /** Which surface initiated this — sent to the server for version/compat handling. */
   source?: "cli" | "mcp";
+  /** Force-target an existing project by slug (else resolved from the checkout/creds). */
+  slug?: string;
 }
 
 export interface PublishResult {
@@ -65,7 +68,10 @@ async function postJson(
 }
 
 export async function publishMap(path: string, params: PublishParams = {}): Promise<PublishResult> {
-  const projectRoot = resolve(path);
+  // Resolve the project root + its slug robustly (local .alkahest/project.json, walk-up,
+  // then saved creds) so a re-publish UPDATES the existing project instead of trying to
+  // create a new one — even when the cwd isn't the exact dir it was first published from.
+  const { root: projectRoot, slug: knownSlug } = resolveProject(path, params.slug);
   const mapFile = join(projectRoot, OUTPUT_DIR, "map.json");
   if (!existsSync(mapFile)) {
     return { ok: false, code: "no_map", message: `No ${OUTPUT_DIR}/map.json found — run scan first.` };
@@ -90,13 +96,12 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     };
   }
 
-  // Known project → send its slug (update). New project → omit slug (server creates it).
-  const known = creds.projects?.[projectRoot];
+  // Known slug → update that project. None → omit slug (server creates a new one).
   const reqBody: Record<string, unknown> = {
     map,
     client: { source: params.source ?? "cli", version: pkg.version },
   };
-  if (known) reqBody.slug = known.slug;
+  if (knownSlug) reqBody.slug = knownSlug;
   else reqBody.name = params.name || basename(projectRoot);
 
   const pub = await postJson(`${apiUrl}/publish`, reqBody, token);
@@ -108,16 +113,13 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     };
   }
 
-  // Remember the slug for this project path so future publishes update the same link.
-  const created = !known && Boolean(pub.body.slug);
-  if (created) {
+  const created = !knownSlug && Boolean(pub.body.slug);
+  // Persist the slug both in creds (path-keyed) and WITH the checkout (.alkahest/project.json),
+  // every publish — so future publishes AND comments (pull/add/MCP) resolve it from any cwd.
+  if (pub.body.slug) {
     creds.projects = creds.projects ?? {};
     creds.projects[projectRoot] = { slug: pub.body.slug };
     saveCredentials(creds);
-  }
-  // Also persist the slug WITH the checkout, so comments pull/add/MCP can resolve it
-  // regardless of cwd / machine (not just from the homedir path-keyed creds map).
-  if (pub.body.slug) {
     try {
       mkdirSync(join(projectRoot, OUTPUT_DIR), { recursive: true });
       writeFileSync(join(projectRoot, OUTPUT_DIR, "project.json"), JSON.stringify({ slug: pub.body.slug }, null, 2) + "\n");

@@ -51,7 +51,8 @@ program
   .argument("[path]", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .option("--name <name>", "project name (first publish only)")
-  .action(async (path: string, opts: { api?: string; name?: string }) => {
+  .option("--slug <slug>", "update an existing project by slug (else resolved from the checkout)")
+  .action(async (path: string, opts: { api?: string; name?: string; slug?: string }) => {
     await publish(path, opts);
     await maybeNotifyUpdate();
   });

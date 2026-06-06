@@ -17,6 +17,8 @@ export interface PublishOptions {
   api?: string;
   /** Project name shown in the URL/dashboard (first publish only; defaults to folder name). */
   name?: string;
+  /** Force-update an existing project by slug (else resolved from the checkout/creds). */
+  slug?: string;
 }
 
 export async function publish(path: string, options: PublishOptions): Promise<void> {

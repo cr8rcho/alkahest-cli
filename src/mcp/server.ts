@@ -172,10 +172,11 @@ export function buildServer(): McpServer {
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
         name: z.string().optional().describe("Project name for the link (first publish only; defaults to folder name)"),
+        slug: z.string().optional().describe("Update an existing project by slug (else resolved from the checkout/creds)"),
       },
     },
-    async ({ path, name }) => {
-      const res = await publishMap(rootOf(path), { name, source: "mcp" });
+    async ({ path, name, slug }) => {
+      const res = await publishMap(rootOf(path), { name, slug, source: "mcp" });
       if (!res.ok) {
         const hints: Record<string, string> = {
           no_map: "Run the scan tool first to build .alkahest/map.json.",
