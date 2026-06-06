@@ -7,7 +7,7 @@ import { mcp } from "./commands/mcp.js";
 import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
-import { commentsPull } from "./commands/comments.js";
+import { commentsPull, commentsAdd, commentsReply } from "./commands/comments.js";
 import { update } from "./commands/update.js";
 import { maybeNotifyUpdate } from "./core/version.js";
 
@@ -71,6 +71,23 @@ comments
     await commentsPull(path, opts);
     await maybeNotifyUpdate();
   });
+comments
+  .command("add")
+  .description("post a new comment on a screen/resource of the published map")
+  .argument("<node>", "screen id/route/title, resource id/path/label, or 'map'")
+  .requiredOption("--body <text>", "comment text")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((node: string, opts: { body?: string; slug?: string; api?: string; path?: string }) => commentsAdd(node, opts));
+comments
+  .command("reply")
+  .description("reply to an existing comment (id from 'comments pull')")
+  .argument("<id>", "parent comment id")
+  .requiredOption("--body <text>", "reply text")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: { body?: string; api?: string; path?: string }) => commentsReply(id, opts));
 
 program
   .command("mcp")

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { OUTPUT_DIR } from "../core/emit.js";
 import { loadMap } from "../core/pipeline.js";
-import { pullComments, enrichComments, type PulledComment } from "../core/comments.js";
+import { pullComments, enrichComments, postComment, resolveNode, type PulledComment } from "../core/comments.js";
 
 export interface CommentsPullOptions {
   api?: string;
@@ -110,4 +110,41 @@ function createIssues(projectRoot: string, slug: string, comments: PulledComment
     }
   }
   writeFileSync(cacheFile, JSON.stringify(cache, null, 2) + "\n");
+}
+
+export interface CommentsAddOptions { body?: string; slug?: string; api?: string; path?: string; }
+
+export async function commentsAdd(node: string, options: CommentsAddOptions): Promise<void> {
+  const body = (options.body || "").trim();
+  if (!body) { console.error("[alkahest] --body is required."); process.exitCode = 1; return; }
+  const projectRoot = resolve(options.path || ".");
+  const map = loadMap(projectRoot);
+  if (!map) { console.error(`[alkahest] no ${OUTPUT_DIR}/map.json — run 'alkahest scan' first.`); process.exitCode = 1; return; }
+  const n = resolveNode(map, node);
+  if (!n) { console.error(`[alkahest] no node matches '${node}'. Try a screen route/title or resource path.`); process.exitCode = 1; return; }
+  const res = await postComment(projectRoot, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: options.slug, api: options.api });
+  if (!res.ok) {
+    console.error(res.code === "forbidden"
+      ? "[alkahest] ✗ Only the project owner or a collaborator can comment."
+      : `[alkahest] comment failed: ${res.message}`);
+    process.exitCode = 1; return;
+  }
+  console.log(`[alkahest] commented on ${n.node_key} (${n.anchor_label ?? n.node_key}) — id ${res.comment?.id}`);
+}
+
+export interface CommentsReplyOptions { body?: string; api?: string; path?: string; }
+
+export async function commentsReply(id: string, options: CommentsReplyOptions): Promise<void> {
+  const body = (options.body || "").trim();
+  if (!body) { console.error("[alkahest] --body is required."); process.exitCode = 1; return; }
+  const res = await postComment(resolve(options.path || "."), { parent_id: id, body, api: options.api });
+  if (!res.ok) {
+    console.error(res.code === "not_found"
+      ? "[alkahest] ✗ Parent comment not found."
+      : res.code === "forbidden"
+        ? "[alkahest] ✗ Only the project owner or a collaborator can comment."
+        : `[alkahest] reply failed: ${res.message}`);
+    process.exitCode = 1; return;
+  }
+  console.log(`[alkahest] replied to ${id} — id ${res.comment?.id}`);
 }

@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
 import { emitMap, emitDashboard } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
-import { pullComments, resolveComment, enrichComments } from "../core/comments.js";
+import { pullComments, resolveComment, enrichComments, postComment, resolveNode } from "../core/comments.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
 import type { ProductMap, Screen } from "../core/types.js";
 
@@ -289,6 +289,66 @@ export function buildServer(): McpServer {
         return text(`Resolve failed (${res.code}): ${res.message}.${hint}`);
       }
       return json({ ok: true, id: res.id, resolved: res.resolved });
+    },
+  );
+
+  server.registerTool(
+    "add_comment",
+    {
+      title: "Add a map comment",
+      description:
+        "Leave a NEW comment on a node of this project's published map. Specify the node by id/route/title (a screen) " +
+        "or id/path/label (a resource/endpoint), or 'map' for the whole map. Use this to record feedback or a finding " +
+        "while working. Needs a publish token; you must be the project owner or a collaborator.",
+      inputSchema: {
+        node: z.string().describe("screen id/route/title, resource id/path/label, or 'map'"),
+        body: z.string().describe("the comment text"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ node, body, path }) => {
+      const root = rootOf(path);
+      const map = loadOrScan(root);
+      if (!map) return text("No map for this project — run the scan/publish tools first.");
+      const n = resolveNode(map, node);
+      if (!n) return text(`No node matches '${node}'. Use the overview tool to list screens/resources.`);
+      const res = await postComment(root, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body });
+      if (!res.ok) {
+        const hints: Record<string, string> = {
+          no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
+          no_slug: "Publish this project first (publish tool).",
+          forbidden: "Only the project owner or a collaborator can comment.",
+        };
+        return text(`Add comment failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
+      }
+      return json({ ok: true, id: res.comment?.id, node_key: n.node_key, anchor_label: n.anchor_label });
+    },
+  );
+
+  server.registerTool(
+    "reply_comment",
+    {
+      title: "Reply to a map comment",
+      description:
+        "Post a reply under an existing comment (use the comment id from the comments tool) — e.g. to note that you've " +
+        "addressed it. The reply inherits the parent's node/anchor. Needs a publish token; owner or collaborator only.",
+      inputSchema: {
+        id: z.string().describe("parent comment id (from the comments tool)"),
+        body: z.string().describe("the reply text"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ id, body, path }) => {
+      const res = await postComment(rootOf(path), { parent_id: id, body });
+      if (!res.ok) {
+        const hints: Record<string, string> = {
+          no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
+          not_found: "No comment with that id (parent).",
+          forbidden: "Only the project owner or a collaborator can comment.",
+        };
+        return text(`Reply failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
+      }
+      return json({ ok: true, id: res.comment?.id, parent_id: id });
     },
   );
 

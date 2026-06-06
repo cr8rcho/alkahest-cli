@@ -232,3 +232,70 @@ export async function resolveComment(
   }
   return { ok: true, id, resolved };
 }
+
+/** Resolve a free-form node reference (id / route / title / path / label, or "map") to a
+ *  node_key + anchor info, using the local map — so a user/agent can say "Checkout" or
+ *  "/admin/users" instead of "s:/admin/users". */
+export function resolveNode(map: ProductMap, query: string): { node_key: string; anchor_kind: string; anchor_label: string | null } | null {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return null;
+  if (q === "map") return { node_key: "map", anchor_kind: "map", anchor_label: null };
+  const screens = map.screens ?? [];
+  const s =
+    screens.find((x) => x.id.toLowerCase() === q || (x.route ?? "").toLowerCase() === q || (x.title ?? "").toLowerCase() === q) ||
+    screens.find((x) => (x.title ?? "").toLowerCase().includes(q) || (x.route ?? "").toLowerCase().includes(q));
+  if (s) return { node_key: "s:" + s.id, anchor_kind: "screen", anchor_label: s.title || s.route };
+  const resources = map.resources ?? [];
+  const r =
+    resources.find((x) => x.id.toLowerCase() === q || (x.path ?? "").toLowerCase() === q || x.label.toLowerCase() === q) ||
+    resources.find((x) => x.label.toLowerCase().includes(q) || (x.path ?? "").toLowerCase().includes(q));
+  if (r) return { node_key: "r:" + r.id, anchor_kind: "resource", anchor_label: r.label };
+  return null;
+}
+
+export interface PostParams {
+  api?: string;
+  token?: string;
+  /** New comment: project slug (else the saved slug for this path). */
+  slug?: string;
+  node_key?: string;
+  anchor_kind?: string;
+  anchor_label?: string | null;
+  /** Reply: parent comment id (project/node/anchor are inherited from it). */
+  parent_id?: string;
+  body: string;
+}
+
+export interface PostResult {
+  ok: boolean;
+  comment?: PulledComment;
+  code?: string;
+  message?: string;
+}
+
+/** Create a comment (slug + node_key) or a reply (parent_id) via the `comments-post` function. */
+export async function postComment(path: string, params: PostParams): Promise<PostResult> {
+  const projectRoot = resolve(path);
+  const creds = loadCredentials();
+  const apiUrl = resolveApiUrl(params.api, creds);
+  if (!apiUrl) return { ok: false, code: "no_api", message: "Missing API URL. Set ALKAHEST_API_URL (or run 'alkahest login --api <url>')." };
+  const token = resolveToken(params.token, creds);
+  if (!token) return { ok: false, code: "no_token", message: "Not authenticated. Set ALKAHEST_TOKEN (or run 'alkahest login --token alk_…')." };
+  if (!params.body || !params.body.trim()) return { ok: false, code: "no_body", message: "Comment body is required." };
+
+  let reqBody: Record<string, unknown>;
+  if (params.parent_id) {
+    reqBody = { parent_id: params.parent_id, body: params.body };
+  } else {
+    const slug = params.slug || creds.projects?.[projectRoot]?.slug;
+    if (!slug) return { ok: false, code: "no_slug", message: "No published map for this project — run 'alkahest publish', or pass --slug." };
+    if (!params.node_key) return { ok: false, code: "no_node", message: "node_key is required for a new comment." };
+    reqBody = { slug, node_key: params.node_key, anchor_kind: params.anchor_kind, anchor_label: params.anchor_label, body: params.body };
+  }
+
+  const res = await postJson(`${apiUrl}/comments-post`, reqBody, token);
+  if (!res.ok) {
+    return { ok: false, code: res.body?.error ?? "http", message: res.body?.message ?? res.body?.error ?? `post failed (${res.status})` };
+  }
+  return { ok: true, comment: res.body?.comment };
+}
