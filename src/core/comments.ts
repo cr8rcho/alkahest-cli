@@ -38,10 +38,26 @@ export interface PulledComment {
   updated_at: string;
 }
 
+/** Where to act on a comment, joined from the local map. */
+export interface CommentSource {
+  // screen (node_key s:*) — the comment is on a page → one source file
+  file?: string;
+  route?: string;
+  title?: string;
+  /** UI elements on the screen, each with its line — in-file landmarks for the comment. */
+  features?: { label: string; kind: string; line?: number }[];
+  // resource (node_key r:*) — an API endpoint, not a single file
+  path?: string;
+  label?: string;
+  kind?: string;
+  /** Screens that call this endpoint (+ their file/line) — where to actually edit it. */
+  callers?: { screen: string; file?: string; line?: number; trigger?: string }[];
+}
+
 /** A comment with the anchored node's source location joined in (from the local map). */
 export interface EnrichedComment extends PulledComment {
   /** Where to go in the code to act on this comment — null if the node is orphaned. */
-  source: { file?: string; route?: string; title?: string; path?: string; label?: string; kind?: string } | null;
+  source: CommentSource | null;
 }
 
 export interface PullResult {
@@ -156,14 +172,34 @@ async function postJson(
 export function enrichComments(comments: PulledComment[], map: ProductMap): EnrichedComment[] {
   const screenById = new Map((map.screens ?? []).map((s) => [s.id, s]));
   const resById = new Map((map.resources ?? []).map((r) => [r.id, r]));
+  const calls = map.calls ?? [];
   return comments.map((c) => {
-    let source: EnrichedComment["source"] = null;
+    let source: CommentSource | null = null;
     if (c.node_key.startsWith("s:")) {
+      // Screen comment → its source file + the UI elements on it (with line numbers),
+      // so the comment body can be matched to a specific spot in the file.
       const s = screenById.get(c.node_key.slice(2));
-      if (s) source = { file: s.sourceFile, route: s.route, title: s.title };
+      if (s) {
+        source = {
+          file: s.sourceFile, route: s.route, title: s.title,
+          features: (s.features ?? []).map((f) => ({ label: f.label, kind: f.kind, line: f.loc?.line })),
+        };
+      }
     } else if (c.node_key.startsWith("r:")) {
+      // Resource comment → the endpoint, plus the screens that call it (an endpoint has no
+      // single source file, so the callers are where you actually edit it).
       const r = resById.get(c.node_key.slice(2));
-      if (r) source = { path: r.path, label: r.label, kind: r.kind };
+      if (r) {
+        source = {
+          path: r.path, label: r.label, kind: r.kind,
+          callers: calls
+            .filter((x) => x.to === r.id)
+            .map((x) => {
+              const s = screenById.get(x.from);
+              return { screen: s?.title || x.from, file: s?.sourceFile, line: x.loc?.line, trigger: x.trigger };
+            }),
+        };
+      }
     }
     return { ...c, source };
   });

@@ -137,7 +137,7 @@ Or add it to any MCP-capable agent's config directly:
 | `set_summary` | save a one-line summary onto a screen → shown in the dashboard panel |
 | `set_prd` | save a PRD/requirements markdown onto a screen → rendered in the panel |
 | `publish` | upload the map to the hosted viewer → shareable link (needs a token, see below) |
-| `comments` | list comments left on the published map, each joined to its node's source file/route — so the agent can address feedback in-editor (needs a token) |
+| `comments` | list comments left on the published map, each joined to where to act: a screen comment → its source file/route + on-screen elements with line numbers; a resource comment → the screens that call that endpoint (file + line). Lets the agent address feedback in-editor (needs a token) |
 | `resolve_comment` | mark a map comment resolved (or reopen) after addressing it (needs a token) |
 | `check_version` | report installed vs latest GitHub release (so the agent can suggest `alkahest update`) |
 
