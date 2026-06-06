@@ -94,6 +94,7 @@ alkahest mcp           # run the MCP server (agents query the product map; no ke
 alkahest login         # save your publish token (Account → Create token on alkahest.app)
 alkahest publish       # upload the map to the hosted viewer → shareable link
 alkahest comments pull # pull comments left on the published map → .alkahest/comments.json
+alkahest comments issue <ids…>  # file the given comments as ONE GitHub issue (gh) + link it back
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 
@@ -139,6 +140,7 @@ Or add it to any MCP-capable agent's config directly:
 | `publish` | upload the map to the hosted viewer → shareable link (needs a token, see below) |
 | `comments` | list comments left on the published map, each joined to where to act: a screen comment → its source file/route + on-screen elements with line numbers; a resource comment → the screens that call that endpoint (file + line). Lets the agent address feedback in-editor (needs a token) |
 | `resolve_comment` | mark a map comment resolved (or reopen) after addressing it (needs a token) |
+| `comment_to_issue` | group one or more map comments into a single GitHub issue (via local `gh`) and link it back onto each, so the hosted viewer shows a "tracked" badge (needs a token) |
 | `check_version` | report installed vs latest GitHub release (so the agent can suggest `alkahest update`) |
 
 The agent reads with `get_screen` / `who_calls` and writes back with `set_summary` / `set_prd`; both write into `map.json` and re-render `index.html`, so the dashboard always reflects the latest.

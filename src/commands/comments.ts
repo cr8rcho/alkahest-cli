@@ -1,22 +1,15 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { OUTPUT_DIR } from "../core/emit.js";
 import { loadMap } from "../core/pipeline.js";
 import { findProjectRoot } from "../core/project.js";
-import { pullComments, enrichComments, postComment, resolveNode, type PulledComment } from "../core/comments.js";
+import { pullComments, enrichComments, postComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
 
 export interface CommentsPullOptions {
   api?: string;
   slug?: string;
   open?: boolean;
-  toIssues?: boolean;
 }
-
-const firstLine = (s: string, max = 72): string => {
-  const line = String(s).split("\n")[0].trim();
-  return line.length > max ? line.slice(0, max - 1) + "…" : line;
-};
 
 export async function commentsPull(path: string, options: CommentsPullOptions): Promise<void> {
   const res = await pullComments(path, options);
@@ -63,54 +56,35 @@ export async function commentsPull(path: string, options: CommentsPullOptions): 
     byNode.set(k, e);
   }
   for (const [k, e] of byNode) console.log(`  ${k}  ${e.label}  —  ${e.open} open / ${e.total}`);
-
-  if (options.toIssues) createIssues(projectRoot, res.slug!, comments);
 }
 
-/**
- * Open each unresolved root comment as a GitHub issue via the `gh` CLI (run in the
- * project's git repo). A local cache (.alkahest/comments-issues.json) maps comment id →
- * issue URL so re-running doesn't create duplicates.
- */
-function createIssues(projectRoot: string, slug: string, comments: PulledComment[]): void {
-  const cacheFile = join(projectRoot, OUTPUT_DIR, "comments-issues.json");
-  let cache: Record<string, string> = {};
-  if (existsSync(cacheFile)) {
-    try { cache = JSON.parse(readFileSync(cacheFile, "utf8")); } catch { /* ignore */ }
-  }
+export interface CommentsIssueOptions { path?: string; slug?: string; api?: string; title?: string; repo?: string; force?: boolean; }
 
-  const roots = comments.filter((c) => !c.parent_id && !c.resolved && !cache[c.id]);
-  if (!roots.length) {
-    console.log("[alkahest] --to-issues: no new open comments to file.");
+/**
+ * File the selected comments as ONE GitHub issue (via `gh`, in the project's git repo) and
+ * link it back onto each. Ids come from `comments pull`; the heavy lifting is in the core
+ * `fileCommentsIssue` (shared with the MCP `comment_to_issue` tool).
+ */
+export async function commentsIssue(ids: string[], options: CommentsIssueOptions): Promise<void> {
+  const list = (ids ?? []).flatMap((s) => s.split(",")).map((s) => s.trim()).filter(Boolean);
+  if (!list.length) { console.error("[alkahest] provide one or more comment ids (from 'comments pull')."); process.exitCode = 1; return; }
+  const projectRoot = findProjectRoot(options.path || ".");
+  const res = await fileCommentsIssue(projectRoot, list, {
+    slug: options.slug, api: options.api, title: options.title, repo: options.repo, force: options.force,
+  });
+  if (!res.ok) {
+    const msg: Record<string, string> = {
+      already_tracked: `[alkahest] ✗ ${res.message} Use --force to file a new issue anyway.`,
+      gh_failed: `[alkahest] ✗ ${res.message}`,
+      forbidden: "[alkahest] ✗ Only the project owner or a collaborator can file issues.",
+      no_slug: "[alkahest] ✗ No published map for this project — run 'alkahest publish' first.",
+      not_found: `[alkahest] ✗ ${res.message}`,
+    };
+    console.error(msg[res.code ?? ""] ?? `[alkahest] file issue failed: ${res.message}`);
+    process.exitCode = 1;
     return;
   }
-
-  for (const c of roots) {
-    const replies = comments.filter((r) => r.parent_id === c.id);
-    const where = c.anchor_label ? `\`${c.node_key}\` (${c.anchor_label})` : `\`${c.node_key}\``;
-    const body =
-      `From an Alkahest map comment on **${slug}**.\n\n` +
-      `- Node: ${where}\n- Author: ${c.author_name || c.author_id}\n- Posted: ${c.created_at}\n\n` +
-      `${c.body}\n` +
-      (replies.length
-        ? `\n---\n` + replies.map((r) => `**${r.author_name || r.author_id}**: ${r.body}`).join("\n\n")
-        : "");
-    const title = `[map] ${c.anchor_label || c.node_key}: ${firstLine(c.body)}`;
-    try {
-      const url = execFileSync("gh", ["issue", "create", "--title", title, "--body", body], {
-        cwd: projectRoot,
-        encoding: "utf8",
-      }).trim();
-      cache[c.id] = url;
-      console.log(`  + ${url}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[alkahest] --to-issues: gh failed (${msg.split("\n")[0]}). Is the GitHub CLI installed and authenticated?`);
-      process.exitCode = 1;
-      break;
-    }
-  }
-  writeFileSync(cacheFile, JSON.stringify(cache, null, 2) + "\n");
+  console.log(`[alkahest] filed ${res.ids!.length} comment${res.ids!.length === 1 ? "" : "s"} as ${res.issue_url}`);
 }
 
 export interface CommentsAddOptions { body?: string; slug?: string; api?: string; path?: string; }

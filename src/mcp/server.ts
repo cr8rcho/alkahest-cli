@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
 import { emitMap, emitDashboard } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
-import { pullComments, resolveComment, enrichComments, postComment, resolveNode } from "../core/comments.js";
+import { pullComments, resolveComment, enrichComments, postComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
 import { findProjectRoot } from "../core/project.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
 import type { ProductMap, Screen } from "../core/types.js";
@@ -351,6 +351,41 @@ export function buildServer(): McpServer {
         return text(`Reply failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
       }
       return json({ ok: true, id: res.comment?.id, parent_id: id });
+    },
+  );
+
+  server.registerTool(
+    "comment_to_issue",
+    {
+      title: "File map comments as a GitHub issue",
+      description:
+        "Group one or more map comments (ids from the comments tool) into a SINGLE GitHub issue and link it back onto each. " +
+        "Creates the issue with the local `gh` CLI (must be installed and authenticated; it runs in the project's git repo), " +
+        "then records the issue URL on the comments so the hosted viewer shows a 'tracked' badge. Use this to turn feedback " +
+        "into tracked work. Needs a publish token; owner or collaborator only. Pass force:true to re-file comments that are " +
+        "already linked to an issue (creates a new one).",
+      inputSchema: {
+        ids: z.array(z.string()).min(1).describe("Comment ids to group into one issue (from the comments tool)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+        title: z.string().optional().describe("Issue title (else derived from the comments)"),
+        repo: z.string().optional().describe("Target GitHub repo owner/repo (else gh's default for the repo)"),
+        force: z.boolean().optional().describe("File even if some selected comments are already tracked"),
+      },
+    },
+    async ({ ids, path, title, repo, force }) => {
+      const res = await fileCommentsIssue(rootOf(path), ids, { title, repo, force });
+      if (!res.ok) {
+        const hints: Record<string, string> = {
+          no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
+          no_slug: "Publish this project first (publish tool).",
+          already_tracked: "Some comments already have an issue — pass force:true to file a new one.",
+          gh_failed: "Install and authenticate the GitHub CLI (`gh auth login`) for this repo.",
+          forbidden: "Only the project owner or a collaborator can file issues.",
+          not_found: "One or more ids don't exist — list them with the comments tool.",
+        };
+        return text(`File issue failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
+      }
+      return json({ ok: true, issue_url: res.issue_url, ids: res.ids, title: res.title });
     },
   );
 

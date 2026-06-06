@@ -7,7 +7,7 @@ import { mcp } from "./commands/mcp.js";
 import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
-import { commentsPull, commentsAdd, commentsReply } from "./commands/comments.js";
+import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
 import { update } from "./commands/update.js";
 import { maybeNotifyUpdate } from "./core/version.js";
 
@@ -67,11 +67,21 @@ comments
   .option("--open", "only unresolved comments", false)
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .option("--to-issues", "open each unresolved comment as a GitHub issue (requires gh)", false)
-  .action(async (path: string, opts: { open?: boolean; slug?: string; api?: string; toIssues?: boolean }) => {
+  .action(async (path: string, opts: { open?: boolean; slug?: string; api?: string }) => {
     await commentsPull(path, opts);
     await maybeNotifyUpdate();
   });
+comments
+  .command("issue")
+  .description("file the given comments as ONE GitHub issue (requires gh) and link it back onto each")
+  .argument("<ids...>", "comment ids to group into one issue (from 'comments pull')")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .option("--title <title>", "issue title (else derived from the comments)")
+  .option("--repo <owner/repo>", "target GitHub repo (else gh's default for the project's repo)")
+  .option("--force", "file even if some selected comments are already linked to an issue", false)
+  .action((ids: string[], opts: { path?: string; slug?: string; api?: string; title?: string; repo?: string; force?: boolean }) => commentsIssue(ids, opts));
 comments
   .command("add")
   .description("post a new comment on a screen/resource of the published map")
