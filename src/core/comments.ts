@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { loadCredentials, resolveApiUrl, resolveToken } from "./credentials.js";
+import type { ProductMap } from "./types.js";
 
 /**
  * Shared logic for `alkahest comments pull`. Reads the comments left on this project's
@@ -31,8 +32,16 @@ export interface PulledComment {
   author_name: string | null;
   body: string;
   resolved: boolean;
+  /** True if the anchored node is gone from the current map (route renamed/removed). */
+  orphaned?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/** A comment with the anchored node's source location joined in (from the local map). */
+export interface EnrichedComment extends PulledComment {
+  /** Where to go in the code to act on this comment — null if the node is orphaned. */
+  source: { file?: string; route?: string; title?: string; path?: string; label?: string; kind?: string } | null;
 }
 
 export interface PullResult {
@@ -112,4 +121,78 @@ export async function pullComments(path: string, params: PullParams = {}): Promi
     name: proj?.name ?? null,
     comments: (proj?.comments ?? []) as PulledComment[],
   };
+}
+
+async function postJson(
+  url: string,
+  body: unknown,
+  token: string,
+): Promise<{ ok: boolean; status: string; body: any }> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, status: "network", body: { error: `could not reach ${url} (${msg})` } };
+  }
+  let parsed: any = null;
+  try {
+    parsed = await res.json();
+  } catch {
+    /* non-JSON error body */
+  }
+  return { ok: res.ok, status: String(res.status), body: parsed };
+}
+
+/**
+ * Join each comment's anchored node (node_key `s:{id}` / `r:{id}`) to its source location
+ * in the local map, so a developer/agent can jump straight from a comment to the code.
+ * `source` is null for the whole-map anchor or an orphaned node (no longer in the map).
+ */
+export function enrichComments(comments: PulledComment[], map: ProductMap): EnrichedComment[] {
+  const screenById = new Map((map.screens ?? []).map((s) => [s.id, s]));
+  const resById = new Map((map.resources ?? []).map((r) => [r.id, r]));
+  return comments.map((c) => {
+    let source: EnrichedComment["source"] = null;
+    if (c.node_key.startsWith("s:")) {
+      const s = screenById.get(c.node_key.slice(2));
+      if (s) source = { file: s.sourceFile, route: s.route, title: s.title };
+    } else if (c.node_key.startsWith("r:")) {
+      const r = resById.get(c.node_key.slice(2));
+      if (r) source = { path: r.path, label: r.label, kind: r.kind };
+    }
+    return { ...c, source };
+  });
+}
+
+export interface ResolveResult {
+  ok: boolean;
+  id?: string;
+  resolved?: boolean;
+  code?: string;
+  message?: string;
+}
+
+/** Mark a comment resolved/reopened via the `comments-resolve` edge function (owner/author only). */
+export async function resolveComment(
+  path: string,
+  id: string,
+  resolved: boolean,
+  params: { api?: string; token?: string } = {},
+): Promise<ResolveResult> {
+  const creds = loadCredentials();
+  const apiUrl = resolveApiUrl(params.api, creds);
+  if (!apiUrl) return { ok: false, code: "no_api", message: "Missing API URL. Set ALKAHEST_API_URL (or run 'alkahest login --api <url>')." };
+  const token = resolveToken(params.token, creds);
+  if (!token) return { ok: false, code: "no_token", message: "Not authenticated. Set ALKAHEST_TOKEN (or run 'alkahest login --token alk_…')." };
+
+  const res = await postJson(`${apiUrl}/comments-resolve`, { id, resolved }, token);
+  if (!res.ok) {
+    return { ok: false, code: res.body?.error ?? "http", message: res.body?.message ?? res.body?.error ?? `resolve failed (${res.status})` };
+  }
+  return { ok: true, id, resolved };
 }

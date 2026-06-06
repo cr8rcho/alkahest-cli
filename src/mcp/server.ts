@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
 import { emitMap, emitDashboard } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
+import { pullComments, resolveComment, enrichComments } from "../core/comments.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
 import type { ProductMap, Screen } from "../core/types.js";
 
@@ -223,6 +224,71 @@ export function buildServer(): McpServer {
             ? "Up to date."
             : "No published GitHub release to compare against yet.",
       });
+    },
+  );
+
+  // ---- comments: read map comments and act on them in-editor ----
+
+  server.registerTool(
+    "comments",
+    {
+      title: "Map comments",
+      description:
+        "List the comments people left on this project's PUBLISHED map (hosted viewer). Each comment is joined to its " +
+        "node's source location (screen → sourceFile/route/title, resource → path/label) so you can open the right file " +
+        "and address it. Use this to drive development from feedback: read open comments, edit the code, then call " +
+        "resolve_comment. Needs a publish token (ALKAHEST_TOKEN in this server's config, or a prior 'alkahest login') " +
+        "and the project must have been published.",
+      inputSchema: {
+        path: z.string().optional().describe("Project root (default: cwd)"),
+        open: z.boolean().optional().describe("Only unresolved comments (default: false = all)"),
+      },
+    },
+    async ({ path, open }) => {
+      const root = rootOf(path);
+      const res = await pullComments(root, { open });
+      if (!res.ok) {
+        const hints: Record<string, string> = {
+          no_token: "Set ALKAHEST_TOKEN in this MCP server's config (token from alkahest.app → Account).",
+          no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
+          no_slug: "This project hasn't been published yet — run the publish tool first.",
+          invalid_token: "The publish token is invalid or revoked — create a new one at alkahest.app → Account.",
+          not_found: "No accessible project for this slug.",
+        };
+        const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
+        return text(`Couldn't read comments (${res.code}): ${res.message}.${hint}`);
+      }
+      const map = loadMap(root);
+      const comments = map ? enrichComments(res.comments ?? [], map) : (res.comments ?? []);
+      return json({ ok: true, slug: res.slug, count: comments.length, comments });
+    },
+  );
+
+  server.registerTool(
+    "resolve_comment",
+    {
+      title: "Resolve a map comment",
+      description:
+        "Mark a map comment resolved after you've addressed it (or reopen it with resolved:false). Pass the comment id " +
+        "from the comments tool. Only the comment author or the project owner can change it. Needs a publish token.",
+      inputSchema: {
+        id: z.string().describe("Comment id (from the comments tool)"),
+        resolved: z.boolean().optional().describe("true (default) to resolve, false to reopen"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ id, resolved, path }) => {
+      const res = await resolveComment(rootOf(path), id, resolved === undefined ? true : resolved);
+      if (!res.ok) {
+        const hints: Record<string, string> = {
+          no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
+          forbidden: "Only the comment author or project owner can resolve it.",
+          not_found: "No comment with that id.",
+        };
+        const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
+        return text(`Resolve failed (${res.code}): ${res.message}.${hint}`);
+      }
+      return json({ ok: true, id: res.id, resolved: res.resolved });
     },
   );
 

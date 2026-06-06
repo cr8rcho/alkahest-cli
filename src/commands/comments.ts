@@ -2,7 +2,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { OUTPUT_DIR } from "../core/emit.js";
-import { pullComments, type PulledComment } from "../core/comments.js";
+import { loadMap } from "../core/pipeline.js";
+import { pullComments, enrichComments, type PulledComment } from "../core/comments.js";
 
 export interface CommentsPullOptions {
   api?: string;
@@ -33,7 +34,10 @@ export async function commentsPull(path: string, options: CommentsPullOptions): 
   }
 
   const projectRoot = resolve(path);
-  const comments = res.comments ?? [];
+  // Join each comment to its node's source location (from the local map) so the file is
+  // immediately actionable — comment → which file/route to edit.
+  const map = loadMap(projectRoot);
+  const comments = map ? enrichComments(res.comments ?? [], map) : (res.comments ?? []);
   const roots = comments.filter((c) => !c.parent_id);
   const open = roots.filter((c) => !c.resolved);
 
