@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { OUTPUT_DIR } from "./emit.js";
@@ -114,6 +114,14 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     creds.projects = creds.projects ?? {};
     creds.projects[projectRoot] = { slug: pub.body.slug };
     saveCredentials(creds);
+  }
+  // Also persist the slug WITH the checkout, so comments pull/add/MCP can resolve it
+  // regardless of cwd / machine (not just from the homedir path-keyed creds map).
+  if (pub.body.slug) {
+    try {
+      mkdirSync(join(projectRoot, OUTPUT_DIR), { recursive: true });
+      writeFileSync(join(projectRoot, OUTPUT_DIR, "project.json"), JSON.stringify({ slug: pub.body.slug }, null, 2) + "\n");
+    } catch { /* non-fatal — creds + --slug still work */ }
   }
 
   return {

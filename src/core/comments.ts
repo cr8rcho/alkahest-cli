@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { loadCredentials, resolveApiUrl, resolveToken } from "./credentials.js";
+import { resolveProject } from "./project.js";
 import type { ProductMap } from "./types.js";
 
 /**
@@ -65,6 +66,8 @@ export interface PullResult {
   slug?: string;
   name?: string | null;
   comments?: PulledComment[];
+  /** Resolved project root (nearest ancestor with .alkahest/) — where to write comments.json. */
+  root?: string;
   /** no_api | no_token | no_slug | not_found | invalid_token | network | <server error>. */
   code?: string;
   message?: string;
@@ -91,13 +94,14 @@ async function getJson(
 }
 
 export async function pullComments(path: string, params: PullParams = {}): Promise<PullResult> {
-  const projectRoot = resolve(path);
   const creds = loadCredentials();
+  const { root, slug } = resolveProject(path, params.slug);
 
   const apiUrl = resolveApiUrl(params.api, creds);
   if (!apiUrl) {
     return {
       ok: false,
+      root,
       code: "no_api",
       message: "Missing API URL. Set ALKAHEST_API_URL (or pass --api / run 'alkahest login --api <url>').",
     };
@@ -106,14 +110,15 @@ export async function pullComments(path: string, params: PullParams = {}): Promi
   if (!token) {
     return {
       ok: false,
+      root,
       code: "no_token",
       message: "Not authenticated. Set ALKAHEST_TOKEN (or run 'alkahest login --token alk_…').",
     };
   }
-  const slug = params.slug || creds.projects?.[projectRoot]?.slug;
   if (!slug) {
     return {
       ok: false,
+      root,
       code: "no_slug",
       message: "No published map for this project yet — run 'alkahest publish', or pass --slug <slug>.",
     };
@@ -134,6 +139,7 @@ export async function pullComments(path: string, params: PullParams = {}): Promi
   return {
     ok: true,
     slug,
+    root,
     name: proj?.name ?? null,
     comments: (proj?.comments ?? []) as PulledComment[],
   };
@@ -275,7 +281,6 @@ export interface PostResult {
 
 /** Create a comment (slug + node_key) or a reply (parent_id) via the `comments-post` function. */
 export async function postComment(path: string, params: PostParams): Promise<PostResult> {
-  const projectRoot = resolve(path);
   const creds = loadCredentials();
   const apiUrl = resolveApiUrl(params.api, creds);
   if (!apiUrl) return { ok: false, code: "no_api", message: "Missing API URL. Set ALKAHEST_API_URL (or run 'alkahest login --api <url>')." };
@@ -287,7 +292,7 @@ export async function postComment(path: string, params: PostParams): Promise<Pos
   if (params.parent_id) {
     reqBody = { parent_id: params.parent_id, body: params.body };
   } else {
-    const slug = params.slug || creds.projects?.[projectRoot]?.slug;
+    const { slug } = resolveProject(path, params.slug);
     if (!slug) return { ok: false, code: "no_slug", message: "No published map for this project — run 'alkahest publish', or pass --slug." };
     if (!params.node_key) return { ok: false, code: "no_node", message: "node_key is required for a new comment." };
     reqBody = { slug, node_key: params.node_key, anchor_kind: params.anchor_kind, anchor_label: params.anchor_label, body: params.body };

@@ -6,6 +6,7 @@ import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
 import { emitMap, emitDashboard } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
 import { pullComments, resolveComment, enrichComments, postComment, resolveNode } from "../core/comments.js";
+import { findProjectRoot } from "../core/project.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
 import type { ProductMap, Screen } from "../core/types.js";
 
@@ -258,7 +259,7 @@ export function buildServer(): McpServer {
         const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
         return text(`Couldn't read comments (${res.code}): ${res.message}.${hint}`);
       }
-      const map = loadMap(root);
+      const map = loadMap(res.root ?? root);
       const comments = map ? enrichComments(res.comments ?? [], map) : (res.comments ?? []);
       return json({ ok: true, slug: res.slug, count: comments.length, comments });
     },
@@ -307,7 +308,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ node, body, path }) => {
-      const root = rootOf(path);
+      const root = findProjectRoot(rootOf(path));
       const map = loadOrScan(root);
       if (!map) return text("No map for this project — run the scan/publish tools first.");
       const n = resolveNode(map, node);
