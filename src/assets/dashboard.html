@@ -606,18 +606,54 @@
       const DRAG_THRESHOLD = 4;
       let down = null; // {node|null, x, y, moved, pointerId}
 
+      // Active pointers for multi-touch. Two pointers down → pinch-to-zoom.
+      const pointers = new Map(); // pointerId -> {x, y}
+      let pinch = null;           // { dist, midX, midY } for the running gesture
+
+      function startPinch() {
+        const pts = [...pointers.values()];
+        const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+        const rect = svg.getBoundingClientRect();
+        pinch = {
+          dist: Math.hypot(dx, dy) || 1,
+          midX: (pts[0].x + pts[1].x) / 2 - rect.left,
+          midY: (pts[0].y + pts[1].y) / 2 - rect.top,
+        };
+        // a pinch is purely a zoom — abandon any in-progress tap / pan / node drag
+        dragging = null; panStart = null; down = null;
+      }
+
       function onNodeDown(ev, n) {
         ev.stopPropagation();
-        down = { node: n, x: ev.clientX, y: ev.clientY, moved: false, pointerId: ev.pointerId };
+        pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
         svg.setPointerCapture(ev.pointerId);
+        if (pointers.size === 2) { startPinch(); return; }
+        down = { node: n, x: ev.clientX, y: ev.clientY, moved: false, pointerId: ev.pointerId };
       }
       svg.addEventListener("pointerdown", (ev) => {
+        pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        svg.setPointerCapture(ev.pointerId);
+        if (pointers.size === 2) { startPinch(); return; }
         if (down) return; // already started on a node
         down = { node: null, x: ev.clientX, y: ev.clientY, moved: false, pointerId: ev.pointerId };
         panStart = { x: ev.clientX - tx, y: ev.clientY - ty };
-        svg.setPointerCapture(ev.pointerId);
       });
       svg.addEventListener("pointermove", (ev) => {
+        if (pointers.has(ev.pointerId)) pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        if (pinch && pointers.size >= 2) {
+          const pts = [...pointers.values()];
+          const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const rect = svg.getBoundingClientRect();
+          const mx = (pts[0].x + pts[1].x) / 2 - rect.left, my = (pts[0].y + pts[1].y) / 2 - rect.top;
+          // pan by how far the two-finger midpoint moved, then zoom around that midpoint
+          tx += mx - pinch.midX; ty += my - pinch.midY;
+          const nk = Math.min(4, Math.max(0.2, k * (dist / pinch.dist)));
+          tx = mx - (mx - tx) * (nk / k); ty = my - (my - ty) * (nk / k); k = nk;
+          pinch.dist = dist; pinch.midX = mx; pinch.midY = my;
+          applyTransform();
+          return;
+        }
         if (!down) return;
         if (!down.moved && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > DRAG_THRESHOLD) {
           down.moved = true;
@@ -627,8 +663,21 @@
         if (dragging) { const w = toWorld(ev.clientX, ev.clientY); dragging.x = w.x; dragging.y = w.y; dragging.vx = 0; dragging.vy = 0; } // free 2D since it's force-based
         else if (panStart) { tx = ev.clientX - panStart.x; ty = ev.clientY - panStart.y; applyTransform(); }
       });
-      svg.addEventListener("pointerup", () => {
-        if (down && !down.moved) {       // didn't move = tap
+      function onPointerUp(ev) {
+        pointers.delete(ev.pointerId);
+        if (pinch) {
+          if (pointers.size < 2) {
+            pinch = null;
+            if (pointers.size === 1) {
+              // one finger left after a pinch → resume panning from there (no jump)
+              const [id, p] = [...pointers.entries()][0];
+              down = { node: null, x: p.x, y: p.y, moved: true, pointerId: id };
+              panStart = { x: p.x - tx, y: p.y - ty };
+            }
+          }
+          return; // a pinch gesture never counts as a tap
+        }
+        if (ev.type !== "pointercancel" && down && !down.moved) { // didn't move = tap
           if (down.node) select(down.node);
           else clearSelection();
         } else if (dragging) {
@@ -636,7 +685,9 @@
           alpha = 0.06;
         }
         dragging = null; panStart = null; down = null;
-      });
+      }
+      svg.addEventListener("pointerup", onPointerUp);
+      svg.addEventListener("pointercancel", onPointerUp);
       svg.addEventListener("wheel", (ev) => {
         ev.preventDefault();
         const rect = svg.getBoundingClientRect();
