@@ -150,7 +150,6 @@ The agent reads with `get_screen` / `who_calls` and writes back with `set_summar
 ```bash
 claude mcp add alkahest -s project \
   -e ALKAHEST_TOKEN=alk_xxxxx \
-  -e ALKAHEST_API_URL=https://<ref>.supabase.co/functions/v1 \
   -- alkahest mcp
 ```
 
@@ -161,15 +160,16 @@ claude mcp add alkahest -s project \
       "command": "alkahest",
       "args": ["mcp"],
       "env": {
-        "ALKAHEST_TOKEN": "alk_xxxxx",
-        "ALKAHEST_API_URL": "https://<ref>.supabase.co/functions/v1"
+        "ALKAHEST_TOKEN": "alk_xxxxx"
       }
     }
   }
 }
 ```
 
-If you've already run `alkahest login`, the saved credentials are used as a fallback — no env needed. Then just ask the agent to *"publish this"* and it returns the link.
+The token is all you need — the CLI defaults to the hosted service (alkahest.app). If you've already run `alkahest login`, even the token env is optional (saved credentials are used). Then just ask the agent to *"publish this"* and it returns the link.
+
+> Self-hosting your own backend? Point the CLI at it with `-e ALKAHEST_API_URL=https://<ref>.supabase.co/functions/v1` (or `alkahest login --api <url>`).
 
 ## Output — `.alkahest/`
 

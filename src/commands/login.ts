@@ -1,4 +1,4 @@
-import { loadCredentials, resolveApiUrl, saveCredentials } from "../core/credentials.js";
+import { loadCredentials, saveCredentials } from "../core/credentials.js";
 
 /**
  * Save a personal publish token so `alkahest publish` can authenticate as you.
@@ -13,13 +13,12 @@ export interface LoginOptions {
 
 export async function login(options: LoginOptions): Promise<void> {
   const creds = loadCredentials();
-  const apiUrl = resolveApiUrl(options.api, creds);
 
   if (!options.token) {
     console.log("[alkahest] login — paste a token from the web app:");
     console.log("  1. Open the Alkahest web app and sign in with GitHub");
     console.log("  2. Account → Create token, copy the alk_… value");
-    console.log("  3. Run: alkahest login --token alk_xxxxx" + (apiUrl ? "" : " --api <url>"));
+    console.log("  3. Run: alkahest login --token alk_xxxxx");
     process.exitCode = 1;
     return;
   }
@@ -30,10 +29,10 @@ export async function login(options: LoginOptions): Promise<void> {
   }
 
   creds.token = options.token;
-  if (apiUrl) creds.apiUrl = apiUrl;
+  // Persist the API URL only when the user explicitly chose one; the hosted default
+  // (resolveApiUrl's fallback) is left implicit so a future default change is picked up.
+  const explicitApi = options.api || process.env.ALKAHEST_API_URL;
+  if (explicitApi) creds.apiUrl = explicitApi.replace(/\/+$/, "");
   saveCredentials(creds);
   console.log("[alkahest] logged in. Token saved to ~/.alkahest/credentials.json");
-  if (!apiUrl) {
-    console.log("  note: no API URL set — pass --api <url> or set ALKAHEST_API_URL before publishing.");
-  }
 }

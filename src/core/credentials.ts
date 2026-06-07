@@ -18,6 +18,14 @@ export interface Credentials {
 const CRED_DIR = join(homedir(), ".alkahest");
 const CRED_FILE = join(CRED_DIR, "credentials.json");
 
+/**
+ * The hosted service (alkahest.app). Used as the final fallback so that pointing
+ * the CLI / MCP at the public instance needs no config — the URL is not a secret
+ * (it ships in every served page). Self-hosters override via --api, `alkahest login
+ * --api <url>`, or ALKAHEST_API_URL.
+ */
+const DEFAULT_API_URL = "https://ytcmzkrvtomtcrcyqqcb.supabase.co/functions/v1";
+
 export function loadCredentials(): Credentials {
   try {
     return JSON.parse(readFileSync(CRED_FILE, "utf8")) as Credentials;
@@ -31,9 +39,9 @@ export function saveCredentials(creds: Credentials): void {
   writeFileSync(CRED_FILE, JSON.stringify(creds, null, 2) + "\n");
 }
 
-/** API base URL resolved from flag → saved creds → env. */
+/** API base URL resolved from flag → saved creds → env → hosted default. */
 export function resolveApiUrl(flag: string | undefined, creds: Credentials): string {
-  return (flag || creds.apiUrl || process.env.ALKAHEST_API_URL || "").replace(/\/+$/, "");
+  return (flag || creds.apiUrl || process.env.ALKAHEST_API_URL || DEFAULT_API_URL).replace(/\/+$/, "");
 }
 
 /**

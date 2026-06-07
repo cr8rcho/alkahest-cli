@@ -145,7 +145,6 @@ claude mcp add alkahest -s project -- alkahest mcp
 ```bash
 claude mcp add alkahest -s project \
   -e ALKAHEST_TOKEN=alk_xxxxx \
-  -e ALKAHEST_API_URL=https://<ref>.supabase.co/functions/v1 \
   -- alkahest mcp
 ```
 
@@ -156,15 +155,16 @@ claude mcp add alkahest -s project \
       "command": "alkahest",
       "args": ["mcp"],
       "env": {
-        "ALKAHEST_TOKEN": "alk_xxxxx",
-        "ALKAHEST_API_URL": "https://<ref>.supabase.co/functions/v1"
+        "ALKAHEST_TOKEN": "alk_xxxxx"
       }
     }
   }
 }
 ```
 
-이미 `alkahest login` 을 했다면 저장된 자격증명이 fallback으로 쓰여서 env 없이도 됩니다. 그다음 에이전트에게 *"이거 publish 해줘"* 라고만 하면 링크를 돌려줍니다.
+토큰만 있으면 됩니다 — CLI가 호스팅 서비스(alkahest.app)를 기본값으로 씁니다. 이미 `alkahest login` 을 했다면 토큰 env조차 생략 가능합니다(저장된 자격증명 사용). 그다음 에이전트에게 *"이거 publish 해줘"* 라고만 하면 링크를 돌려줍니다.
+
+> 백엔드를 직접 셀프호스팅한다면 `-e ALKAHEST_API_URL=https://<ref>.supabase.co/functions/v1` (또는 `alkahest login --api <url>`)로 CLI를 그쪽으로 가리키세요.
 
 ## 산출물 — `.alkahest/`
 
