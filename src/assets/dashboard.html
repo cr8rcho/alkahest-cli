@@ -71,8 +71,13 @@
       .brand { font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; }
       .brand .sub { color: var(--muted); font-weight: 400; margin-left: 6px; }
       .counts { color: var(--muted); white-space: nowrap; }
-      .counts-min { display: none; } /* compact "12S 8R" — shown on mobile only */
-      .counts-min i { font-style: normal; font-size: 0.78em; opacity: 0.72; margin-left: 1px; }
+      /* compact counts (mobile only): node-shape icons + number — ○ screen / ▢ resource, matching the legend */
+      .counts-min { display: none; }
+      .counts-min .cg { display: inline-flex; align-items: center; gap: 5px; }
+      .counts-min .cg + .cg { margin-left: 11px; }
+      .counts-min .nd { width: 9px; height: 9px; border: 1.5px solid var(--node-stroke); background: var(--node-fill); flex: 0 0 auto; }
+      .counts-min .nd.dot { border-radius: 50%; }
+      .counts-min .nd.sq { border-radius: 2px; background: var(--res-fill); }
 
       /* ---- Display menu: edge filters + legend behind one button. Dropdown on desktop, bottom sheet on mobile. ---- */
       .display-menu { position: relative; }
@@ -144,7 +149,7 @@
         .toolbar { column-gap: 10px; padding: 8px 12px; font-size: 12px; flex-wrap: nowrap; }
         .brand .sub { display: none; }
         .counts-full { display: none; }
-        .counts-min { display: inline; }
+        .counts-min { display: inline-flex; align-items: center; }
         .display-label { display: none; } /* Display collapses to icon-only */
         .display-btn { width: 32px; padding: 0; }
         /* Display popover → bottom sheet, mirroring the #panel idiom */
@@ -319,9 +324,10 @@
           MAP.screens.length + " screens · " + MAP.resources.length + " resources · " +
           navCount + " navigate" + (containCount ? " · " + containCount + " contains" : "") +
           " · " + MAP.calls.length + " calls";
-        // compact form for the mobile toolbar: "12S 8R"
+        // compact form for the mobile toolbar: ○{screens} ▢{resources} (node-shape icons)
         countsEl.querySelector(".counts-min").innerHTML =
-          MAP.screens.length + "<i>S</i> " + MAP.resources.length + "<i>R</i>";
+          '<span class="cg"><span class="nd dot"></span>' + MAP.screens.length + "</span>" +
+          '<span class="cg"><span class="nd sq"></span>' + MAP.resources.length + "</span>";
       }
 
       // ====== force-directed layout (reference approach) ======
