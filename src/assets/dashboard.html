@@ -68,8 +68,9 @@
       [data-theme="light"] #theme-toggle .i-sun { display: none; } [data-theme="light"] #theme-toggle .i-moon { display: block; }
       /* Action cluster pinned to the right: Display · Fit · theme */
       .toolbar-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
-      .brand { font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; }
-      .brand .sub { color: var(--muted); font-weight: 400; margin-left: 6px; }
+      /* Brand matches the web service header (account/landing): 16px / 650 / -0.01em */
+      .brand { font-size: 16px; font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; }
+      .brand .sub { color: var(--muted); font-weight: 400; font-size: 13px; letter-spacing: 0; margin-left: 6px; }
       .counts { color: var(--muted); white-space: nowrap; }
       /* compact counts (mobile only): node-shape icons + number — ○ screen / ▢ resource, matching the legend */
       .counts-min { display: none; }
@@ -160,10 +161,14 @@
           border-radius: 16px 16px 0 0; border-left: none; border-right: none; border-bottom: none;
           box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
           padding: 26px 18px 22px; z-index: 41;
-          transform: translateY(101%); transition: transform 0.24s ease;
           display: block; /* always present; slid off-screen until open */
+          transform: translateY(101%);
+          /* visibility:hidden when closed so the upward box-shadow doesn't bleed a band
+             at the bottom of the screen; delayed off so the slide-out still animates. */
+          visibility: hidden;
+          transition: transform 0.24s ease, visibility 0s linear 0.24s;
         }
-        .display-menu.open .display-pop { transform: translateY(0); }
+        .display-menu.open .display-pop { transform: translateY(0); visibility: visible; transition: transform 0.24s ease; }
         .display-pop::before { content: ""; position: absolute; top: 9px; left: 50%; width: 40px; height: 4px; margin-left: -20px; background: var(--line); border-radius: 2px; }
         .disp-row { padding: 9px 0; font-size: 14px; }
         .disp-legend { font-size: 13px; gap: 8px; }
@@ -178,10 +183,12 @@
           border-radius: 14px 14px 0 0;
           box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
           transform: translateY(101%);
-          transition: transform 0.22s ease;
+          /* hidden when closed so the upward shadow doesn't peek at the screen bottom */
+          visibility: hidden;
+          transition: transform 0.22s ease, visibility 0s linear 0.22s;
           padding-top: 30px;
         }
-        body.panel-open #panel { transform: translateY(0); }
+        body.panel-open #panel { transform: translateY(0); visibility: visible; transition: transform 0.22s ease; }
         .panel-close {
           display: block;
           position: absolute;
