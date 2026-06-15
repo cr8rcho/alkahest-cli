@@ -8,6 +8,7 @@ import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
+import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm } from "./commands/issues.js";
 import { update } from "./commands/update.js";
 import { maybeNotifyUpdate } from "./core/version.js";
 
@@ -99,6 +100,66 @@ comments
   .option("--path <dir>", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string, opts: { body?: string; api?: string; path?: string }) => commentsReply(id, opts));
+
+const issues = program
+  .command("issues")
+  .description("work with this project's Issue Map — a map-shaped issue tracker on the hosted viewer");
+issues
+  .command("pull")
+  .description("pull the issue graph into .alkahest/issues.json and print it (▶ = actionable now)")
+  .argument("[path]", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action(async (path: string, opts: { slug?: string; api?: string }) => {
+    await issuesPull(path, opts);
+    await maybeNotifyUpdate();
+  });
+issues
+  .command("add")
+  .description("create an issue (a node of the issue graph)")
+  .argument("<title>", "issue title")
+  .option("--type <type>", "node type from the project's issue config (default: task)")
+  .option("--status <status>", "status from the project's issue config (default: todo)")
+  .option("--body <markdown>", "issue body")
+  .option("--parent <id>", "parent issue — creates a contains edge (epic → task)")
+  .option("--target <key>", "code-map target: s:/r: node key, /route (planned screen), or a resource label")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((title: string, opts: Parameters<typeof issuesAdd>[1]) => issuesAdd(title, opts));
+issues
+  .command("status")
+  .description("move an issue to a status from the project's issue config")
+  .argument("<id>", "issue id (from 'issues pull')")
+  .argument("<status>", "new status id")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, status: string, opts: { path?: string; api?: string }) => issuesStatus(id, status, opts));
+issues
+  .command("done")
+  .description("mark an issue finished (moves it to the project's terminal status)")
+  .argument("<id>", "issue id (from 'issues pull')")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: { path?: string; slug?: string; api?: string }) => issuesDone(id, opts));
+issues
+  .command("link")
+  .description("connect two issues: <from> —kind→ <to> (blocks = from must finish first)")
+  .argument("<from>", "issue id")
+  .argument("<to>", "issue id")
+  .option("--kind <kind>", "blocks | contains | relates", "blocks")
+  .option("--remove", "remove the edge instead of adding it", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((from: string, to: string, opts: { kind?: string; remove?: boolean; path?: string; api?: string }) => issuesLink(from, to, opts));
+issues
+  .command("rm")
+  .description("delete an issue (author or project owner only; its edges go with it)")
+  .argument("<id>", "issue id")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: { path?: string; api?: string }) => issuesRm(id, opts));
 
 program
   .command("mcp")

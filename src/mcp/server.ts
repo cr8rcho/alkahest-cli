@@ -6,6 +6,7 @@ import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
 import { emitMap, emitDashboard } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
 import { pullComments, resolveComment, enrichComments, postComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
+import { pullIssues, createIssue, updateIssue, deriveIssueStates } from "../core/issues.js";
 import { findProjectRoot } from "../core/project.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
 import type { ProductMap, Screen } from "../core/types.js";
@@ -386,6 +387,149 @@ export function buildServer(): McpServer {
         return text(`File issue failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
       }
       return json({ ok: true, issue_url: res.issue_url, ids: res.ids, title: res.title });
+    },
+  );
+
+  // ---- issues: the Issue Map — a map-shaped issue tracker on the hosted viewer ----
+
+  const issueHints: Record<string, string> = {
+    no_token: "Set ALKAHEST_TOKEN in this MCP server's config (token from alkahest.app → Account).",
+    no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
+    no_slug: "This project hasn't been published yet — run the publish tool first.",
+    invalid_token: "The publish token is invalid or revoked — create a new one at alkahest.app → Account.",
+    forbidden: "Only the project owner or a collaborator can write issues.",
+    not_found: "Not found — list ids with the issues tool.",
+  };
+  const issueFail = (what: string, code?: string, message?: string) =>
+    text(`${what} failed (${code}): ${message}.${issueHints[code ?? ""] ? " " + issueHints[code ?? ""] : ""}`);
+
+  server.registerTool(
+    "issues",
+    {
+      title: "Issue Map graph",
+      description:
+        "Read this project's Issue Map: a dependency-first issue tracker drawn as a graph on the hosted viewer. " +
+        "Returns issues (work items with per-project type/status), edges (blocks = dependency, contains = grouping, " +
+        "relates), code-map links, and the project's issue_config (valid types/statuses). Each issue carries derived " +
+        "state: done (terminal status) and actionable (not done, nothing unfinished blocks it) — use actionable issues " +
+        "to decide what to work on next. Needs a publish token and a published project.",
+      inputSchema: {
+        path: z.string().optional().describe("Project root (default: cwd)"),
+        open: z.boolean().optional().describe("Only issues that are not done (default: false = all)"),
+      },
+    },
+    async ({ path, open }) => {
+      const res = await pullIssues(rootOf(path), {});
+      if (!res.ok || !res.graph) return issueFail("Read issues", res.code, res.message);
+      const states = deriveIssueStates(res.graph);
+      const issues = res.graph.issues
+        .map((i) => ({ ...i, ...states.get(i.id)! }))
+        .filter((i) => !open || !i.done);
+      return json({
+        ok: true,
+        slug: res.graph.slug,
+        issue_config: res.graph.issue_config,
+        count: issues.length,
+        issues,
+        edges: res.graph.edges,
+        links: res.graph.links,
+      });
+    },
+  );
+
+  server.registerTool(
+    "add_issue",
+    {
+      title: "Add an issue",
+      description:
+        "Create a node on this project's Issue Map. Use it while planning with the user: each work item becomes an " +
+        "issue, parent_id groups it under an epic (contains edge), and target ties it to the code map — pass an " +
+        "existing node key ('s:…'/'r:…'), or a planned route ('/orders/refund') for a screen that doesn't exist yet " +
+        "(it shows as a ghost node and auto-converges when a scan finds the real screen). type/status must come from " +
+        "the project's issue_config (see the issues tool). Needs a publish token; owner or collaborator only.",
+      inputSchema: {
+        title: z.string().describe("Issue title"),
+        type: z.string().optional().describe("Node type from issue_config (default: task)"),
+        status: z.string().optional().describe("Status from issue_config (default: todo)"),
+        body: z.string().optional().describe("Issue body as markdown (requirements, context)"),
+        parent_id: z.string().optional().describe("Parent issue id — creates a contains edge (epic → task)"),
+        target: z.string().optional().describe("Code-map target: 's:…'/'r:…' node key, '/route' (planned screen), or a resource label"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ title, type, status, body, parent_id, target, path }) => {
+      const targetFields = target
+        ? {
+            target_kind: (target.startsWith("s:") || target.startsWith("r:") ? "node" : target.startsWith("/") ? "route" : "resource") as
+              "node" | "route" | "resource",
+            target_key: target,
+          }
+        : {};
+      const res = await createIssue(rootOf(path), { title, type, status, body, parent_id, ...targetFields });
+      if (!res.ok || !res.issue) return issueFail("Add issue", res.code, res.message);
+      return json({ ok: true, issue: res.issue });
+    },
+  );
+
+  server.registerTool(
+    "update_issue",
+    {
+      title: "Update an issue",
+      description:
+        "Mutate an Issue Map node: move its status (e.g. to 'done' when you finish the work — this is how progress " +
+        "gets painted onto the map), edit title/body/type, set or clear its code-map target, or delete it " +
+        "(delete: author/owner only). Statuses/types must come from the project's issue_config. Needs a publish token.",
+      inputSchema: {
+        id: z.string().describe("Issue id (from the issues tool)"),
+        status: z.string().optional().describe("New status from issue_config"),
+        title: z.string().optional(),
+        body: z.string().optional().describe("New body markdown"),
+        type: z.string().optional().describe("New node type from issue_config"),
+        target: z.string().optional().describe("New code-map target ('s:…'/'r:…'/'/route'/resource label); pass '' to clear"),
+        delete: z.boolean().optional().describe("Delete the issue instead of updating it"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ id, status, title, body, type, target, delete: del, path }) => {
+      const set: Record<string, unknown> = {};
+      if (status !== undefined) set.status = status;
+      if (title !== undefined) set.title = title;
+      if (body !== undefined) set.body = body;
+      if (type !== undefined) set.type = type;
+      if (target !== undefined) {
+        if (target === "") Object.assign(set, { target_kind: null, target_key: null });
+        else {
+          set.target_kind = target.startsWith("s:") || target.startsWith("r:") ? "node" : target.startsWith("/") ? "route" : "resource";
+          set.target_key = target;
+        }
+      }
+      const res = await updateIssue(rootOf(path), { id, ...(del ? { delete: true } : { set }) });
+      if (!res.ok) return issueFail("Update issue", res.code, res.message);
+      return json(res.deleted ? { ok: true, deleted: true, id } : { ok: true, issue: res.issue });
+    },
+  );
+
+  server.registerTool(
+    "link_issues",
+    {
+      title: "Link two issues",
+      description:
+        "Add or remove an edge between two issues on the Issue Map: from —kind→ to. kind 'blocks' means `from` must " +
+        "finish before `to` can start (the dependency arrows that make the map readable), 'contains' groups (epic → " +
+        "task), 'relates' is a loose association. Needs a publish token; owner or collaborator only.",
+      inputSchema: {
+        from: z.string().describe("Issue id the edge starts at"),
+        to: z.string().describe("Issue id the edge points to"),
+        kind: z.enum(["blocks", "contains", "relates"]).optional().describe("Edge kind (default: blocks)"),
+        remove: z.boolean().optional().describe("Remove the edge instead of adding it"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ from, to, kind, remove, path }) => {
+      const edge = [{ to, kind: kind ?? ("blocks" as const) }];
+      const res = await updateIssue(rootOf(path), { id: from, ...(remove ? { remove_edges: edge } : { add_edges: edge }) });
+      if (!res.ok) return issueFail("Link issues", res.code, res.message);
+      return json({ ok: true, from, to, kind: kind ?? "blocks", removed: Boolean(remove) });
     },
   );
 
