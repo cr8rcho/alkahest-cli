@@ -7,7 +7,7 @@
 Alkahest is a CLI that **statically analyzes** a UI codebase and builds a **Product Map**.
 It extracts screens as nodes, and the navigation between screens plus the API/data calls each screen makes as edges — then shows it in an interactive dashboard and helps you write PRDs and requirements.
 
-Platforms are **pluggable via adapters** — currently **Next.js (app-router)** and **SwiftUI**. The data model is platform-agnostic, so other frameworks just need a new adapter.
+Platforms are **pluggable via adapters** — **21 today** across React (Next.js, React Router, Remix), Vue (Nuxt, Vue Router), Angular, Svelte, Astro, React Native, SwiftUI/UIKit, Jetpack Compose, Flutter, and server-rendered Django/Flask/Rails (+ plain HTML). The data model is platform-agnostic, so a new framework is just a new adapter.
 
 Where the references (graphify, codegraph, Understand-Anything) build *code-symbol* graphs, Alkahest aims one level up — **screen-level product understanding** — for a target audience of **PMs / product folks**.
 
@@ -95,6 +95,9 @@ alkahest login         # save your publish token (Account → Create token on al
 alkahest publish       # upload the map to the hosted viewer → shareable link
 alkahest comments pull # pull comments left on the published map → .alkahest/comments.json
 alkahest comments issue <ids…>  # file the given comments as ONE GitHub issue (gh) + link it back
+alkahest issues pull   # pull the project's Issue Map (graph-shaped issue tracker) → .alkahest/issues.json
+alkahest issues add <title>     # create an issue (--parent epic, --target s:…/r:…//route, --type/--status)
+alkahest issues done <id>       # mark an issue finished (other ops: status / link / rm)
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 
@@ -140,7 +143,12 @@ Or add it to any MCP-capable agent's config directly:
 | `publish` | upload the map to the hosted viewer → shareable link (needs a token, see below) |
 | `comments` | list comments left on the published map, each joined to where to act: a screen comment → its source file/route + on-screen elements with line numbers; a resource comment → the screens that call that endpoint (file + line). Lets the agent address feedback in-editor (needs a token) |
 | `resolve_comment` | mark a map comment resolved (or reopen) after addressing it (needs a token) |
+| `add_comment` / `reply_comment` | leave a new comment on a map node / reply under an existing one (needs a token) |
 | `comment_to_issue` | group one or more map comments into a single GitHub issue (via local `gh`) and link it back onto each, so the hosted viewer shows a "tracked" badge (needs a token) |
+| `issues` | read the project's **Issue Map** — a dependency-first issue tracker drawn as a graph. Each issue comes with derived state: `done` and `actionable` (nothing unfinished blocks it), so the agent can pick what to work on next (needs a token) |
+| `add_issue` | create an issue while planning with the user — `parent_id` groups under an epic, `target` ties it to the code map (existing node key, or a planned `/route` that converges when the screen ships) (needs a token) |
+| `update_issue` | move status (e.g. to done when the work ships — progress gets painted onto the map), edit fields, or delete (needs a token) |
+| `link_issues` | add/remove an edge between issues: `blocks` (dependency), `contains` (epic→task), `relates` (needs a token) |
 | `check_version` | report installed vs latest GitHub release (so the agent can suggest `alkahest update`) |
 
 The agent reads with `get_screen` / `who_calls` and writes back with `set_summary` / `set_prd`; both write into `map.json` and re-render `index.html`, so the dashboard always reflects the latest.
@@ -187,7 +195,15 @@ The token is all you need — the CLI defaults to the hosted service (alkahest.a
 
 ## Scope & limitations
 
-Current adapters:
+Adapters (21, under `src/core/adapters/`), grouped by framework:
+
+- **React** — Next.js (app & pages router), React Router (Vite/CRA), Remix, plain JSX
+- **Vue** — Nuxt, Vue Router, Vue SFC · **Angular** · **Svelte** (SvelteKit) · **Astro**
+- **React Native** — Expo Router, React Navigation
+- **iOS** — SwiftUI, UIKit · **Android** — Jetpack Compose · **Flutter**
+- Server-rendered — **Django**, **Flask**, **Rails** · plain multi-page **HTML**
+
+How a couple map source → graph:
 
 | Adapter | Screen | Navigate | Call |
 |---|---|---|---|
@@ -195,7 +211,7 @@ Current adapters:
 | **SwiftUI** | `struct X: View` | `NavigationLink` · `.sheet` · `.fullScreenCover` · `navigationDestination` | `URL(string:)` · `URLRequest` |
 
 - **Limitations**: parsing is per file/view — features/calls inside imported child components aren't traced yet. Dynamic targets (`router.push(variable)`, a `useQuery` hook's URL, etc.) are marked "unresolved".
-- More adapters (pages router, React Router, Jetpack Compose, …) and runtime screenshots are planned as needed — a new platform is just one adapter under `src/core/adapters/`.
+- The data model is platform-agnostic — a new platform is just one adapter under `src/core/adapters/`.
 
 ## Development
 

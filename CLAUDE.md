@@ -19,16 +19,17 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
 ## Architecture (open-core)
 
 - **CLI** (`src/`) — public, MIT. Commands: `scan`, `view`, `publish`, `login`,
-  `mcp`, `hook`, `update`. Output goes to `<project>/.alkahest/` (`map.json` + `index.html`).
-- **Hosted backend** (`supabase/`) — **gitignored / kept private.** Edge functions
-  (`publish`, `create-token`, deprecated `register`) + schema. Holds paid-plan logic,
-  so it lives outside the public repo (open-core split).
-- **Viewer** (`viewer/`, built by `scripts/build-viewer.mjs`) — gitignored build
-  output. Dashboard shell + `/account` page; deployed to Vercel.
+  `mcp`, `hook`, `comments`, `issues`, `update`. Output goes to `<project>/.alkahest/`
+  (`map.json` + `index.html`).
+- **Hosted service** — the web app (landing + `/account` + the `/p/{slug}` viewer),
+  Supabase backend, and paid-plan logic live in the **separate private
+  [`alkahest-cloud`](../alkahest-cloud) repo** (open-core split). This MIT CLI talks to it
+  only through the `map.json` **data contract** + `alkahest publish` — no shared code.
 
-The same dashboard template (`src/assets/dashboard.html`) renders three ways:
-inlined map (local `index.html`), `?src=` override, or `/p/{slug}` + a
-`alkahest:map-base` meta tag (hosted). One renderer, no duplication.
+The local renderer `src/assets/dashboard.html` powers **`alkahest view`** — it renders an
+inlined map (local `index.html`) or a `?src=` override. The **hosted** viewer at
+`/p/{slug}` is a **separate React renderer owned by `alkahest-cloud`** (ADR-008) — the two
+forked and may diverge. Both read the same `map.json`.
 
 ## Auth model
 
