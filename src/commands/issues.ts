@@ -18,6 +18,10 @@ const die = (msg: string): void => {
   process.exitCode = 1;
 };
 
+/** Fixed priority enum (mirrors cloud migration 0020 + the issues-* edge functions). */
+const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 const failMessage = (code: string | undefined, message: string | undefined, action: string): string => {
   const known: Record<string, string> = {
     invalid_token: "✗ Token invalid or revoked. Run 'alkahest login' again.",
@@ -50,8 +54,10 @@ export async function issuesPull(path: string, options: IssuesPullOptions): Prom
   for (const i of graph.issues) {
     const st = states.get(i.id)!;
     const mark = st.done ? "✓" : st.actionable ? "▶" : "⏳";
+    const pri = i.priority && i.priority !== "none" ? `  !${i.priority}` : "";
+    const due = i.due_on ? `  due:${i.due_on}` : "";
     const blocked = st.blockedBy.length ? `  (blocked by ${st.blockedBy.length})` : "";
-    console.log(`  ${mark} [${i.type}/${i.status}] ${i.title}  ${i.id}${blocked}`);
+    console.log(`  ${mark} [${i.type}/${i.status}] ${i.title}  ${i.id}${pri}${due}${blocked}`);
   }
 }
 
@@ -59,6 +65,7 @@ export interface IssuesAddOptions {
   api?: string; slug?: string; path?: string;
   type?: string; status?: string; body?: string;
   parent?: string; target?: string;
+  priority?: string; due?: string;
 }
 
 /** `--target` infers the kind: s:/r: prefix = existing node, leading '/' = planned route, else resource label. */
@@ -68,14 +75,38 @@ const inferTarget = (target: string): { target_kind: "node" | "route" | "resourc
 });
 
 export async function issuesAdd(title: string, options: IssuesAddOptions): Promise<void> {
+  if (options.priority && !PRIORITIES.includes(options.priority)) {
+    return die(`✗ --priority must be one of: ${PRIORITIES.join(", ")}.`);
+  }
+  if (options.due && !DATE_RE.test(options.due)) {
+    return die("✗ --due must be a date in YYYY-MM-DD form.");
+  }
   const res = await createIssue(options.path || ".", {
     api: options.api, slug: options.slug,
     title, type: options.type, status: options.status, body: options.body,
+    priority: options.priority, due_on: options.due,
     parent_id: options.parent,
     ...(options.target ? inferTarget(options.target) : {}),
   });
   if (!res.ok || !res.issue) return die(failMessage(res.code, res.message, "issues add"));
   console.log(`[alkahest] created [${res.issue.type}/${res.issue.status}] ${res.issue.title} — id ${res.issue.id}`);
+}
+
+/** Set an issue's priority (one of: none, low, medium, high, urgent). */
+export async function issuesPriority(id: string, priority: string, options: IssuesWriteOptions): Promise<void> {
+  if (!PRIORITIES.includes(priority)) return die(`✗ priority must be one of: ${PRIORITIES.join(", ")}.`);
+  const res = await updateIssue(options.path || ".", { api: options.api, id, set: { priority } });
+  if (!res.ok || !res.issue) return die(failMessage(res.code, res.message, "issues priority"));
+  console.log(`[alkahest] ${res.issue.title} → priority ${res.issue.priority}`);
+}
+
+/** Set or clear an issue's due date. Pass YYYY-MM-DD, or 'none'/'-' to clear. */
+export async function issuesDue(id: string, date: string, options: IssuesWriteOptions): Promise<void> {
+  const clear = date === "none" || date === "-" || date === "";
+  if (!clear && !DATE_RE.test(date)) return die("✗ due date must be YYYY-MM-DD (or 'none' to clear).");
+  const res = await updateIssue(options.path || ".", { api: options.api, id, set: { due_on: clear ? null : date } });
+  if (!res.ok || !res.issue) return die(failMessage(res.code, res.message, "issues due"));
+  console.log(`[alkahest] ${res.issue.title} → due ${res.issue.due_on ?? "(none)"}`);
 }
 
 export interface IssuesWriteOptions { api?: string; slug?: string; path?: string; }

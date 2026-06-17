@@ -8,7 +8,7 @@ import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
-import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm } from "./commands/issues.js";
+import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue } from "./commands/issues.js";
 import { update } from "./commands/update.js";
 import { maybeNotifyUpdate } from "./core/version.js";
 
@@ -121,6 +121,8 @@ issues
   .option("--type <type>", "node type from the project's issue config (default: task)")
   .option("--status <status>", "status from the project's issue config (default: todo)")
   .option("--body <markdown>", "issue body")
+  .option("--priority <level>", "none | low | medium | high | urgent (default: none)")
+  .option("--due <date>", "due date in YYYY-MM-DD")
   .option("--parent <id>", "parent issue — creates a contains edge (epic → task)")
   .option("--target <key>", "code-map target: s:/r: node key, /route (planned screen), or a resource label")
   .option("--path <dir>", "project path", ".")
@@ -135,6 +137,22 @@ issues
   .option("--path <dir>", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string, status: string, opts: { path?: string; api?: string }) => issuesStatus(id, status, opts));
+issues
+  .command("priority")
+  .description("set an issue's priority (none | low | medium | high | urgent)")
+  .argument("<id>", "issue id (from 'issues pull')")
+  .argument("<level>", "none | low | medium | high | urgent")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, level: string, opts: { path?: string; api?: string }) => issuesPriority(id, level, opts));
+issues
+  .command("due")
+  .description("set or clear an issue's due date")
+  .argument("<id>", "issue id (from 'issues pull')")
+  .argument("<date>", "due date YYYY-MM-DD, or 'none' to clear")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, date: string, opts: { path?: string; api?: string }) => issuesDue(id, date, opts));
 issues
   .command("done")
   .description("mark an issue finished (moves it to the project's terminal status)")

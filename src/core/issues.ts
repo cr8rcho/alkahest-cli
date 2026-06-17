@@ -23,6 +23,10 @@ export interface Issue {
   status: string;
   title: string;
   body: string | null;
+  /** Fixed enum: none | low | medium | high | urgent (cloud migration 0020). */
+  priority: string;
+  /** Due date as YYYY-MM-DD, or null. */
+  due_on: string | null;
   /** 'node' (existing map node) | 'route'/'resource' (prospective — awaits convergence). */
   target_kind: "node" | "route" | "resource" | null;
   target_key: string | null;
@@ -157,6 +161,10 @@ export interface CreateIssueParams {
   type?: string;
   status?: string;
   body?: string;
+  /** none | low | medium | high | urgent (default none). */
+  priority?: string;
+  /** Due date YYYY-MM-DD. */
+  due_on?: string | null;
   target_kind?: "node" | "route" | "resource";
   target_key?: string;
   /** Existing issue id — creates a contains edge parent→new (epic→task). */
@@ -183,6 +191,8 @@ export async function createIssue(path: string, params: CreateIssueParams): Prom
     type: params.type,
     status: params.status,
     body: params.body,
+    priority: params.priority,
+    due_on: params.due_on ?? null,
     target_kind: params.target_kind ?? null,
     target_key: params.target_key ?? null,
     parent_id: params.parent_id,
@@ -201,6 +211,8 @@ export interface UpdateIssueParams {
     body?: string | null;
     type?: string;
     status?: string;
+    priority?: string;
+    due_on?: string | null;
     target_kind?: "node" | "route" | "resource" | null;
     target_key?: string | null;
   };
