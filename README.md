@@ -96,8 +96,8 @@ alkahest publish       # upload the map to the hosted viewer → shareable link
 alkahest comments pull # pull comments left on the published map → .alkahest/comments.json
 alkahest comments issue <ids…>  # file the given comments as ONE GitHub issue (gh) + link it back
 alkahest issues pull   # pull the project's Issue Map (graph-shaped issue tracker) → .alkahest/issues.json
-alkahest issues add <title>     # create an issue (--parent epic, --target s:…/r:…//route, --type/--status, --priority/--due)
-alkahest issues done <id>       # mark an issue finished (other ops: status / priority / due / link / rm)
+alkahest issues add <title>     # create an issue (--parent epic, --target s:…/r:…//route, --type/--status, --priority/--due/--assignee)
+alkahest issues done <id>       # mark an issue finished (other ops: status / priority / due / assign / link / rm)
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 

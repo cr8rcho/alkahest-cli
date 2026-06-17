@@ -454,12 +454,13 @@ export function buildServer(): McpServer {
         body: z.string().optional().describe("Issue body as markdown (requirements, context)"),
         priority: z.enum(["none", "low", "medium", "high", "urgent"]).optional().describe("Priority (default: none)"),
         due_on: z.string().optional().describe("Due date as YYYY-MM-DD"),
+        assignee_id: z.string().optional().describe("Assign to a project member (user id)"),
         parent_id: z.string().optional().describe("Parent issue id — creates a contains edge (epic → task)"),
         target: z.string().optional().describe("Code-map target: 's:…'/'r:…' node key, '/route' (planned screen), or a resource label"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, type, status, body, priority, due_on, parent_id, target, path }) => {
+    async ({ title, type, status, body, priority, due_on, assignee_id, parent_id, target, path }) => {
       const targetFields = target
         ? {
             target_kind: (target.startsWith("s:") || target.startsWith("r:") ? "node" : target.startsWith("/") ? "route" : "resource") as
@@ -467,7 +468,7 @@ export function buildServer(): McpServer {
             target_key: target,
           }
         : {};
-      const res = await createIssue(rootOf(path), { title, type, status, body, priority, due_on, parent_id, ...targetFields });
+      const res = await createIssue(rootOf(path), { title, type, status, body, priority, due_on, assignee_id, parent_id, ...targetFields });
       if (!res.ok || !res.issue) return issueFail("Add issue", res.code, res.message);
       return json({ ok: true, issue: res.issue });
     },
@@ -489,12 +490,13 @@ export function buildServer(): McpServer {
         type: z.string().optional().describe("New node type from issue_config"),
         priority: z.enum(["none", "low", "medium", "high", "urgent"]).optional().describe("New priority"),
         due_on: z.string().optional().describe("New due date YYYY-MM-DD; pass '' to clear"),
+        assignee_id: z.string().optional().describe("Assign to a project member (user id); pass '' to unassign"),
         target: z.string().optional().describe("New code-map target ('s:…'/'r:…'/'/route'/resource label); pass '' to clear"),
         delete: z.boolean().optional().describe("Delete the issue instead of updating it"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ id, status, title, body, type, priority, due_on, target, delete: del, path }) => {
+    async ({ id, status, title, body, type, priority, due_on, assignee_id, target, delete: del, path }) => {
       const set: Record<string, unknown> = {};
       if (status !== undefined) set.status = status;
       if (title !== undefined) set.title = title;
@@ -502,6 +504,7 @@ export function buildServer(): McpServer {
       if (type !== undefined) set.type = type;
       if (priority !== undefined) set.priority = priority;
       if (due_on !== undefined) set.due_on = due_on === "" ? null : due_on;
+      if (assignee_id !== undefined) set.assignee_id = assignee_id === "" ? null : assignee_id;
       if (target !== undefined) {
         if (target === "") Object.assign(set, { target_kind: null, target_key: null });
         else {

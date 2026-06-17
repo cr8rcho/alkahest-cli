@@ -27,6 +27,8 @@ export interface Issue {
   priority: string;
   /** Due date as YYYY-MM-DD, or null. */
   due_on: string | null;
+  /** Assigned user id (a project member), or null. Names resolve on the hosted viewer. */
+  assignee_id: string | null;
   /** 'node' (existing map node) | 'route'/'resource' (prospective — awaits convergence). */
   target_kind: "node" | "route" | "resource" | null;
   target_key: string | null;
@@ -165,6 +167,8 @@ export interface CreateIssueParams {
   priority?: string;
   /** Due date YYYY-MM-DD. */
   due_on?: string | null;
+  /** Assignee user id (must be a project member; the server validates). */
+  assignee_id?: string | null;
   target_kind?: "node" | "route" | "resource";
   target_key?: string;
   /** Existing issue id — creates a contains edge parent→new (epic→task). */
@@ -193,6 +197,7 @@ export async function createIssue(path: string, params: CreateIssueParams): Prom
     body: params.body,
     priority: params.priority,
     due_on: params.due_on ?? null,
+    assignee_id: params.assignee_id ?? null,
     target_kind: params.target_kind ?? null,
     target_key: params.target_key ?? null,
     parent_id: params.parent_id,
@@ -213,6 +218,7 @@ export interface UpdateIssueParams {
     status?: string;
     priority?: string;
     due_on?: string | null;
+    assignee_id?: string | null;
     target_kind?: "node" | "route" | "resource" | null;
     target_key?: string | null;
   };

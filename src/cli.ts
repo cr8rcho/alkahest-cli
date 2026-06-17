@@ -8,7 +8,7 @@ import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
-import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue } from "./commands/issues.js";
+import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue, issuesAssign } from "./commands/issues.js";
 import { update } from "./commands/update.js";
 import { maybeNotifyUpdate } from "./core/version.js";
 
@@ -123,6 +123,7 @@ issues
   .option("--body <markdown>", "issue body")
   .option("--priority <level>", "none | low | medium | high | urgent (default: none)")
   .option("--due <date>", "due date in YYYY-MM-DD")
+  .option("--assignee <user-id>", "assign to a project member (user id)")
   .option("--parent <id>", "parent issue — creates a contains edge (epic → task)")
   .option("--target <key>", "code-map target: s:/r: node key, /route (planned screen), or a resource label")
   .option("--path <dir>", "project path", ".")
@@ -153,6 +154,14 @@ issues
   .option("--path <dir>", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string, date: string, opts: { path?: string; api?: string }) => issuesDue(id, date, opts));
+issues
+  .command("assign")
+  .description("assign an issue to a project member (or 'none' to clear)")
+  .argument("<id>", "issue id (from 'issues pull')")
+  .argument("<user>", "member user id, or 'none' to unassign")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, user: string, opts: { path?: string; api?: string }) => issuesAssign(id, user, opts));
 issues
   .command("done")
   .description("mark an issue finished (moves it to the project's terminal status)")

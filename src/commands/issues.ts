@@ -65,7 +65,7 @@ export interface IssuesAddOptions {
   api?: string; slug?: string; path?: string;
   type?: string; status?: string; body?: string;
   parent?: string; target?: string;
-  priority?: string; due?: string;
+  priority?: string; due?: string; assignee?: string;
 }
 
 /** `--target` infers the kind: s:/r: prefix = existing node, leading '/' = planned route, else resource label. */
@@ -84,12 +84,20 @@ export async function issuesAdd(title: string, options: IssuesAddOptions): Promi
   const res = await createIssue(options.path || ".", {
     api: options.api, slug: options.slug,
     title, type: options.type, status: options.status, body: options.body,
-    priority: options.priority, due_on: options.due,
+    priority: options.priority, due_on: options.due, assignee_id: options.assignee,
     parent_id: options.parent,
     ...(options.target ? inferTarget(options.target) : {}),
   });
   if (!res.ok || !res.issue) return die(failMessage(res.code, res.message, "issues add"));
   console.log(`[alkahest] created [${res.issue.type}/${res.issue.status}] ${res.issue.title} — id ${res.issue.id}`);
+}
+
+/** Assign (or unassign) an issue. `user` is a member's user id, or 'none'/'-' to clear. */
+export async function issuesAssign(id: string, user: string, options: IssuesWriteOptions): Promise<void> {
+  const clear = user === "none" || user === "-" || user === "";
+  const res = await updateIssue(options.path || ".", { api: options.api, id, set: { assignee_id: clear ? null : user } });
+  if (!res.ok || !res.issue) return die(failMessage(res.code, res.message, "issues assign"));
+  console.log(`[alkahest] ${res.issue.title} → assignee ${res.issue.assignee_id ?? "(none)"}`);
 }
 
 /** Set an issue's priority (one of: none, low, medium, high, urgent). */
