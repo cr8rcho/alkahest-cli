@@ -1,6 +1,6 @@
 {
   "name": "@cr8rcho/alkahest",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "publishConfig": {
     "access": "public"
   },
