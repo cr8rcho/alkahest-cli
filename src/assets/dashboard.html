@@ -1,45 +1,56 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alkahest — Product Map</title>
+    <!-- Inter (UI) + Geist Mono (code/targets), matching the hosted viewer. Degrades to the
+         system stack offline (the fallbacks below). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-      /* Minimal palette — light by default, swapped via [data-theme="dark"] (style F) */
+      /* Linear palette — monotone base + indigo brand accent, dark by default (matches the hosted
+         viewer). --accent is monotone emphasis (route text, hover borders); --primary is the indigo
+         brand (#6366f1) used for the selection stroke — one mid-tone value for both themes. */
       :root {
         --bg: #ffffff;
-        --panel: #f7f7f8;
+        --panel: #f4f5f6;
         --panel-soft: #ffffff;
-        --line: #e5e5e5;
-        --ink: #111111;
-        --muted: #666666;
+        --line: #e8e9eb;
+        --ink: #08090a;
+        --muted: #62666d;
         --node-fill: #ffffff;       /* screen */
-        --node-stroke: #c4c4cc;
-        --node-ink: #27272a;
-        --res-fill: #f4f4f5;        /* resource (F: light gray fill) */
-        --entry: #16a34a;
-        --accent: #2563eb;
-        --edge: #a1a1aa;
+        --node-stroke: #d0d2d6;
+        --node-ink: #08090a;
+        --res-fill: #f0f1f2;        /* resource */
+        --entry: #27a644;
+        --accent: #08090a;
+        --primary: #6366f1;
+        --edge: #c4c6cc;
       }
       html[data-theme="dark"] {
-        --bg: #0b0b0c;
-        --panel: #161619;
-        --panel-soft: #1d1d21;
-        --line: #2a2a2e;
-        --ink: #f4f4f5;
-        --muted: #9ca3af;
-        --node-fill: #1d1d21;
-        --node-stroke: #444c56;
-        --node-ink: #f4f4f5;
-        --res-fill: #2e2e33;
-        --entry: #3fb950;
-        --accent: #3b82f6;
-        --edge: #4a4a50;
+        --bg: #08090a;
+        --panel: #161718;
+        --panel-soft: #1c1d1f;
+        --line: #23252a;
+        --ink: #f7f8f8;
+        --muted: #8a8f98;
+        --node-fill: #1c1d1f;
+        --node-stroke: #383b3f;
+        --node-ink: #f7f8f8;
+        --res-fill: #26282c;
+        --entry: #27a644;
+        --accent: #f7f8f8;
+        --primary: #6366f1;
+        --edge: #44474d;
       }
       * { box-sizing: border-box; }
       html, body { margin: 0; height: 100%; }
       body {
-        font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font: 13px/1.5 "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
         background: var(--bg);
         color: var(--ink);
         display: flex;
@@ -68,8 +79,8 @@
       [data-theme="light"] #theme-toggle .i-sun { display: none; } [data-theme="light"] #theme-toggle .i-moon { display: block; }
       /* Action cluster pinned to the right: Display · Fit · theme */
       .toolbar-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
-      /* Brand matches the web service header (account/landing): 16px / 650 / -0.01em */
-      .brand { font-size: 16px; font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; }
+      /* Brand matches the web service header (account/landing): 13px / 600 / -0.025em */
+      .brand { font-size: 13px; font-weight: 600; letter-spacing: -0.025em; white-space: nowrap; }
       .brand .sub { color: var(--muted); font-weight: 400; font-size: 13px; letter-spacing: 0; margin-left: 6px; }
       .counts { color: var(--muted); white-space: nowrap; }
       /* compact counts (mobile only): node-shape icons + number — ○ screen / ▢ resource, matching the legend */
@@ -117,26 +128,26 @@
         -webkit-overflow-scrolling: touch;
       }
       #panel h2 { margin: 0 0 2px; font-size: 16px; }
-      #panel .route { color: var(--accent); font-family: ui-monospace, monospace; font-size: 12px; margin-bottom: 12px; word-break: break-all; }
-      #panel .src { color: var(--muted); font-family: ui-monospace, monospace; font-size: 11px; margin-bottom: 14px; word-break: break-all; }
+      #panel .route { color: var(--accent); font-family: "Geist Mono", ui-monospace, monospace; font-size: 12px; margin-bottom: 12px; word-break: break-all; }
+      #panel .src { color: var(--muted); font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; margin-bottom: 14px; word-break: break-all; }
       #panel section { margin-bottom: 16px; }
       #panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 0 0 7px; }
       #panel ul { list-style: none; margin: 0; padding: 0; }
       #panel li { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 5px; background: var(--panel-soft); }
       #panel li.clickable { cursor: pointer; }
       #panel li.clickable:hover { border-color: var(--accent); }
-      #panel .tag { font-family: ui-monospace, monospace; font-size: 10px; color: var(--muted); }
-      #panel .lineno { float: right; color: var(--muted); font-family: ui-monospace, monospace; font-size: 10px; }
+      #panel .tag { font-family: "Geist Mono", ui-monospace, monospace; font-size: 10px; color: var(--muted); }
+      #panel .lineno { float: right; color: var(--muted); font-family: "Geist Mono", ui-monospace, monospace; font-size: 10px; }
       #panel .empty { color: var(--muted); font-style: italic; }
       #panel .prd h4, #panel .prd h5, #panel .prd h6 { margin: 12px 0 4px; font-size: 12px; font-weight: 700; color: var(--ink); text-transform: none; letter-spacing: 0; }
       #panel .prd p { margin: 4px 0; }
       #panel .prd ul.md { list-style: none; margin: 4px 0; padding: 0; }
       #panel .prd ul.md li { border: none; background: none; padding: 1px 0; margin: 0; }
-      #panel .prd code { font-family: ui-monospace, monospace; font-size: 11px; background: var(--panel-soft); padding: 0 3px; border-radius: 3px; }
+      #panel .prd code { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; background: var(--panel-soft); padding: 0 3px; border-radius: 3px; }
       .hint { color: var(--muted); }
       .node text { font-size: 11px; fill: var(--node-ink); pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
       .node circle, .node rect, .node path { cursor: pointer; stroke: var(--node-stroke); stroke-width: 1.5px; }
-      .node.selected circle, .node.selected rect, .node.selected path { stroke: var(--accent); stroke-width: 2.5px; }
+      .node.selected circle, .node.selected rect, .node.selected path { stroke: var(--primary); stroke-width: 2.5px; }
       .node.dim { opacity: 0.2; }
       /* Hover preview (only when nothing is selected): highlight connected edges/neighbors by color only (keep width) */
       .node.hl circle, .node.hl rect, .node.hl path { stroke: var(--ink); }
