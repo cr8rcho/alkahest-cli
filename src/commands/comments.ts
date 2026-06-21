@@ -8,11 +8,12 @@ import { pullComments, enrichComments, postComment, resolveNode, fileCommentsIss
 export interface CommentsPullOptions {
   api?: string;
   slug?: string;
+  map?: string;
   open?: boolean;
 }
 
 export async function commentsPull(path: string, options: CommentsPullOptions): Promise<void> {
-  const res = await pullComments(path, options);
+  const res = await pullComments(path, { ...options, mapSlug: options.map });
   if (!res.ok) {
     if (res.code === "no_slug") {
       console.error(`[alkahest] ${res.message}`);
@@ -87,7 +88,7 @@ export async function commentsIssue(ids: string[], options: CommentsIssueOptions
   console.log(`[alkahest] filed ${res.ids!.length} comment${res.ids!.length === 1 ? "" : "s"} as ${res.issue_url}`);
 }
 
-export interface CommentsAddOptions { body?: string; slug?: string; api?: string; path?: string; }
+export interface CommentsAddOptions { body?: string; slug?: string; map?: string; api?: string; path?: string; }
 
 export async function commentsAdd(node: string, options: CommentsAddOptions): Promise<void> {
   const body = (options.body || "").trim();
@@ -97,7 +98,7 @@ export async function commentsAdd(node: string, options: CommentsAddOptions): Pr
   if (!map) { console.error(`[alkahest] no ${OUTPUT_DIR}/map.json — run 'alkahest scan' first.`); process.exitCode = 1; return; }
   const n = resolveNode(map, node);
   if (!n) { console.error(`[alkahest] no node matches '${node}'. Try a screen route/title or resource path.`); process.exitCode = 1; return; }
-  const res = await postComment(projectRoot, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: options.slug, api: options.api });
+  const res = await postComment(projectRoot, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: options.slug, mapSlug: options.map, api: options.api });
   if (!res.ok) {
     console.error(res.code === "forbidden"
       ? "[alkahest] ✗ Only the project owner or a collaborator can comment."

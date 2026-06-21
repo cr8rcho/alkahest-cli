@@ -68,8 +68,9 @@ comments
   .argument("[path]", "project path", ".")
   .option("--open", "only unresolved comments", false)
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "restrict to one code map's comments (defaults to this checkout's map)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .action(async (path: string, opts: { open?: boolean; slug?: string; api?: string }) => {
+  .action(async (path: string, opts: { open?: boolean; slug?: string; map?: string; api?: string }) => {
     await commentsPull(path, opts);
     await maybeNotifyUpdate();
   });
@@ -91,8 +92,9 @@ comments
   .requiredOption("--body <text>", "comment text")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "which code map the comment is on (defaults to this checkout's map)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .action((node: string, opts: { body?: string; slug?: string; api?: string; path?: string }) => commentsAdd(node, opts));
+  .action((node: string, opts: { body?: string; slug?: string; map?: string; api?: string; path?: string }) => commentsAdd(node, opts));
 comments
   .command("reply")
   .description("reply to an existing comment (id from 'comments pull')")
