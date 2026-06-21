@@ -101,6 +101,14 @@ alkahest issues done <id>       # mark an issue finished (other ops: status / pr
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 
+> **Multiple maps per project.** A hosted project is a container that can hold several **code maps**
+> *and* several **issue maps** (e.g. `web` / `api` in a monorepo) — all equal, no privileged default.
+> `alkahest publish --map <slug>` targets a code map (remembered per checkout in
+> `.alkahest/project.json`); `issues add/pull --map <slug>` and `comments add/pull --map <slug>` pick
+> the issue / code map. Omit `--map` and the CLI uses the project's sole map of that type — the server
+> asks you to pass `--map` only when there's more than one. Each map is shared at
+> `alkahest.app/p/<project>/<map>`.
+
 ### Dashboard interactions
 
 - **Force-directed layout** — nodes settle naturally by their connections. A fixed seed keeps the layout the same every time.

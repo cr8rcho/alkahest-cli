@@ -17,6 +17,8 @@ export interface PullParams {
   api?: string;
   /** Project slug (else the saved slug for this project path). */
   slug?: string;
+  /** Which CODE map's comments (a project can hold several); else the checkout's remembered map. */
+  mapSlug?: string;
   /** Only unresolved comments. */
   open?: boolean;
   /** Publish token (else env ALKAHEST_TOKEN / saved creds). */
@@ -98,7 +100,7 @@ async function getJson(
 
 export async function pullComments(path: string, params: PullParams = {}): Promise<PullResult> {
   const creds = loadCredentials();
-  const { root, slug } = resolveProject(path, params.slug);
+  const { root, slug, mapSlug: knownMap } = resolveProject(path, params.slug);
 
   const apiUrl = resolveApiUrl(params.api, creds);
   if (!apiUrl) {
@@ -128,6 +130,8 @@ export async function pullComments(path: string, params: PullParams = {}): Promi
   }
 
   const qs = new URLSearchParams({ slug });
+  const mapSlug = params.mapSlug ?? knownMap;
+  if (mapSlug) qs.set("map", mapSlug); // scope to one code map (else all the project's comments)
   if (params.open) qs.set("open", "1");
   const res = await getJson(`${apiUrl}/comments-pull?${qs.toString()}`, token);
   if (!res.ok) {
@@ -267,6 +271,8 @@ export interface PostParams {
   token?: string;
   /** New comment: project slug (else the saved slug for this path). */
   slug?: string;
+  /** New comment: which CODE map it's on; else the checkout's remembered map. */
+  mapSlug?: string;
   node_key?: string;
   anchor_kind?: string;
   anchor_label?: string | null;
@@ -295,10 +301,10 @@ export async function postComment(path: string, params: PostParams): Promise<Pos
   if (params.parent_id) {
     reqBody = { parent_id: params.parent_id, body: params.body };
   } else {
-    const { slug } = resolveProject(path, params.slug);
+    const { slug, mapSlug: knownMap } = resolveProject(path, params.slug);
     if (!slug) return { ok: false, code: "no_slug", message: "No published map for this project — run 'alkahest publish', or pass --slug." };
     if (!params.node_key) return { ok: false, code: "no_node", message: "node_key is required for a new comment." };
-    reqBody = { slug, node_key: params.node_key, anchor_kind: params.anchor_kind, anchor_label: params.anchor_label, body: params.body };
+    reqBody = { slug, mapSlug: params.mapSlug ?? knownMap, node_key: params.node_key, anchor_kind: params.anchor_kind, anchor_label: params.anchor_label, body: params.body };
   }
 
   const res = await postJson(`${apiUrl}/comments-post`, reqBody, token);
