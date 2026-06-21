@@ -28,14 +28,15 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
     forbidden: "✗ Only the project owner or a collaborator can do this.",
     not_found: `✗ ${message ?? "Not found."}`,
     no_slug: message ?? "No published map for this project yet.",
+    ambiguous_map: `✗ ${message ?? "This project has several issue maps."} Pass --map <slug>.`,
   };
   return known[code ?? ""] ?? `${action} failed: ${message}`;
 };
 
-export interface IssuesPullOptions { api?: string; slug?: string; }
+export interface IssuesPullOptions { api?: string; slug?: string; map?: string; }
 
 export async function issuesPull(path: string, options: IssuesPullOptions): Promise<void> {
-  const res = await pullIssues(path, options);
+  const res = await pullIssues(path, { ...options, mapSlug: options.map });
   if (!res.ok || !res.graph) return die(failMessage(res.code, res.message, "issues pull"));
   const graph = res.graph;
   const states = deriveIssueStates(graph);
@@ -62,7 +63,7 @@ export async function issuesPull(path: string, options: IssuesPullOptions): Prom
 }
 
 export interface IssuesAddOptions {
-  api?: string; slug?: string; path?: string;
+  api?: string; slug?: string; path?: string; map?: string;
   type?: string; status?: string; body?: string;
   parent?: string; target?: string;
   priority?: string; due?: string; assignee?: string;
@@ -82,7 +83,7 @@ export async function issuesAdd(title: string, options: IssuesAddOptions): Promi
     return die("✗ --due must be a date in YYYY-MM-DD form.");
   }
   const res = await createIssue(options.path || ".", {
-    api: options.api, slug: options.slug,
+    api: options.api, slug: options.slug, mapSlug: options.map,
     title, type: options.type, status: options.status, body: options.body,
     priority: options.priority, due_on: options.due, assignee_id: options.assignee,
     parent_id: options.parent,

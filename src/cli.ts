@@ -53,7 +53,8 @@ program
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .option("--name <name>", "project name (first publish only)")
   .option("--slug <slug>", "update an existing project by slug (else resolved from the checkout)")
-  .action(async (path: string, opts: { api?: string; name?: string; slug?: string }) => {
+  .option("--map <slug>", "which code map to publish to (a project can hold several)")
+  .action(async (path: string, opts: { api?: string; name?: string; slug?: string; map?: string }) => {
     await publish(path, opts);
     await maybeNotifyUpdate();
   });
@@ -109,8 +110,9 @@ issues
   .description("pull the issue graph into .alkahest/issues.json and print it (▶ = actionable now)")
   .argument("[path]", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "restrict to one issue map within the project")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .action(async (path: string, opts: { slug?: string; api?: string }) => {
+  .action(async (path: string, opts: { slug?: string; api?: string; map?: string }) => {
     await issuesPull(path, opts);
     await maybeNotifyUpdate();
   });
@@ -128,6 +130,7 @@ issues
   .option("--target <key>", "code-map target: s:/r: node key, /route (planned screen), or a resource label")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "which issue map to add to (a project can hold several)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((title: string, opts: Parameters<typeof issuesAdd>[1]) => issuesAdd(title, opts));
 issues

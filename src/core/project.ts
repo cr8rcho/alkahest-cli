@@ -46,8 +46,20 @@ export function localSlug(root: string): string | undefined {
   return undefined;
 }
 
-/** Resolve { root, slug } from any path: explicit → local file → saved creds (by root or exact path). */
-export function resolveProject(path: string, explicitSlug?: string): { root: string; slug?: string } {
+/** Code map this checkout publishes to, stored alongside the slug in .alkahest/project.json. */
+export function localMapSlug(root: string): string | undefined {
+  try {
+    const j = JSON.parse(readFileSync(join(root, OUTPUT_DIR, "project.json"), "utf8"));
+    if (j?.mapSlug) return String(j.mapSlug);
+  } catch { /* missing or unparsable */ }
+  return undefined;
+}
+
+/** Resolve { root, slug, mapSlug } from any path: explicit → local file → saved creds (by root/path). */
+export function resolveProject(
+  path: string,
+  explicitSlug?: string,
+): { root: string; slug?: string; mapSlug?: string } {
   const root = findProjectRoot(path);
   const creds = loadCredentials();
   const slug =
@@ -55,5 +67,9 @@ export function resolveProject(path: string, explicitSlug?: string): { root: str
     localSlug(root) ||
     creds.projects?.[root]?.slug ||
     creds.projects?.[resolve(path || ".")]?.slug;
-  return { root, slug };
+  const mapSlug =
+    localMapSlug(root) ||
+    creds.projects?.[root]?.mapSlug ||
+    creds.projects?.[resolve(path || ".")]?.mapSlug;
+  return { root, slug, mapSlug };
 }

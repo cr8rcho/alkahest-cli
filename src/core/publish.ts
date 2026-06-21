@@ -27,11 +27,16 @@ export interface PublishParams {
   source?: "cli" | "mcp";
   /** Force-target an existing project by slug (else resolved from the checkout/creds). */
   slug?: string;
+  /** Which CODE map to publish to (a project can hold several). Omit → the checkout's remembered
+   *  map, else the project's sole code map (the server returns `ambiguous_map` if there are >1). */
+  mapSlug?: string;
 }
 
 export interface PublishResult {
   ok: boolean;
   slug?: string;
+  /** The code map the publish landed on (a project can hold several). */
+  mapSlug?: string;
   viewerUrl?: string | null;
   mapUrl?: string;
   /** Whether this was the project's first publish (a new slug was created). */
@@ -71,7 +76,9 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
   // Resolve the project root + its slug robustly (local .alkahest/project.json, walk-up,
   // then saved creds) so a re-publish UPDATES the existing project instead of trying to
   // create a new one — even when the cwd isn't the exact dir it was first published from.
-  const { root: projectRoot, slug: knownSlug } = resolveProject(path, params.slug);
+  const { root: projectRoot, slug: knownSlug, mapSlug: knownMap } = resolveProject(path, params.slug);
+  // Target code map: explicit --map, else the one this checkout last published to.
+  const mapSlug = params.mapSlug || knownMap;
   const mapFile = join(projectRoot, OUTPUT_DIR, "map.json");
   if (!existsSync(mapFile)) {
     return { ok: false, code: "no_map", message: `No ${OUTPUT_DIR}/map.json found — run scan first.` };
@@ -103,6 +110,7 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
   };
   if (knownSlug) reqBody.slug = knownSlug;
   else reqBody.name = params.name || basename(projectRoot);
+  if (mapSlug) reqBody.mapSlug = mapSlug;
 
   const pub = await postJson(`${apiUrl}/publish`, reqBody, token);
   if (!pub.ok) {
@@ -117,18 +125,22 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
   // Persist the slug both in creds (path-keyed) and WITH the checkout (.alkahest/project.json),
   // every publish — so future publishes AND comments (pull/add/MCP) resolve it from any cwd.
   if (pub.body.slug) {
+    // Remember the code map the server resolved (pub.body.mapSlug) so re-publishes target it
+    // even once the project has several code maps.
+    const entry = { slug: pub.body.slug, ...(pub.body.mapSlug ? { mapSlug: pub.body.mapSlug } : {}) };
     creds.projects = creds.projects ?? {};
-    creds.projects[projectRoot] = { slug: pub.body.slug };
+    creds.projects[projectRoot] = entry;
     saveCredentials(creds);
     try {
       mkdirSync(join(projectRoot, OUTPUT_DIR), { recursive: true });
-      writeFileSync(join(projectRoot, OUTPUT_DIR, "project.json"), JSON.stringify({ slug: pub.body.slug }, null, 2) + "\n");
+      writeFileSync(join(projectRoot, OUTPUT_DIR, "project.json"), JSON.stringify(entry, null, 2) + "\n");
     } catch { /* non-fatal — creds + --slug still work */ }
   }
 
   return {
     ok: true,
     slug: pub.body.slug,
+    mapSlug: pub.body.mapSlug,
     viewerUrl: pub.body.viewerUrl ?? null,
     mapUrl: pub.body.mapUrl,
     created,

@@ -26,6 +26,13 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
   [`alkahest-cloud`](../alkahest-cloud) repo** (open-core split). This MIT CLI talks to it
   only through the `map.json` **data contract** + `alkahest publish` — no shared code.
 
+> **`--map` (cloud ADR-011).** A hosted project can hold **many code/issue maps** (equal, no
+> default), each with a per-project slug. `publish --map <slug>`, `issues add/pull --map <slug>`
+> pick one; the resolved code map is remembered in `.alkahest/project.json` (`{slug, mapSlug}`) +
+> credentials. Without `--map` the server uses the project's sole map of the type, or returns
+> `ambiguous_map` (surfaced as "pass --map"). Back-compatible — single-map projects are unaffected,
+> so this did **not** bump `MIN_CLI_VERSION`. Resolution lives in `src/core/{publish,issues,project}.ts`.
+
 The local renderer `src/assets/dashboard.html` powers **`alkahest view`** — it renders an
 inlined map (local `index.html`) or a `?src=` override. The **hosted** viewer at
 `/p/{slug}` is a **separate React renderer owned by `alkahest-cloud`** (ADR-008) — the two
