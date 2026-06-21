@@ -131,6 +131,8 @@ export interface PullIssuesParams {
   api?: string;
   token?: string;
   slug?: string;
+  /** Restrict to one issue map within the project (a project can hold several). */
+  mapSlug?: string;
 }
 
 /** Fetch the project's issue graph (issues + edges + map links + effective config). */
@@ -138,7 +140,8 @@ export async function pullIssues(path: string, params: PullIssuesParams = {}): P
   const ctx = authContext(path, params, true);
   if ("code" in ctx) return { ok: false, ...ctx };
 
-  const res = await request(`${ctx.apiUrl}/issues-pull?slug=${encodeURIComponent(ctx.slug!)}`, ctx.token);
+  const mapQ = params.mapSlug ? `&map=${encodeURIComponent(params.mapSlug)}` : "";
+  const res = await request(`${ctx.apiUrl}/issues-pull?slug=${encodeURIComponent(ctx.slug!)}${mapQ}`, ctx.token);
   if (!res.ok) return fail(res, "pull");
   const proj = (res.body?.projects ?? []).find((p: any) => p.slug === ctx.slug) ?? res.body?.projects?.[0];
   return {
@@ -159,6 +162,8 @@ export interface CreateIssueParams {
   api?: string;
   token?: string;
   slug?: string;
+  /** Which issue map to add to (a project can hold several). Omit → the sole one (else error). */
+  mapSlug?: string;
   title: string;
   type?: string;
   status?: string;
@@ -191,6 +196,7 @@ export async function createIssue(path: string, params: CreateIssueParams): Prom
 
   const res = await request(`${ctx.apiUrl}/issues-post`, ctx.token, {
     slug: ctx.slug,
+    mapSlug: params.mapSlug,
     title: params.title.trim(),
     type: params.type,
     status: params.status,

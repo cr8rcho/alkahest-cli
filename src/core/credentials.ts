@@ -11,8 +11,9 @@ export interface Credentials {
   apiUrl?: string;
   /** Personal publish token (alk_...) from `alkahest login`. */
   token?: string;
-  /** Per-project state, keyed by absolute project path. */
-  projects?: Record<string, { slug: string }>;
+  /** Per-project state, keyed by absolute project path. `mapSlug` = the code map this checkout
+   *  publishes to (maps are equal in the cloud; a project can hold several code maps). */
+  projects?: Record<string, { slug: string; mapSlug?: string }>;
 }
 
 const CRED_DIR = join(homedir(), ".alkahest");

@@ -19,10 +19,12 @@ export interface PublishOptions {
   name?: string;
   /** Force-update an existing project by slug (else resolved from the checkout/creds). */
   slug?: string;
+  /** Which code map to publish to (a project can hold several). Default: the remembered one. */
+  map?: string;
 }
 
 export async function publish(path: string, options: PublishOptions): Promise<void> {
-  const res = await publishMap(path, { ...options, source: "cli" });
+  const res = await publishMap(path, { ...options, mapSlug: options.map, source: "cli" });
   if (!res.ok) {
     if (res.code === "no_map") {
       console.error(`[alkahest] no .alkahest/map.json found — run 'alkahest scan' first.`);
@@ -33,6 +35,9 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
       console.error("[alkahest] ✗ Token invalid or revoked. Run 'alkahest login' again.");
     } else if (res.code === "client_too_old") {
       console.error(`[alkahest] ✗ ${res.message}`);
+    } else if (res.code === "ambiguous_map") {
+      console.error(`[alkahest] ✗ ${res.message}`);
+      console.error("  Pick one with --map <slug> (or create a new code map by name).");
     } else {
       console.error(`[alkahest] publish failed: ${res.message}`);
     }
@@ -40,6 +45,6 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
     return;
   }
 
-  console.log(`[alkahest] published ${res.slug}`);
+  console.log(`[alkahest] published ${res.slug}${res.mapSlug ? ` (map: ${res.mapSlug})` : ""}`);
   console.log(`  → ${res.viewerUrl ?? res.mapUrl}`);
 }
