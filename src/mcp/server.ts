@@ -7,6 +7,7 @@ import { emitMap, emitDashboard } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
 import { pullComments, resolveComment, enrichComments, postComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
 import { pullIssues, createIssue, updateIssue, deriveIssueStates } from "../core/issues.js";
+import { listMaps, createMap } from "../core/maps.js";
 import { findProjectRoot } from "../core/project.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
 import type { ProductMap, Screen } from "../core/types.js";
@@ -174,10 +175,11 @@ export function buildServer(): McpServer {
         path: z.string().optional().describe("Project root (default: cwd)"),
         name: z.string().optional().describe("Project name for the link (first publish only; defaults to folder name)"),
         slug: z.string().optional().describe("Update an existing project by slug (else resolved from the checkout/creds)"),
+        map: z.string().optional().describe("Which code map to publish to (a project can hold several; omit when there's one). Passing a new slug creates that code map. List them with the maps tool."),
       },
     },
-    async ({ path, name, slug }) => {
-      const res = await publishMap(rootOf(path), { name, slug, source: "mcp" });
+    async ({ path, name, slug, map }) => {
+      const res = await publishMap(rootOf(path), { name, slug, mapSlug: map, source: "mcp" });
       if (!res.ok) {
         const hints: Record<string, string> = {
           no_map: "Run the scan tool first to build .alkahest/map.json.",
@@ -186,9 +188,12 @@ export function buildServer(): McpServer {
           plan_limit: "Free plan project limit reached — upgrade to Pro for more.",
           invalid_token: "The publish token is invalid or revoked — create a new one at alkahest.app → Account.",
           client_too_old: "This alkahest is too old to publish — run 'alkahest update'.",
+          ambiguous_map: "List the project's code maps with the maps tool, then call publish again with `map` set to one of them (or a new slug to create one).",
         };
         const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
-        return text(`Publish failed (${res.code}): ${res.message}.${hint}`);
+        // Carry the structured map list (the edge function returns it) so the agent can pick without re-listing.
+        const maps = res.maps?.length ? ` Maps: ${JSON.stringify(res.maps)}` : "";
+        return text(`Publish failed (${res.code}): ${res.message}.${hint}${maps}`);
       }
       const v = await cachedUpdateStatus().catch(() => null);
       return json({
@@ -398,10 +403,13 @@ export function buildServer(): McpServer {
     no_slug: "This project hasn't been published yet — run the publish tool first.",
     invalid_token: "The publish token is invalid or revoked — create a new one at alkahest.app → Account.",
     forbidden: "Only the project owner or a collaborator can write issues.",
-    not_found: "Not found — list ids with the issues tool.",
+    not_found: "Not found — list ids with the issues tool, or the project's issue maps with the maps tool.",
+    ambiguous_map: "List the project's issue maps with the maps tool, then retry with `map` set to one (or create one with create_map).",
   };
-  const issueFail = (what: string, code?: string, message?: string) =>
-    text(`${what} failed (${code}): ${message}.${issueHints[code ?? ""] ? " " + issueHints[code ?? ""] : ""}`);
+  // `maps` (present on ambiguous_map / unknown-slug) is appended as JSON so the agent can pick a map
+  // without a second round-trip to the maps tool.
+  const issueFail = (what: string, code?: string, message?: string, maps?: { slug: string; name: string | null }[]) =>
+    text(`${what} failed (${code}): ${message}.${issueHints[code ?? ""] ? " " + issueHints[code ?? ""] : ""}${maps?.length ? ` Maps: ${JSON.stringify(maps)}` : ""}`);
 
   server.registerTool(
     "issues",
@@ -416,11 +424,12 @@ export function buildServer(): McpServer {
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
         open: z.boolean().optional().describe("Only issues that are not done (default: false = all)"),
+        map: z.string().optional().describe("Restrict to one issue map (a project can hold several; omit when there's one). List them with the maps tool."),
       },
     },
-    async ({ path, open }) => {
-      const res = await pullIssues(rootOf(path), {});
-      if (!res.ok || !res.graph) return issueFail("Read issues", res.code, res.message);
+    async ({ path, open, map }) => {
+      const res = await pullIssues(rootOf(path), { mapSlug: map });
+      if (!res.ok || !res.graph) return issueFail("Read issues", res.code, res.message, res.maps);
       const states = deriveIssueStates(res.graph);
       const issues = res.graph.issues
         .map((i) => ({ ...i, ...states.get(i.id)! }))
@@ -457,10 +466,11 @@ export function buildServer(): McpServer {
         assignee_id: z.string().optional().describe("Assign to a project member (user id)"),
         parent_id: z.string().optional().describe("Parent issue id — creates a contains edge (epic → task)"),
         target: z.string().optional().describe("Code-map target: 's:…'/'r:…' node key, '/route' (planned screen), or a resource label"),
+        map: z.string().optional().describe("Which issue map to add to (a project can hold several; omit when there's one). List them with the maps tool, or create one with create_map."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, type, status, body, priority, due_on, assignee_id, parent_id, target, path }) => {
+    async ({ title, type, status, body, priority, due_on, assignee_id, parent_id, target, map, path }) => {
       const targetFields = target
         ? {
             target_kind: (target.startsWith("s:") || target.startsWith("r:") ? "node" : target.startsWith("/") ? "route" : "resource") as
@@ -468,9 +478,53 @@ export function buildServer(): McpServer {
             target_key: target,
           }
         : {};
-      const res = await createIssue(rootOf(path), { title, type, status, body, priority, due_on, assignee_id, parent_id, ...targetFields });
-      if (!res.ok || !res.issue) return issueFail("Add issue", res.code, res.message);
+      const res = await createIssue(rootOf(path), { title, type, status, body, priority, due_on, assignee_id, parent_id, mapSlug: map, ...targetFields });
+      if (!res.ok || !res.issue) return issueFail("Add issue", res.code, res.message, res.maps);
       return json({ ok: true, issue: res.issue });
+    },
+  );
+
+  server.registerTool(
+    "maps",
+    {
+      title: "List a project's maps",
+      description:
+        "List the maps in this published project. A project is a container of many maps (ADR-011): code maps " +
+        "(published from a scan) and issue maps — each with a per-project slug, addressed at /p/:project/:map. Maps " +
+        "are equal (no default), so when a project has several of a type the publish / add_issue / issues tools return " +
+        "'ambiguous_map' — call this to see the slugs, then pass `map`. Needs a publish token and a published project.",
+      inputSchema: {
+        path: z.string().optional().describe("Project root (default: cwd)"),
+        type: z.enum(["code", "issue"]).optional().describe("Restrict to one type (default: all)"),
+      },
+    },
+    async ({ path, type }) => {
+      const res = await listMaps(rootOf(path), { type });
+      if (!res.ok || !res.maps) return issueFail("List maps", res.code, res.message);
+      return json({ ok: true, slug: res.slug, count: res.maps.length, maps: res.maps });
+    },
+  );
+
+  server.registerTool(
+    "create_map",
+    {
+      title: "Create a map",
+      description:
+        "Create a new map in this project — a code map (a slot you later publish a scan into) or an issue map. Use it " +
+        "when the user wants a separate map (e.g. a second issue map for a workstream), or after an 'ambiguous_map' " +
+        "error when none of the existing maps fit. The slug is addressed at /p/:project/:slug. Needs a publish token; " +
+        "owner or collaborator only.",
+      inputSchema: {
+        slug: z.string().describe("The new map's slug (lowercase letters, numbers, dashes; the server slugifies)"),
+        type: z.enum(["code", "issue"]).optional().describe("Map type (default: issue)"),
+        name: z.string().optional().describe("Display name (defaults to the slug)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ slug, type, name, path }) => {
+      const res = await createMap(rootOf(path), { mapSlug: slug, type, mapName: name });
+      if (!res.ok || !res.map) return issueFail("Create map", res.code, res.message);
+      return json({ ok: true, map: res.map });
     },
   );
 

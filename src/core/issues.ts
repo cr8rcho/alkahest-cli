@@ -64,9 +64,11 @@ export interface IssuesResult {
   graph?: IssueGraph;
   /** Resolved project root (nearest ancestor with .alkahest/). */
   root?: string;
-  /** no_api | no_token | no_slug | not_found | invalid_token | network | <server error>. */
+  /** no_api | no_token | no_slug | not_found | ambiguous_map | invalid_token | network | <server error>. */
   code?: string;
   message?: string;
+  /** Present on ambiguous_map / unknown-slug: the project's issue maps (slug + name). */
+  maps?: { slug: string; name: string | null }[];
 }
 
 interface AuthContext {
@@ -125,6 +127,9 @@ const fail = (res: { status: string; body: any }, what: string) => ({
   ok: false as const,
   code: res.body?.error ?? "http",
   message: res.body?.message ?? res.body?.error ?? `${what} failed (${res.status})`,
+  // `ambiguous_map` / unknown-slug errors carry a structured map list so callers can guide
+  // ("pick one of …, or create one") without parsing the message string.
+  ...(Array.isArray(res.body?.maps) ? { maps: res.body.maps as { slug: string; name: string | null }[] } : {}),
 });
 
 export interface PullIssuesParams {
@@ -187,6 +192,8 @@ export interface IssueWriteResult {
   deleted?: boolean;
   code?: string;
   message?: string;
+  /** Present on ambiguous_map / unknown-slug: the project's issue maps (slug + name). */
+  maps?: { slug: string; name: string | null }[];
 }
 
 export async function createIssue(path: string, params: CreateIssueParams): Promise<IssueWriteResult> {

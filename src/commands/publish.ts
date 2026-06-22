@@ -37,7 +37,7 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
       console.error(`[alkahest] ✗ ${res.message}`);
     } else if (res.code === "ambiguous_map") {
       console.error(`[alkahest] ✗ ${res.message}`);
-      console.error("  Pick one with --map <slug> (or create a new code map by name).");
+      console.error("  See them with 'alkahest maps list', or publish to a new one with 'alkahest publish --map <slug>'.");
     } else {
       console.error(`[alkahest] publish failed: ${res.message}`);
     }
