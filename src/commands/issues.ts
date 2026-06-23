@@ -28,7 +28,7 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
     forbidden: "✗ Only the project owner or a collaborator can do this.",
     not_found: `✗ ${message ?? "Not found."}`,
     no_slug: message ?? "No published map for this project yet.",
-    ambiguous_map: `✗ ${message ?? "This project has several issue maps."} Pass --map <slug>.`,
+    ambiguous_map: `✗ ${message ?? "This project has several issue maps."}\n  See them with 'alkahest maps list', or make a new one with 'alkahest maps create <slug> --type issue'.`,
   };
   return known[code ?? ""] ?? `${action} failed: ${message}`;
 };

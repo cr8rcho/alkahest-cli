@@ -9,6 +9,7 @@ import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue, issuesAssign } from "./commands/issues.js";
+import { mapsList, mapsCreate } from "./commands/maps.js";
 import { update } from "./commands/update.js";
 import { maybeNotifyUpdate } from "./core/version.js";
 
@@ -192,6 +193,32 @@ issues
   .option("--path <dir>", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string, opts: { path?: string; api?: string }) => issuesRm(id, opts));
+
+const maps = program
+  .command("maps")
+  .description("list or create the maps in a project (a project holds many code/issue maps)");
+maps
+  .command("list")
+  .description("list the project's maps (code + issue) — handy when publish/issues report an ambiguous map")
+  .argument("[path]", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--type <type>", "restrict to one type: code | issue")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action(async (path: string, opts: { slug?: string; type?: string; api?: string }) => {
+    await mapsList(path, opts);
+    await maybeNotifyUpdate();
+  });
+maps
+  .command("create")
+  .description("create a new map in the project")
+  .argument("<slug>", "the new map's slug (lowercase letters, numbers, dashes)")
+  .option("--type <type>", "code | issue (default: issue)")
+  .option("--name <name>", "display name (defaults to the slug)")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((slug: string, opts: { type?: string; name?: string; path?: string; slug?: string; api?: string }) =>
+    mapsCreate(slug, opts));
 
 program
   .command("mcp")

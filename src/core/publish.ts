@@ -41,10 +41,12 @@ export interface PublishResult {
   mapUrl?: string;
   /** Whether this was the project's first publish (a new slug was created). */
   created?: boolean;
-  /** Machine-readable failure code: no_map | no_api | no_token | network | <server error>. */
+  /** Machine-readable failure code: no_map | no_api | no_token | ambiguous_map | network | <server error>. */
   code?: string;
   /** Human-readable failure message. */
   message?: string;
+  /** Present on ambiguous_map: the project's code maps (slug + name). */
+  maps?: { slug: string; name: string | null }[];
 }
 
 async function postJson(
@@ -118,6 +120,8 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
       ok: false,
       code: pub.body?.error ?? "http",
       message: pub.body?.message ?? pub.body?.error ?? `publish failed (${pub.status})`,
+      // `ambiguous_map` carries the project's code maps so callers can guide the choice.
+      ...(Array.isArray(pub.body?.maps) ? { maps: pub.body.maps as { slug: string; name: string | null }[] } : {}),
     };
   }
 
