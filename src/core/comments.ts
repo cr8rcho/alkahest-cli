@@ -8,7 +8,7 @@ import type { ProductMap } from "./types.js";
  * Shared logic for `alkahest comments pull`. Reads the comments left on this project's
  * PUBLISHED map (hosted viewer) via the `comments-pull` edge function, so they can be
  * used during development. Comments live only in the cloud — there is no local
- * authoring; this is the read side of that loop (see alkahest-cloud ADR-001).
+ * authoring; this is the read side of that loop (see alkahest ADR-001).
  *
  * Like publish.ts, this returns a structured result and never writes to stdout/stderr.
  */
@@ -372,7 +372,7 @@ export interface FileIssueResult {
  * (the dev already has `gh` authenticated — they deploy that repo). The cloud never talks
  * to GitHub; once the URL exists we POST it to the `comments-issue` edge function, which
  * records it on each comment so the hosted viewer shows a "tracked" badge. Backs the CLI
- * `comments issue` command and the MCP `comment_to_issue` tool (see alkahest-cloud TODO §1).
+ * `comments issue` command and the MCP `comment_to_issue` tool (see alkahest TODO §1).
  *
  * Re-filing comments that are ALREADY tracked would create a duplicate GitHub issue, so
  * that's refused unless `force` is set. Like the rest of this module, returns a structured

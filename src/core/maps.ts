@@ -2,7 +2,7 @@ import { loadCredentials, resolveApiUrl, resolveToken } from "./credentials.js";
 import { resolveProject } from "./project.js";
 
 /**
- * Client for a project's maps (alkahest-cloud ADR-011): a project is a container of many
+ * Client for a project's maps (alkahest ADR-011): a project is a container of many
  * maps — code maps (published from `scan`) and issue maps — each addressed by a per-project
  * slug. Maps are equal (no privileged default), so when a project holds several of a type the
  * `publish` / `issues-post` functions can't guess which one and return `ambiguous_map`. These

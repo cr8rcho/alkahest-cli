@@ -23,7 +23,7 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
   (`map.json` + `index.html`).
 - **Hosted service** — the web app (landing + `/account` + the `/p/{slug}` viewer),
   Supabase backend, and paid-plan logic live in the **separate private
-  [`alkahest-cloud`](../alkahest-cloud) repo** (open-core split). This MIT CLI talks to it
+  [`alkahest`](../alkahest) repo** (open-core split). This MIT CLI talks to it
   only through the `map.json` **data contract** + `alkahest publish` — no shared code.
 
 > **`--map` (cloud ADR-011).** A hosted project can hold **many code/issue maps** (equal, no
@@ -35,7 +35,7 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
 
 The local renderer `src/assets/dashboard.html` powers **`alkahest view`** — it renders an
 inlined map (local `index.html`) or a `?src=` override. The **hosted** viewer at
-`/p/{slug}` is a **separate React renderer owned by `alkahest-cloud`** (ADR-008) — the two
+`/p/{slug}` is a **separate React renderer owned by `alkahest`** (ADR-008) — the two
 forked and may diverge. Both read the same `map.json`.
 
 ## Auth model
@@ -78,7 +78,7 @@ the hosted viewer renders — not to internal refactors:
 3. **Only for a *breaking* `map.json` schema change:** bump `MIN_CLI_VERSION` in the
    `publish` edge function and redeploy it, so old clients get a clear 426
    "run `alkahest update`" instead of uploading a map the viewer can't render. That
-   constant lives in the **alkahest-cloud** repo (`supabase/functions/publish/index.ts`).
+   constant lives in the **alkahest** repo (`supabase/functions/publish/index.ts`).
    `MIN` locks out everyone below it — raise it only for genuine incompatibility; prefer
    additive schema changes so it rarely moves. (There is no `LATEST` constant — "a newer
    version exists" is detected client-side from GitHub Releases, so cutting the release in

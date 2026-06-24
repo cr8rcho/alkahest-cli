@@ -13,7 +13,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const pkg = require("../../package.json") as { version: string; repository?: { url?: string } };
 
-const FALLBACK_REPO = "cr8rcho/alkahest";
+const FALLBACK_REPO = "cr8rcho/alkahest-cli";
 const CACHE_FILE = join(homedir(), ".alkahest", "update-check.json");
 const TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
