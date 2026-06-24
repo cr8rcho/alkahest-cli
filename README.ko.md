@@ -44,8 +44,8 @@ npm i -g @cr8rcho/alkahest      # 실행 명령은 `alkahest`
 소스에서 (컨트리뷰터):
 
 ```bash
-git clone https://github.com/cr8rcho/alkahest.git
-cd alkahest && npm install && npm run build && npm link
+git clone https://github.com/cr8rcho/alkahest-cli.git
+cd alkahest-cli && npm install && npm run build && npm link
 ```
 
 ## 빠른 시작 (Claude Code)

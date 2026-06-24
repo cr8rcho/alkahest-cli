@@ -35,11 +35,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cr8rcho/alkahest.git"
+    "url": "git+https://github.com/cr8rcho/alkahest-cli.git"
   },
-  "homepage": "https://github.com/cr8rcho/alkahest#readme",
+  "homepage": "https://github.com/cr8rcho/alkahest-cli#readme",
   "bugs": {
-    "url": "https://github.com/cr8rcho/alkahest/issues"
+    "url": "https://github.com/cr8rcho/alkahest-cli/issues"
   },
   "author": "cr8rcho",
   "license": "MIT",

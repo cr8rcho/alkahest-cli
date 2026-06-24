@@ -2,7 +2,7 @@ import { loadCredentials, resolveApiUrl, resolveToken } from "./credentials.js";
 import { resolveProject } from "./project.js";
 
 /**
- * Client for the hosted Issue Map (alkahest-cloud ADR-004): a human/agent-authored
+ * Client for the hosted Issue Map (alkahest ADR-004): a human/agent-authored
  * graph of work items per published project — issues as nodes, blocks/contains/relates
  * edges, optional links into the code map. Issues live only in the cloud (the web
  * viewer edits them via RLS); the CLI/MCP read and write through the issues-pull /
