@@ -9,6 +9,7 @@ import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue, issuesAssign } from "./commands/issues.js";
+import { notesAdd } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { update } from "./commands/update.js";
 import { maybeNotifyUpdate } from "./core/version.js";
@@ -194,15 +195,30 @@ issues
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string, opts: { path?: string; api?: string }) => issuesRm(id, opts));
 
+const notes = program
+  .command("notes")
+  .description("the hosted Note Map — a mindmap of notes you arrange on the viewer (cloud ADR-017)");
+notes
+  .command("add")
+  .description("create a note (a node of the mindmap; arrange & connect it on the hosted viewer)")
+  .argument("<title>", "note title")
+  .option("--body <markdown>", "note body")
+  .option("--parent <id>", "parent note — creates a child edge (parent → new)")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "which note map to add to (a project can hold several)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((title: string, opts: Parameters<typeof notesAdd>[1]) => notesAdd(title, opts));
+
 const maps = program
   .command("maps")
-  .description("list or create the maps in a project (a project holds many code/issue maps)");
+  .description("list or create the maps in a project (a project holds many code/issue/note maps)");
 maps
   .command("list")
-  .description("list the project's maps (code + issue) — handy when publish/issues report an ambiguous map")
+  .description("list the project's maps (code + issue + note) — handy when publish/issues report an ambiguous map")
   .argument("[path]", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
-  .option("--type <type>", "restrict to one type: code | issue")
+  .option("--type <type>", "restrict to one type: code | issue | note")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action(async (path: string, opts: { slug?: string; type?: string; api?: string }) => {
     await mapsList(path, opts);
@@ -212,7 +228,7 @@ maps
   .command("create")
   .description("create a new map in the project")
   .argument("<slug>", "the new map's slug (lowercase letters, numbers, dashes)")
-  .option("--type <type>", "code | issue (default: issue)")
+  .option("--type <type>", "code | issue | note (default: issue)")
   .option("--name <name>", "display name (defaults to the slug)")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")

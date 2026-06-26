@@ -12,7 +12,7 @@ import { resolveProject } from "./project.js";
  * stdout/stderr.
  */
 
-export type MapType = "code" | "issue";
+export type MapType = "code" | "issue" | "note";
 
 export interface MapInfo {
   id: string;

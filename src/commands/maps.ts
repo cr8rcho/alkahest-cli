@@ -12,7 +12,7 @@ const die = (msg: string): void => {
   process.exitCode = 1;
 };
 
-const MAP_TYPES: MapType[] = ["code", "issue"];
+const MAP_TYPES: MapType[] = ["code", "issue", "note"];
 
 const failMessage = (code: string | undefined, message: string | undefined, action: string): string => {
   const known: Record<string, string> = {
@@ -60,6 +60,8 @@ export async function mapsCreate(mapSlug: string, options: MapsCreateOptions): P
   console.log(`[alkahest] created ${m.type} map '${m.slug}'${m.name ? ` (${m.name})` : ""} on ${res.slug}`);
   if (m.type === "code") {
     console.log(`  publish to it with 'alkahest publish --map ${m.slug}'.`);
+  } else if (m.type === "note") {
+    console.log(`  add notes with 'alkahest notes add "<title>" --map ${m.slug}'.`);
   } else {
     console.log(`  add issues with 'alkahest issues add "<title>" --map ${m.slug}'.`);
   }
