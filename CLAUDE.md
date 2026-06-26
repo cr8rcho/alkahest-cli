@@ -19,15 +19,16 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
 ## Architecture (open-core)
 
 - **CLI** (`src/`) — public, MIT. Commands: `scan`, `view`, `publish`, `login`,
-  `mcp`, `hook`, `comments`, `issues`, `update`. Output goes to `<project>/.alkahest/`
+  `mcp`, `hook`, `comments`, `issues`, `notes`, `update`. Output goes to `<project>/.alkahest/`
   (`map.json` + `index.html`).
 - **Hosted service** — the web app (landing + `/account` + the `/p/{slug}` viewer),
   Supabase backend, and paid-plan logic live in the **separate private
   [`alkahest`](../alkahest) repo** (open-core split). This MIT CLI talks to it
   only through the `map.json` **data contract** + `alkahest publish` — no shared code.
 
-> **`--map` (cloud ADR-011).** A hosted project can hold **many code/issue maps** (equal, no
-> default), each with a per-project slug. `publish --map <slug>`, `issues add/pull --map <slug>`
+> **`--map` (cloud ADR-011).** A hosted project can hold **many code/issue/note maps** (equal, no
+> default), each with a per-project slug. `publish --map <slug>`, `issues add/pull --map <slug>`,
+> `notes add --map <slug>`
 > pick one; the resolved code map is remembered in `.alkahest/project.json` (`{slug, mapSlug}`) +
 > credentials. Without `--map` the server uses the project's sole map of the type, or returns
 > `ambiguous_map` (surfaced as "pass --map"). Back-compatible — single-map projects are unaffected,

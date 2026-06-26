@@ -7,6 +7,7 @@ import { emitMap, emitDashboard } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
 import { pullComments, resolveComment, enrichComments, postComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
 import { pullIssues, createIssue, updateIssue, deriveIssueStates } from "../core/issues.js";
+import { createNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { findProjectRoot } from "../core/project.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
@@ -484,6 +485,32 @@ export function buildServer(): McpServer {
     },
   );
 
+  // ---- notes: the Note Map — a mindmap of notes on the hosted viewer (ADR-017) ----
+  server.registerTool(
+    "add_note",
+    {
+      title: "Add a note",
+      description:
+        "Create a node on this project's Note Map — a mindmap-style free graph of notes. Use it while brainstorming " +
+        "with the user: each idea becomes a note, and parent_id links it under another note (a 'child' edge). Notes are " +
+        "arranged, connected, and read on the hosted viewer's interactive canvas (there's no pull/update tool yet). If " +
+        "the project has several note maps, pass `map` (list them with the maps tool, or create one with create_map). " +
+        "Needs a publish token; owner or collaborator only.",
+      inputSchema: {
+        title: z.string().describe("Note title (the node label)"),
+        body: z.string().optional().describe("Note body as markdown (details, context)"),
+        parent_id: z.string().optional().describe("Parent note id — creates a child edge (parent → new)"),
+        map: z.string().optional().describe("Which note map to add to (a project can hold several; omit when there's one). List them with the maps tool, or create one with create_map."),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ title, body, parent_id, map, path }) => {
+      const res = await createNote(rootOf(path), { title, body, parent_id, mapSlug: map });
+      if (!res.ok || !res.note) return issueFail("Add note", res.code, res.message, res.maps);
+      return json({ ok: true, note: res.note });
+    },
+  );
+
   server.registerTool(
     "maps",
     {
@@ -495,7 +522,7 @@ export function buildServer(): McpServer {
         "'ambiguous_map' — call this to see the slugs, then pass `map`. Needs a publish token and a published project.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
-        type: z.enum(["code", "issue"]).optional().describe("Restrict to one type (default: all)"),
+        type: z.enum(["code", "issue", "note"]).optional().describe("Restrict to one type (default: all)"),
       },
     },
     async ({ path, type }) => {
@@ -516,7 +543,7 @@ export function buildServer(): McpServer {
         "owner or collaborator only.",
       inputSchema: {
         slug: z.string().describe("The new map's slug (lowercase letters, numbers, dashes; the server slugifies)"),
-        type: z.enum(["code", "issue"]).optional().describe("Map type (default: issue)"),
+        type: z.enum(["code", "issue", "note"]).optional().describe("Map type (default: issue)"),
         name: z.string().optional().describe("Display name (defaults to the slug)"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
