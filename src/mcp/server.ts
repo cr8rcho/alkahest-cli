@@ -451,6 +451,8 @@ export function buildServer(): McpServer {
         ok: true,
         slug: res.graph.slug,
         issue_config: res.graph.issue_config,
+        // Members = @mention targets for ask_issue (route a decision to a specific person, ADR-020 §9).
+        members: res.graph.members,
         count: issues.length,
         issues,
         edges: res.graph.edges,
@@ -667,16 +669,19 @@ export function buildServer(): McpServer {
         "Post a decision QUESTION on an issue and stop — this is how you escalate a choice to the user mid-task " +
         "(ADR-020). It posts a kind='question' comment on the issue's thread, which makes the issue stop being " +
         "actionable until the user answers and the question is resolved. Use it whenever you hit a fork the user should " +
-        "decide (A vs B, an ambiguous requirement, a risky change). State the options clearly in `body`. Re-read with " +
-        "issue_comments to pick up the answer, then resolve_issue_question to close it and continue. Needs a publish token.",
+        "decide (A vs B, an ambiguous requirement, a risky change). State the options clearly in `body`. With multiple " +
+        "people, `mention` the member(s) who should decide (their name from the issues tool's `members`, or just their " +
+        "handle) — it then surfaces as 'waiting on you' for exactly them, not the whole team. Re-read with issue_comments " +
+        "to pick up the answer, then resolve_issue_question to close it and continue. Needs a publish token.",
       inputSchema: {
         issue: z.string().describe("Issue id to ask about (from the issues tool)"),
         body: z.string().describe("The question / decision needed — lay out the options so the user can just pick one"),
+        mention: z.array(z.string()).optional().describe("Member(s) who should decide — names/handles from the issues tool's `members` (also write @name in body). Routes 'waiting on you' to them."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ issue, body, path }) => {
-      const res = await postIssueComment(rootOf(path), { issue_id: issue, body, kind: "question" });
+    async ({ issue, body, mention, path }) => {
+      const res = await postIssueComment(rootOf(path), { issue_id: issue, body, kind: "question", mention });
       if (!res.ok || !res.comment) return issueFail("Ask issue", res.code, res.message);
       return json({ ok: true, comment: res.comment, note: "Question posted — the issue is now awaiting the user's decision. Re-check with issue_comments, then resolve_issue_question once answered." });
     },
@@ -696,11 +701,12 @@ export function buildServer(): McpServer {
         parent: z.string().optional().describe("Comment id to reply under (inherits the issue)"),
         body: z.string().describe("Comment body (markdown)"),
         kind: z.enum(["note", "question", "answer", "result"]).optional().describe("Override the comment kind"),
+        mention: z.array(z.string()).optional().describe("Member(s) to tag — names/handles from the issues tool's `members`"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ issue, parent, body, kind, path }) => {
-      const res = await postIssueComment(rootOf(path), { issue_id: issue, parent, body, kind });
+    async ({ issue, parent, body, kind, mention, path }) => {
+      const res = await postIssueComment(rootOf(path), { issue_id: issue, parent, body, kind, mention });
       if (!res.ok || !res.comment) return issueFail("Reply on issue", res.code, res.message);
       return json({ ok: true, comment: res.comment });
     },

@@ -51,8 +51,16 @@ export interface IssueComment {
   resolved: boolean;
   author_id: string;
   author_name: string | null;
+  /** Mentioned member user ids (ADR-020 §9) — who the decision is routed to. */
+  mentions: string[];
   created_at: string;
   updated_at: string;
+}
+
+/** A project member (for @mention targets). */
+export interface IssueMember {
+  id: string;
+  name: string | null;
 }
 
 export interface IssueEdge {
@@ -71,6 +79,8 @@ export interface IssueGraph {
   slug: string;
   name: string | null;
   issue_config: IssueConfig;
+  /** Project members — @mention targets for routing a decision (ADR-020 §9). */
+  members: IssueMember[];
   issues: Issue[];
   edges: IssueEdge[];
   links: IssueMapLink[];
@@ -173,6 +183,7 @@ export async function pullIssues(path: string, params: PullIssuesParams = {}): P
       slug: ctx.slug!,
       name: proj?.name ?? null,
       issue_config: proj?.issue_config ?? { nodeTypes: [], statuses: [] },
+      members: proj?.members ?? [],
       issues: proj?.issues ?? [],
       edges: proj?.edges ?? [],
       links: proj?.links ?? [],
@@ -319,6 +330,9 @@ export interface PostIssueCommentParams {
   body: string;
   /** note | question | answer | result. Defaults: 'answer' for a reply, else 'note'. */
   kind?: string;
+  /** @mention targets (ADR-020 §9): member ids OR display-name handles. The server keeps only
+   *  project members. Tag who should decide so it surfaces as "waiting on you" for them. */
+  mention?: string | string[];
 }
 
 export interface IssueCommentResult {
@@ -335,11 +349,13 @@ export async function postIssueComment(path: string, params: PostIssueCommentPar
   if (!params.body?.trim()) return { ok: false, code: "no_body", message: "Comment body is required." };
   if (!params.issue_id && !params.parent) return { ok: false, code: "no_target", message: "issue_id (or parent for a reply) is required." };
 
+  const mentions = params.mention === undefined ? undefined : (Array.isArray(params.mention) ? params.mention : [params.mention]);
   const res = await request(`${ctx.apiUrl}/issue-comments-post`, ctx.token, {
     issue_id: params.issue_id,
     parent_id: params.parent,
     body: params.body.trim(),
     kind: params.kind,
+    mentions,
   });
   if (!res.ok) return fail(res, "post comment");
   return { ok: true, comment: res.body?.comment };
