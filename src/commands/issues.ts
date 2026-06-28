@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { OUTPUT_DIR } from "../core/emit.js";
 import {
   pullIssues, createIssue, updateIssue, deriveIssueStates, terminalStatuses,
+  pullIssueComments, postIssueComment, resolveIssueComment,
   type IssueGraph, type IssueEdge,
 } from "../core/issues.js";
 
@@ -54,11 +55,12 @@ export async function issuesPull(path: string, options: IssuesPullOptions): Prom
     ` (${open.length} open, ${actionable.length} actionable) → ${OUTPUT_DIR}/issues.json`);
   for (const i of graph.issues) {
     const st = states.get(i.id)!;
-    const mark = st.done ? "✓" : st.actionable ? "▶" : "⏳";
+    const mark = st.done ? "✓" : st.awaitingDecision ? "❓" : st.actionable ? "▶" : "⏳";
     const pri = i.priority && i.priority !== "none" ? `  !${i.priority}` : "";
     const due = i.due_on ? `  due:${i.due_on}` : "";
     const blocked = st.blockedBy.length ? `  (blocked by ${st.blockedBy.length})` : "";
-    console.log(`  ${mark} [${i.type}/${i.status}] ${i.title}  ${i.id}${pri}${due}${blocked}`);
+    const awaiting = st.awaitingDecision ? `  (awaiting decision: ${i.open_questions})` : "";
+    console.log(`  ${mark} [${i.type}/${i.status}] ${i.title}  ${i.id}${pri}${due}${blocked}${awaiting}`);
   }
 }
 
@@ -152,6 +154,52 @@ export async function issuesRm(id: string, options: IssuesWriteOptions): Promise
   const res = await updateIssue(options.path || ".", { api: options.api, id, delete: true });
   if (!res.ok) return die(failMessage(res.code, res.message, "issues rm"));
   console.log(`[alkahest] deleted issue ${id}`);
+}
+
+// ── Discussion thread / decision channel (ADR-020) ──────────────────────────────────────
+
+export interface IssuesCommentsOptions extends IssuesWriteOptions { issue?: string; open?: boolean; }
+
+/** List issue discussion threads (optionally one issue's, optionally only unresolved). */
+export async function issuesComments(options: IssuesCommentsOptions): Promise<void> {
+  const res = await pullIssueComments(options.path || ".", {
+    api: options.api, slug: options.slug, issue: options.issue, open: options.open,
+  });
+  if (!res.ok || !res.comments) return die(failMessage(res.code, res.message, "issues comments"));
+  console.log(`[alkahest] ${res.comments.length} comment${res.comments.length === 1 ? "" : "s"}` +
+    (options.open ? " (unresolved)" : "") + (options.issue ? ` on ${options.issue}` : ""));
+  for (const c of res.comments) {
+    const tag = c.kind === "question" ? (c.resolved ? "question ✓" : "question ?") : c.kind;
+    const indent = c.parent_id ? "      ↳ " : "  ";
+    console.log(`${indent}[${tag}] ${c.author_name ?? "someone"}: ${c.body.split("\n")[0]}  ${c.id}`);
+  }
+}
+
+export interface IssuesCommentOptions extends IssuesWriteOptions { question?: boolean; }
+
+/** Post a note (or, with --question, a decision question) on an issue. */
+export async function issuesComment(issue: string, body: string, options: IssuesCommentOptions): Promise<void> {
+  const res = await postIssueComment(options.path || ".", {
+    api: options.api, issue_id: issue, body, kind: options.question ? "question" : "note",
+  });
+  if (!res.ok || !res.comment) return die(failMessage(res.code, res.message, "issues comment"));
+  console.log(`[alkahest] posted ${res.comment.kind} on ${issue} — id ${res.comment.id}`);
+}
+
+/** Reply under an existing comment (defaults to kind 'answer'). */
+export async function issuesReply(parent: string, body: string, options: IssuesWriteOptions): Promise<void> {
+  const res = await postIssueComment(options.path || ".", { api: options.api, parent, body });
+  if (!res.ok || !res.comment) return die(failMessage(res.code, res.message, "issues reply"));
+  console.log(`[alkahest] replied — id ${res.comment.id}`);
+}
+
+export interface IssuesResolveOptions extends IssuesWriteOptions { reopen?: boolean; }
+
+/** Resolve (or, with --reopen, reopen) a decision question. */
+export async function issuesResolveComment(id: string, options: IssuesResolveOptions): Promise<void> {
+  const res = await resolveIssueComment(options.path || ".", { api: options.api, id, resolved: !options.reopen });
+  if (!res.ok) return die(failMessage(res.code, res.message, "issues resolve"));
+  console.log(`[alkahest] ${options.reopen ? "reopened" : "resolved"} ${id}`);
 }
 
 export { type IssueGraph };

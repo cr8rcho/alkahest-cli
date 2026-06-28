@@ -33,7 +33,24 @@ export interface Issue {
   target_kind: "node" | "route" | "resource" | null;
   target_key: string | null;
   shipped_map_version_id: string | null;
+  /** Unresolved decision questions on this issue (ADR-020). >0 ⇒ awaiting a human answer. */
+  open_questions?: number;
   created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A node on the per-issue discussion thread (ADR-020 decision channel). */
+export interface IssueComment {
+  id: string;
+  issue_id: string;
+  parent_id: string | null;
+  /** note | question | answer | result. */
+  kind: string;
+  body: string;
+  resolved: boolean;
+  author_id: string;
+  author_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -254,6 +271,97 @@ export async function updateIssue(path: string, params: UpdateIssueParams): Prom
   return res.body?.deleted ? { ok: true, deleted: true } : { ok: true, issue: res.body?.issue };
 }
 
+// ── Issue discussion thread (ADR-020 decision channel) ─────────────────────────────────
+// The per-issue Q&A loop: an agent posts a `question` to ask the user a decision while
+// working, a member replies (the decision), resolving the question closes it, and a
+// `result` records what shipped. Reads/writes go through the issue-comments-{pull,post,
+// resolve} edge functions with the same alk_ token — mirroring comments.ts.
+
+export interface IssueCommentsResult {
+  ok: boolean;
+  comments?: IssueComment[];
+  root?: string;
+  code?: string;
+  message?: string;
+}
+
+export interface PullIssueCommentsParams {
+  api?: string;
+  token?: string;
+  slug?: string;
+  /** Restrict to one issue's thread. */
+  issue?: string;
+  /** Only unresolved comments (the decision-pending signal). */
+  open?: boolean;
+}
+
+/** Fetch issue discussion threads (optionally one issue's, optionally only unresolved). */
+export async function pullIssueComments(path: string, params: PullIssueCommentsParams = {}): Promise<IssueCommentsResult> {
+  const ctx = authContext(path, params, true);
+  if ("code" in ctx) return { ok: false, ...ctx };
+
+  const q = new URLSearchParams({ slug: ctx.slug! });
+  if (params.issue) q.set("issue", params.issue);
+  if (params.open) q.set("open", "1");
+  const res = await request(`${ctx.apiUrl}/issue-comments-pull?${q.toString()}`, ctx.token);
+  if (!res.ok) return fail(res, "pull comments");
+  const proj = (res.body?.projects ?? []).find((p: any) => p.slug === ctx.slug) ?? res.body?.projects?.[0];
+  return { ok: true, root: ctx.root, comments: proj?.comments ?? [] };
+}
+
+export interface PostIssueCommentParams {
+  api?: string;
+  token?: string;
+  /** Target issue (new comment). Omit when replying — `parent` carries the thread. */
+  issue_id?: string;
+  /** Reply under this comment id (inherits the issue). */
+  parent?: string;
+  body: string;
+  /** note | question | answer | result. Defaults: 'answer' for a reply, else 'note'. */
+  kind?: string;
+}
+
+export interface IssueCommentResult {
+  ok: boolean;
+  comment?: IssueComment;
+  code?: string;
+  message?: string;
+}
+
+/** Post a comment on an issue, or a reply (`parent`). kind 'question' asks for a decision. */
+export async function postIssueComment(path: string, params: PostIssueCommentParams): Promise<IssueCommentResult> {
+  const ctx = authContext(path, params, false);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.body?.trim()) return { ok: false, code: "no_body", message: "Comment body is required." };
+  if (!params.issue_id && !params.parent) return { ok: false, code: "no_target", message: "issue_id (or parent for a reply) is required." };
+
+  const res = await request(`${ctx.apiUrl}/issue-comments-post`, ctx.token, {
+    issue_id: params.issue_id,
+    parent_id: params.parent,
+    body: params.body.trim(),
+    kind: params.kind,
+  });
+  if (!res.ok) return fail(res, "post comment");
+  return { ok: true, comment: res.body?.comment };
+}
+
+/** Resolve (or reopen) an issue comment — the "decision closed" signal for a question. */
+export async function resolveIssueComment(
+  path: string,
+  params: { api?: string; token?: string; id: string; resolved?: boolean },
+): Promise<{ ok: boolean; id?: string; resolved?: boolean; code?: string; message?: string }> {
+  const ctx = authContext(path, params, false);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.id) return { ok: false, code: "no_id", message: "Comment id is required." };
+
+  const res = await request(`${ctx.apiUrl}/issue-comments-resolve`, ctx.token, {
+    id: params.id,
+    resolved: params.resolved ?? true,
+  });
+  if (!res.ok) return fail(res, "resolve comment");
+  return { ok: true, id: res.body?.id, resolved: res.body?.resolved };
+}
+
 /** Status ids marked terminal in the config (= "this work is finished"). */
 export function terminalStatuses(config: IssueConfig): Set<string> {
   return new Set((config.statuses ?? []).filter((s) => s.terminal).map((s) => s.id));
@@ -261,20 +369,30 @@ export function terminalStatuses(config: IssueConfig): Set<string> {
 
 /**
  * Derive what the graph itself can't store: which issues are DONE (terminal status)
- * and which are ACTIONABLE — not done, and every incoming `blocks` edge comes from a
- * done issue. "What can I start right now" is the map-shaped tracker's headline view.
+ * and which are ACTIONABLE — not done, every incoming `blocks` edge comes from a done
+ * issue, AND no open decision question is awaiting a human answer (ADR-020). An issue
+ * blocked on a decision is no more workable than one blocked by a dependency, so it
+ * drops out of "what can I start right now" until the question is resolved.
  */
-export function deriveIssueStates(graph: IssueGraph): Map<string, { done: boolean; actionable: boolean; blockedBy: string[] }> {
+export function deriveIssueStates(
+  graph: IssueGraph,
+): Map<string, { done: boolean; actionable: boolean; blockedBy: string[]; awaitingDecision: boolean }> {
   const terminal = terminalStatuses(graph.issue_config);
   const byId = new Map(graph.issues.map((i) => [i.id, i]));
-  const out = new Map<string, { done: boolean; actionable: boolean; blockedBy: string[] }>();
+  const out = new Map<string, { done: boolean; actionable: boolean; blockedBy: string[]; awaitingDecision: boolean }>();
   for (const issue of graph.issues) {
     const done = terminal.has(issue.status);
     const blockedBy = graph.edges
       .filter((e) => e.kind === "blocks" && e.to_issue === issue.id)
       .map((e) => e.from_issue)
       .filter((from) => !terminal.has(byId.get(from)?.status ?? ""));
-    out.set(issue.id, { done, actionable: !done && blockedBy.length === 0, blockedBy });
+    const awaitingDecision = (issue.open_questions ?? 0) > 0;
+    out.set(issue.id, {
+      done,
+      actionable: !done && blockedBy.length === 0 && !awaitingDecision,
+      blockedBy,
+      awaitingDecision,
+    });
   }
   return out;
 }

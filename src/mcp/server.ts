@@ -6,7 +6,16 @@ import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
 import { emitMap, emitDashboard } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
 import { pullComments, resolveComment, enrichComments, postComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
-import { pullIssues, createIssue, updateIssue, deriveIssueStates } from "../core/issues.js";
+import {
+  pullIssues,
+  createIssue,
+  updateIssue,
+  deriveIssueStates,
+  terminalStatuses,
+  pullIssueComments,
+  postIssueComment,
+  resolveIssueComment,
+} from "../core/issues.js";
 import { createNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { findProjectRoot } from "../core/project.js";
@@ -420,8 +429,11 @@ export function buildServer(): McpServer {
         "Read this project's Issue Map: a dependency-first issue tracker drawn as a graph on the hosted viewer. " +
         "Returns issues (work items with per-project type/status), edges (blocks = dependency, contains = grouping, " +
         "relates), code-map links, and the project's issue_config (valid types/statuses). Each issue carries derived " +
-        "state: done (terminal status) and actionable (not done, nothing unfinished blocks it) — use actionable issues " +
-        "to decide what to work on next. Needs a publish token and a published project.",
+        "state: done (terminal status), actionable (not done, nothing unfinished blocks it, and no open decision " +
+        "question awaits an answer), and awaitingDecision (open_questions > 0) — use actionable issues to decide what " +
+        "to work on next. When you hit a decision you need the user to make mid-task, post it with ask_issue (the issue " +
+        "stops being actionable until they answer and you resolve_issue_question). Read the thread with issue_comments. " +
+        "Needs a publish token and a published project.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
         open: z.boolean().optional().describe("Only issues that are not done (default: false = all)"),
@@ -620,6 +632,139 @@ export function buildServer(): McpServer {
       const res = await updateIssue(rootOf(path), { id: from, ...(remove ? { remove_edges: edge } : { add_edges: edge }) });
       if (!res.ok) return issueFail("Link issues", res.code, res.message);
       return json({ ok: true, from, to, kind: kind ?? "blocks", removed: Boolean(remove) });
+    },
+  );
+
+  // ---- issue discussion thread: the decision channel (ADR-020) ----
+  server.registerTool(
+    "issue_comments",
+    {
+      title: "Read an issue's discussion",
+      description:
+        "Read the discussion thread on this project's issues — the decision channel where you ask the user questions " +
+        "mid-task and they answer (ADR-020). Each comment has a kind (question = a decision you need, answer = the " +
+        "user's reply, result = a completion summary, note), a resolved flag (a question with resolved=false is still " +
+        "awaiting an answer), and parent_id for replies. Pass `issue` to read one issue's thread, or `open` to see only " +
+        "unresolved comments across the project (the decisions waiting on the user). Needs a publish token.",
+      inputSchema: {
+        issue: z.string().optional().describe("Restrict to one issue's thread (issue id from the issues tool)"),
+        open: z.boolean().optional().describe("Only unresolved comments — the decisions still awaiting an answer (default: false)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ issue, open, path }) => {
+      const res = await pullIssueComments(rootOf(path), { issue, open });
+      if (!res.ok || !res.comments) return issueFail("Read issue comments", res.code, res.message);
+      return json({ ok: true, count: res.comments.length, comments: res.comments });
+    },
+  );
+
+  server.registerTool(
+    "ask_issue",
+    {
+      title: "Ask the user a decision on an issue",
+      description:
+        "Post a decision QUESTION on an issue and stop — this is how you escalate a choice to the user mid-task " +
+        "(ADR-020). It posts a kind='question' comment on the issue's thread, which makes the issue stop being " +
+        "actionable until the user answers and the question is resolved. Use it whenever you hit a fork the user should " +
+        "decide (A vs B, an ambiguous requirement, a risky change). State the options clearly in `body`. Re-read with " +
+        "issue_comments to pick up the answer, then resolve_issue_question to close it and continue. Needs a publish token.",
+      inputSchema: {
+        issue: z.string().describe("Issue id to ask about (from the issues tool)"),
+        body: z.string().describe("The question / decision needed — lay out the options so the user can just pick one"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ issue, body, path }) => {
+      const res = await postIssueComment(rootOf(path), { issue_id: issue, body, kind: "question" });
+      if (!res.ok || !res.comment) return issueFail("Ask issue", res.code, res.message);
+      return json({ ok: true, comment: res.comment, note: "Question posted — the issue is now awaiting the user's decision. Re-check with issue_comments, then resolve_issue_question once answered." });
+    },
+  );
+
+  server.registerTool(
+    "reply_issue",
+    {
+      title: "Reply on an issue thread",
+      description:
+        "Post a reply or a note on an issue's discussion thread (ADR-020). Reply under a comment with `parent` (e.g. to " +
+        "acknowledge the user's decision or add follow-up), or start a top-level note with `issue`. Defaults to kind " +
+        "'answer' for a reply and 'note' otherwise; pass `kind` to override. For a completion summary, prefer " +
+        "complete_issue. Needs a publish token.",
+      inputSchema: {
+        issue: z.string().optional().describe("Issue id for a top-level note (omit when replying)"),
+        parent: z.string().optional().describe("Comment id to reply under (inherits the issue)"),
+        body: z.string().describe("Comment body (markdown)"),
+        kind: z.enum(["note", "question", "answer", "result"]).optional().describe("Override the comment kind"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ issue, parent, body, kind, path }) => {
+      const res = await postIssueComment(rootOf(path), { issue_id: issue, parent, body, kind });
+      if (!res.ok || !res.comment) return issueFail("Reply on issue", res.code, res.message);
+      return json({ ok: true, comment: res.comment });
+    },
+  );
+
+  server.registerTool(
+    "resolve_issue_question",
+    {
+      title: "Resolve an issue question",
+      description:
+        "Mark a decision question on an issue's thread resolved (or reopen it with resolved=false) — the 'decision " +
+        "closed' signal (ADR-020). Resolve a question once the user has answered and you've captured the decision; the " +
+        "issue becomes actionable again. Only the comment author or the project owner can toggle it. Needs a publish token.",
+      inputSchema: {
+        id: z.string().describe("Comment id of the question (from issue_comments)"),
+        resolved: z.boolean().optional().describe("false to reopen (default: true)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ id, resolved, path }) => {
+      const res = await resolveIssueComment(rootOf(path), { id, resolved });
+      if (!res.ok) return issueFail("Resolve question", res.code, res.message);
+      return json({ ok: true, id: res.id, resolved: res.resolved });
+    },
+  );
+
+  server.registerTool(
+    "complete_issue",
+    {
+      title: "Complete an issue with a result",
+      description:
+        "Finish an issue: move it to a terminal status AND leave a result summary on its thread, in one step (ADR-020 " +
+        "layer 3). This is the right way to close work — the status flip paints progress onto the map, and the result " +
+        "comment records WHAT you did and why for the human history (don't just silently flip status). After this, run " +
+        "scan + publish so the code map reflects your changes; the publish stamps this issue with the map version that " +
+        "shipped it. Needs a publish token.",
+      inputSchema: {
+        id: z.string().describe("Issue id to complete (from the issues tool)"),
+        result: z.string().describe("What you did / the outcome — recorded as a 'result' comment on the issue"),
+        status: z.string().optional().describe("Terminal status id from issue_config (default: the first terminal status, usually 'done')"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ id, result, status, path }) => {
+      const root = rootOf(path);
+      // Resolve the terminal status to move to (explicit, else the project's first terminal status).
+      let target = status;
+      if (!target) {
+        const g = await pullIssues(root, {});
+        if (!g.ok || !g.graph) return issueFail("Complete issue", g.code, g.message, g.maps);
+        const terminal = [...terminalStatuses(g.graph.issue_config)];
+        if (!terminal.length) return text("Complete issue failed: this project's issue_config has no terminal status. Set one, or use update_issue with an explicit status.");
+        target = terminal[0];
+      }
+      const upd = await updateIssue(root, { id, set: { status: target } });
+      if (!upd.ok) return issueFail("Complete issue", upd.code, upd.message);
+      const cmt = await postIssueComment(root, { issue_id: id, body: result, kind: "result" });
+      if (!cmt.ok) return issueFail("Complete issue (result note)", cmt.code, cmt.message);
+      return json({
+        ok: true,
+        issue: upd.issue,
+        result: cmt.comment,
+        note: "Done + result recorded. Now run scan + publish so the code map reflects the change — publish stamps this issue with the shipping map version.",
+      });
     },
   );
 

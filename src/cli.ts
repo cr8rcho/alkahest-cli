@@ -8,7 +8,7 @@ import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
-import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue, issuesAssign } from "./commands/issues.js";
+import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
 import { notesAdd } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { update } from "./commands/update.js";
@@ -194,6 +194,40 @@ issues
   .option("--path <dir>", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string, opts: { path?: string; api?: string }) => issuesRm(id, opts));
+issues
+  .command("comments")
+  .description("read issue discussion threads — the decision channel (? = open question)")
+  .option("--issue <id>", "restrict to one issue's thread")
+  .option("--open", "only unresolved comments (decisions awaiting an answer)", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((opts: { issue?: string; open?: boolean; path?: string; slug?: string; api?: string }) => issuesComments(opts));
+issues
+  .command("comment")
+  .description("post a note on an issue, or a decision question with --question")
+  .argument("<id>", "issue id (from 'issues pull')")
+  .requiredOption("--body <text>", "comment text")
+  .option("--question", "post as a decision question (blocks the issue until resolved)", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: { body: string; question?: boolean; path?: string; api?: string }) => issuesComment(id, opts.body, opts));
+issues
+  .command("reply")
+  .description("reply under an issue comment (id from 'issues comments')")
+  .argument("<id>", "parent comment id")
+  .requiredOption("--body <text>", "reply text")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: { body: string; path?: string; api?: string }) => issuesReply(id, opts.body, opts));
+issues
+  .command("resolve")
+  .description("resolve a decision question (or reopen it with --reopen)")
+  .argument("<id>", "comment id (from 'issues comments')")
+  .option("--reopen", "reopen instead of resolving", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: { reopen?: boolean; path?: string; api?: string }) => issuesResolveComment(id, opts));
 
 const notes = program
   .command("notes")
