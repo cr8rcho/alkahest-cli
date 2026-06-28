@@ -209,17 +209,19 @@ issues
   .argument("<id>", "issue id (from 'issues pull')")
   .requiredOption("--body <text>", "comment text")
   .option("--question", "post as a decision question (blocks the issue until resolved)", false)
+  .option("--mention <handle...>", "tag member(s) by name/handle — routes 'waiting on you' to them")
   .option("--path <dir>", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .action((id: string, opts: { body: string; question?: boolean; path?: string; api?: string }) => issuesComment(id, opts.body, opts));
+  .action((id: string, opts: { body: string; question?: boolean; mention?: string[]; path?: string; api?: string }) => issuesComment(id, opts.body, opts));
 issues
   .command("reply")
   .description("reply under an issue comment (id from 'issues comments')")
   .argument("<id>", "parent comment id")
   .requiredOption("--body <text>", "reply text")
+  .option("--mention <handle...>", "tag member(s) by name/handle")
   .option("--path <dir>", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .action((id: string, opts: { body: string; path?: string; api?: string }) => issuesReply(id, opts.body, opts));
+  .action((id: string, opts: { body: string; mention?: string[]; path?: string; api?: string }) => issuesReply(id, opts.body, opts));
 issues
   .command("resolve")
   .description("resolve a decision question (or reopen it with --reopen)")

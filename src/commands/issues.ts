@@ -175,20 +175,21 @@ export async function issuesComments(options: IssuesCommentsOptions): Promise<vo
   }
 }
 
-export interface IssuesCommentOptions extends IssuesWriteOptions { question?: boolean; }
+export interface IssuesCommentOptions extends IssuesWriteOptions { question?: boolean; mention?: string[]; }
 
-/** Post a note (or, with --question, a decision question) on an issue. */
+/** Post a note (or, with --question, a decision question) on an issue. --mention tags members. */
 export async function issuesComment(issue: string, body: string, options: IssuesCommentOptions): Promise<void> {
   const res = await postIssueComment(options.path || ".", {
-    api: options.api, issue_id: issue, body, kind: options.question ? "question" : "note",
+    api: options.api, issue_id: issue, body, kind: options.question ? "question" : "note", mention: options.mention,
   });
   if (!res.ok || !res.comment) return die(failMessage(res.code, res.message, "issues comment"));
-  console.log(`[alkahest] posted ${res.comment.kind} on ${issue} — id ${res.comment.id}`);
+  const tagged = res.comment.mentions?.length ? `  (@${res.comment.mentions.length})` : "";
+  console.log(`[alkahest] posted ${res.comment.kind} on ${issue} — id ${res.comment.id}${tagged}`);
 }
 
-/** Reply under an existing comment (defaults to kind 'answer'). */
-export async function issuesReply(parent: string, body: string, options: IssuesWriteOptions): Promise<void> {
-  const res = await postIssueComment(options.path || ".", { api: options.api, parent, body });
+/** Reply under an existing comment (defaults to kind 'answer'). --mention tags members. */
+export async function issuesReply(parent: string, body: string, options: IssuesWriteOptions & { mention?: string[] }): Promise<void> {
+  const res = await postIssueComment(options.path || ".", { api: options.api, parent, body, mention: options.mention });
   if (!res.ok || !res.comment) return die(failMessage(res.code, res.message, "issues reply"));
   console.log(`[alkahest] replied — id ${res.comment.id}`);
 }
