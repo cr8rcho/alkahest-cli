@@ -94,6 +94,7 @@ alkahest mcp           # run the MCP server (agents query the product map; no ke
 alkahest login         # save your publish token (Account → Create token on alkahest.app)
 alkahest publish       # upload the map to the hosted viewer → shareable link
 alkahest projects      # list your account's workspaces & projects (recover a slug after a move, etc.)
+alkahest history       # a code map's publish timeline — when each publish happened & what changed
 alkahest comments pull # pull comments left on the published map → .alkahest/comments.json
 alkahest comments issue <ids…>  # file the given comments as ONE GitHub issue (gh) + link it back
 alkahest issues pull   # pull the project's Issue Map (graph-shaped issue tracker) → .alkahest/issues.json

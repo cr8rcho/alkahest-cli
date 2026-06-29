@@ -94,6 +94,7 @@ alkahest mcp           # MCP 서버 실행 (에이전트가 제품 지도를 질
 alkahest login         # publish 토큰 저장 (alkahest.app → Account → Create token)
 alkahest publish       # 지도를 hosted 뷰어에 업로드 → 공유 링크
 alkahest projects      # 계정의 워크스페이스·프로젝트 목록 (이동 후 slug 복구 등)
+alkahest history       # 코드맵 발행 타임라인 — 언제 발행됐고 뭐가 바뀌었나
 alkahest comments pull # 발행된 지도에 달린 댓글 가져오기 → .alkahest/comments.json
 alkahest comments issue <ids…>  # 선택한 댓글들을 GitHub 이슈 하나로 파일링(gh) + 역링크
 alkahest issues pull   # 프로젝트의 Issue Map(그래프형 이슈 트래커) 가져오기 → .alkahest/issues.json

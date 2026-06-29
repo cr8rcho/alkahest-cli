@@ -19,6 +19,7 @@ import {
 import { createNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
+import { listHistory } from "../core/history.js";
 import { findProjectRoot } from "../core/project.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
 import type { ProductMap, Screen } from "../core/types.js";
@@ -583,6 +584,43 @@ export function buildServer(): McpServer {
           updatedAt: p.updatedAt,
           codeMaps: p.codeMaps.map((m) => ({ mapSlug: m.mapSlug, stats: m.stats, lastPublishedAt: m.lastPublishedAt })),
         })),
+      });
+    },
+  );
+
+  server.registerTool(
+    "history",
+    {
+      title: "Code map publish history",
+      description:
+        "Show a code map's publish timeline (ADR-023) — when each publish happened, the screen/resource/" +
+        "transition counts, and which nodes were added/removed since the previous publish. Use it to answer " +
+        "'when did this last publish' and 'what changed' without diffing manually. Needs a publish token and a " +
+        "published project; `map` picks the code map when the project has several (else the oldest).",
+      inputSchema: {
+        path: z.string().optional().describe("Project root (default: cwd)"),
+        map: z.string().optional().describe("Which code map (default: this checkout's / the oldest)"),
+        limit: z.number().optional().describe("Max versions (default 50)"),
+      },
+    },
+    async ({ path, map, limit }) => {
+      const res = await listHistory(rootOf(path), { map, limit });
+      if (!res.ok || !res.versions) return issueFail("History", res.code, res.message);
+      // Newest first; include count deltas vs the previous version so the agent needn't recompute.
+      const vs = res.versions;
+      return json({
+        ok: true,
+        slug: res.slug,
+        mapSlug: res.mapSlug,
+        count: vs.length,
+        versions: vs.map((v, i) => {
+          const prev = vs[i + 1]?.stats ?? null;
+          const delta = v.stats && prev
+            ? Object.fromEntries((["screens", "resources", "transitions", "calls"] as const)
+                .map((k) => [k, (v.stats![k] ?? 0) - (prev[k] ?? 0)]).filter(([, d]) => d !== 0))
+            : null;
+          return { createdAt: v.createdAt, stats: v.stats, delta, diff: v.diff };
+        }),
       });
     },
   );

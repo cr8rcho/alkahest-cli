@@ -12,6 +12,7 @@ import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, 
 import { notesAdd } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
+import { history } from "./commands/history.js";
 import { update } from "./commands/update.js";
 import { maybeNotifyUpdate } from "./core/version.js";
 
@@ -280,6 +281,19 @@ program
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action(async (opts: { json?: boolean; api?: string }) => {
     await projects(opts);
+    await maybeNotifyUpdate();
+  });
+
+program
+  .command("history")
+  .description("a code map's publish history — when each publish happened and what changed")
+  .argument("[path]", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "which code map (defaults to this checkout's / the oldest)")
+  .option("--limit <n>", "max versions to show (default 50)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action(async (path: string, opts: { slug?: string; map?: string; limit?: string; api?: string }) => {
+    await history(path, opts);
     await maybeNotifyUpdate();
   });
 
