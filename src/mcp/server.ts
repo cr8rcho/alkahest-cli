@@ -18,6 +18,7 @@ import {
 } from "../core/issues.js";
 import { createNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
+import { listProjects } from "../core/listProjects.js";
 import { findProjectRoot } from "../core/project.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
 import type { ProductMap, Screen } from "../core/types.js";
@@ -199,11 +200,16 @@ export function buildServer(): McpServer {
           invalid_token: "The publish token is invalid or revoked — create a new one at alkahest.app → Account.",
           client_too_old: "This alkahest is too old to publish — run 'alkahest update'.",
           ambiguous_map: "List the project's code maps with the maps tool, then call publish again with `map` set to one of them (or a new slug to create one).",
+          ambiguous_project: "This checkout has no linked project and an existing one looks like it — do NOT create a duplicate. Pick a candidate's slug below (or use list_projects) and call publish again with `slug` set, or pass a deliberately new `name` to create a fresh project.",
         };
         const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
         // Carry the structured map list (the edge function returns it) so the agent can pick without re-listing.
         const maps = res.maps?.length ? ` Maps: ${JSON.stringify(res.maps)}` : "";
-        return text(`Publish failed (${res.code}): ${res.message}.${hint}${maps}`);
+        // Carry slug-less-publish candidates so the agent can re-publish with the right slug.
+        const cands = res.candidates?.length
+          ? ` Candidates: ${JSON.stringify(res.candidates.map((c) => ({ slug: c.slug, name: c.projectName, workspace: c.workspace, map: c.mapSlug })))}`
+          : "";
+        return text(`Publish failed (${res.code}): ${res.message}.${hint}${maps}${cands}`);
       }
       const v = await cachedUpdateStatus().catch(() => null);
       return json({
@@ -543,6 +549,41 @@ export function buildServer(): McpServer {
       const res = await listMaps(rootOf(path), { type });
       if (!res.ok || !res.maps) return issueFail("List maps", res.code, res.message);
       return json({ ok: true, slug: res.slug, count: res.maps.length, maps: res.maps });
+    },
+  );
+
+  server.registerTool(
+    "list_projects",
+    {
+      title: "List account projects & workspaces",
+      description:
+        "List every workspace and project this account's token can reach (ADR-022). Use it to find a project's slug — " +
+        "e.g. to recover the right publish target after the local link was lost (a workspace move, a fresh clone, CI), " +
+        "or before publishing to confirm which existing project to update instead of creating a duplicate. Each project " +
+        "includes isOwner (only owned projects can be re-published/overwritten) and per-code-map fingerprints " +
+        "(screens/resources counts) so you can match a local scan by structure. Needs a publish token; no project context.",
+      inputSchema: {},
+    },
+    async () => {
+      const res = await listProjects({});
+      if (!res.ok || !res.projects) {
+        const hint = res.code === "no_token" ? " Set ALKAHEST_TOKEN in this MCP server's config." : "";
+        return text(`List projects failed (${res.code}): ${res.message}.${hint}`);
+      }
+      return json({
+        ok: true,
+        workspaces: res.workspaces ?? [],
+        projects: res.projects.map((p) => ({
+          slug: p.slug,
+          name: p.name,
+          workspace: p.workspace?.name ?? p.workspace?.slug ?? null,
+          isOwner: p.isOwner,
+          capability: p.capability,
+          isPublic: p.isPublic,
+          updatedAt: p.updatedAt,
+          codeMaps: p.codeMaps.map((m) => ({ mapSlug: m.mapSlug, stats: m.stats, lastPublishedAt: m.lastPublishedAt })),
+        })),
+      });
     },
   );
 

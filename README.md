@@ -93,6 +93,7 @@ alkahest hook install  # run scan automatically on commit/merge (diff-driven ref
 alkahest mcp           # run the MCP server (agents query the product map; no key)
 alkahest login         # save your publish token (Account → Create token on alkahest.app)
 alkahest publish       # upload the map to the hosted viewer → shareable link
+alkahest projects      # list your account's workspaces & projects (recover a slug after a move, etc.)
 alkahest comments pull # pull comments left on the published map → .alkahest/comments.json
 alkahest comments issue <ids…>  # file the given comments as ONE GitHub issue (gh) + link it back
 alkahest issues pull   # pull the project's Issue Map (graph-shaped issue tracker) → .alkahest/issues.json
@@ -109,6 +110,12 @@ alkahest update        # update to the latest GitHub release (--check to only ch
 > the issue / code map. Omit `--map` and the CLI uses the project's sole map of that type — the server
 > asks you to pass `--map` only when there's more than one. Each map is shared at
 > `alkahest.app/p/<project>/<map>`.
+
+> **Lost a project's link?** A checkout remembers its project slug in `.alkahest/project.json`, but a
+> fresh clone or a project moved to another workspace can lose it. `alkahest projects` lists every
+> workspace & project on your account so you can re-publish with `--slug <slug>`. And when a slug-less
+> `publish` spots an existing project that looks like this one, it asks before creating a duplicate
+> (in CI / non-interactive runs it stops and points you at `--slug` instead of guessing).
 
 ### Dashboard interactions
 

@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { OUTPUT_DIR } from "./emit.js";
 import { loadCredentials, resolveApiUrl, resolveToken, saveCredentials } from "./credentials.js";
 import { resolveProject } from "./project.js";
+import { listProjects, rankPublishCandidates, localMapCounts, type PublishCandidate } from "./listProjects.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../../package.json") as { version: string };
@@ -30,6 +31,15 @@ export interface PublishParams {
   /** Which CODE map to publish to (a project can hold several). Omit → the checkout's remembered
    *  map, else the project's sole code map (the server returns `ambiguous_map` if there are >1). */
   mapSlug?: string;
+  /**
+   * Slug-less publish only (ADR-022 B): when no slug is resolved AND existing owned projects look
+   * like this one, the caller is asked to confirm overwriting one instead of silently creating a
+   * duplicate. The callback receives the ranked candidates and returns the chosen target (slug +
+   * optional code map) to UPDATE, or null to create a new project. When omitted (e.g. the MCP
+   * server / non-interactive), publishMap does NOT auto-overwrite — it returns `ambiguous_project`
+   * with the candidates so the caller can re-publish with an explicit slug.
+   */
+  confirm?: (candidates: PublishCandidate[]) => Promise<{ slug: string; mapSlug?: string } | null>;
 }
 
 export interface PublishResult {
@@ -47,6 +57,9 @@ export interface PublishResult {
   message?: string;
   /** Present on ambiguous_map: the project's code maps (slug + name). */
   maps?: { slug: string; name: string | null }[];
+  /** Present on ambiguous_project (slug-less publish, no confirm): owned projects that look like
+   *  this one — re-publish with one of their slugs to update, or --name to force a new project. */
+  candidates?: PublishCandidate[];
 }
 
 async function postJson(
@@ -105,14 +118,44 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     };
   }
 
-  // Known slug → update that project. None → omit slug (server creates a new one).
+  // Resolve the target. Known slug → update it. Slug-less → before blindly creating a new project
+  // (the old behaviour that duplicated projects when the local slug was lost), check whether an
+  // owned project already looks like this one (ADR-022 B). If so: ask `confirm` to overwrite, or —
+  // when there's no confirm (MCP/non-interactive) — refuse to auto-create and surface the candidates.
+  let targetSlug = knownSlug;
+  let targetMap = mapSlug;
+  if (!targetSlug) {
+    const list = await listProjects({ api: params.api, token: params.token });
+    if (list.ok && list.projects?.length) {
+      const localName = params.name || basename(projectRoot);
+      const candidates = rankPublishCandidates(localName, localMapCounts(map), list.projects);
+      if (candidates.length) {
+        if (params.confirm) {
+          const chosen = await params.confirm(candidates);
+          if (chosen) { targetSlug = chosen.slug; if (chosen.mapSlug) targetMap = chosen.mapSlug; }
+        } else {
+          return {
+            ok: false,
+            code: "ambiguous_project",
+            message:
+              "This looks like an already-published project. Re-publish with --slug <slug> to update it, " +
+              "or --name <name> to force a new project.",
+            candidates,
+          };
+        }
+      }
+    }
+    // list failures (network/auth) are non-fatal here — fall through to the normal create path.
+  }
+
+  // Target slug → update that project. None → omit slug (server creates a new one).
   const reqBody: Record<string, unknown> = {
     map,
     client: { source: params.source ?? "cli", version: pkg.version },
   };
-  if (knownSlug) reqBody.slug = knownSlug;
+  if (targetSlug) reqBody.slug = targetSlug;
   else reqBody.name = params.name || basename(projectRoot);
-  if (mapSlug) reqBody.mapSlug = mapSlug;
+  if (targetMap) reqBody.mapSlug = targetMap;
 
   const pub = await postJson(`${apiUrl}/publish`, reqBody, token);
   if (!pub.ok) {
@@ -125,7 +168,7 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     };
   }
 
-  const created = !knownSlug && Boolean(pub.body.slug);
+  const created = !targetSlug && Boolean(pub.body.slug);
   // Persist the slug both in creds (path-keyed) and WITH the checkout (.alkahest/project.json),
   // every publish — so future publishes AND comments (pull/add/MCP) resolve it from any cwd.
   if (pub.body.slug) {

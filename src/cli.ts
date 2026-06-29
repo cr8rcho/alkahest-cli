@@ -11,6 +11,7 @@ import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./comma
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
 import { notesAdd } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
+import { projects } from "./commands/projects.js";
 import { update } from "./commands/update.js";
 import { maybeNotifyUpdate } from "./core/version.js";
 
@@ -271,6 +272,16 @@ maps
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((slug: string, opts: { type?: string; name?: string; path?: string; slug?: string; api?: string }) =>
     mapsCreate(slug, opts));
+
+program
+  .command("projects")
+  .description("list your account's workspaces & projects (recover a slug after a move, etc.)")
+  .option("--json", "print the raw payload", false)
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action(async (opts: { json?: boolean; api?: string }) => {
+    await projects(opts);
+    await maybeNotifyUpdate();
+  });
 
 program
   .command("mcp")
