@@ -118,46 +118,69 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     };
   }
 
-  // Resolve the target. Known slug → update it. Slug-less → before blindly creating a new project
-  // (the old behaviour that duplicated projects when the local slug was lost), check whether an
-  // owned project already looks like this one (ADR-022 B). If so: ask `confirm` to overwrite, or —
-  // when there's no confirm (MCP/non-interactive) — refuse to auto-create and surface the candidates.
+  // Candidate resolution shared by the slug-less case and the stale-slug recovery below. Looks for
+  // an OWNED project that already looks like this one and returns a decision: overwrite the match,
+  // create new, or — when there's no `confirm` (MCP/non-interactive) — bail with the candidates so
+  // the caller passes an explicit slug. Never silently duplicate (ADR-022 B). List failures
+  // (network/auth) are non-fatal → treated as "create".
+  const localName = params.name || basename(projectRoot);
+  type Decision =
+    | { mode: "use"; slug: string; mapSlug?: string }
+    | { mode: "create" }
+    | { mode: "ambiguous"; candidates: PublishCandidate[] };
+  const decideTarget = async (): Promise<Decision> => {
+    const list = await listProjects({ api: params.api, token: params.token });
+    if (!list.ok || !list.projects?.length) return { mode: "create" };
+    const candidates = rankPublishCandidates(localName, localMapCounts(map), list.projects);
+    if (!candidates.length) return { mode: "create" };
+    if (params.confirm) {
+      const chosen = await params.confirm(candidates);
+      return chosen ? { mode: "use", slug: chosen.slug, mapSlug: chosen.mapSlug } : { mode: "create" };
+    }
+    return { mode: "ambiguous", candidates };
+  };
+  const ambiguous = (candidates: PublishCandidate[], stale: boolean): PublishResult => ({
+    ok: false,
+    code: "ambiguous_project",
+    message: stale
+      ? "This checkout's project no longer exists on the server (deleted, or you lost access). " +
+        "Re-publish with --slug <slug> to point at one below, or --name <name> to create a new project."
+      : "This looks like an already-published project. Re-publish with --slug <slug> to update it, " +
+        "or --name <name> to force a new project.",
+    candidates,
+  });
+
+  const buildBody = (slug?: string, codeMap?: string): Record<string, unknown> => {
+    const b: Record<string, unknown> = { map, client: { source: params.source ?? "cli", version: pkg.version } };
+    if (slug) b.slug = slug; else b.name = localName;
+    if (codeMap) b.mapSlug = codeMap;
+    return b;
+  };
+
+  // Known slug → update it. Slug-less → resolve a candidate (don't blindly create a duplicate).
   let targetSlug = knownSlug;
   let targetMap = mapSlug;
   if (!targetSlug) {
-    const list = await listProjects({ api: params.api, token: params.token });
-    if (list.ok && list.projects?.length) {
-      const localName = params.name || basename(projectRoot);
-      const candidates = rankPublishCandidates(localName, localMapCounts(map), list.projects);
-      if (candidates.length) {
-        if (params.confirm) {
-          const chosen = await params.confirm(candidates);
-          if (chosen) { targetSlug = chosen.slug; if (chosen.mapSlug) targetMap = chosen.mapSlug; }
-        } else {
-          return {
-            ok: false,
-            code: "ambiguous_project",
-            message:
-              "This looks like an already-published project. Re-publish with --slug <slug> to update it, " +
-              "or --name <name> to force a new project.",
-            candidates,
-          };
-        }
-      }
-    }
-    // list failures (network/auth) are non-fatal here — fall through to the normal create path.
+    const d = await decideTarget();
+    if (d.mode === "use") { targetSlug = d.slug; if (d.mapSlug) targetMap = d.mapSlug; }
+    else if (d.mode === "ambiguous") return ambiguous(d.candidates, false);
+    // create → leave targetSlug undefined
   }
 
-  // Target slug → update that project. None → omit slug (server creates a new one).
-  const reqBody: Record<string, unknown> = {
-    map,
-    client: { source: params.source ?? "cli", version: pkg.version },
-  };
-  if (targetSlug) reqBody.slug = targetSlug;
-  else reqBody.name = params.name || basename(projectRoot);
-  if (targetMap) reqBody.mapSlug = targetMap;
+  let pub = await postJson(`${apiUrl}/publish`, buildBody(targetSlug, targetMap), token);
 
-  const pub = await postJson(`${apiUrl}/publish`, reqBody, token);
+  // Stale local slug: the project this checkout remembers was deleted (or moved out of reach) on the
+  // server, so the slug 404s. Don't dead-end — recover via candidate resolution (re-link to the live
+  // project, or create). Only for a slug that came from local state, not an explicit --slug the user
+  // typed (an explicit miss is a real error). On success the slug is re-persisted below, self-healing.
+  if (!pub.ok && pub.body?.error === "not_found" && targetSlug && !params.slug) {
+    const d = await decideTarget();
+    if (d.mode === "ambiguous") return ambiguous(d.candidates, true);
+    targetSlug = d.mode === "use" ? d.slug : undefined;
+    if (d.mode === "use" && d.mapSlug) targetMap = d.mapSlug;
+    pub = await postJson(`${apiUrl}/publish`, buildBody(targetSlug, targetMap), token);
+  }
+
   if (!pub.ok) {
     return {
       ok: false,

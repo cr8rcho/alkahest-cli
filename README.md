@@ -112,10 +112,12 @@ alkahest update        # update to the latest GitHub release (--check to only ch
 > `alkahest.app/p/<project>/<map>`.
 
 > **Lost a project's link?** A checkout remembers its project slug in `.alkahest/project.json`, but a
-> fresh clone or a project moved to another workspace can lose it. `alkahest projects` lists every
-> workspace & project on your account so you can re-publish with `--slug <slug>`. And when a slug-less
-> `publish` spots an existing project that looks like this one, it asks before creating a duplicate
-> (in CI / non-interactive runs it stops and points you at `--slug` instead of guessing).
+> fresh clone (or a project moved between workspaces) can lose it. `alkahest projects` lists every
+> workspace & project on your account so you can re-publish with `--slug <slug>` (which also re-links
+> the checkout). And `publish` won't blindly create a duplicate: when the checkout has **no link** —
+> or its remembered project **was deleted on the web** (the old slug 404s) — it finds the project that
+> matches this one and asks before overwriting. CI / non-interactive runs stop with the candidates and
+> point you at `--slug` rather than guessing.
 
 ### Dashboard interactions
 
