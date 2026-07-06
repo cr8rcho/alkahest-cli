@@ -28,7 +28,7 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
 
 > **`--map` (cloud ADR-011).** A hosted project can hold **many code/issue/note maps** (equal, no
 > default), each with a per-project slug. `publish --map <slug>`, `issues add/pull --map <slug>`,
-> `notes add --map <slug>`
+> `notes add/list/show/update --map <slug>`
 > pick one; the resolved code map is remembered in `.alkahest/project.json` (`{slug, mapSlug}`) +
 > credentials. Without `--map` the server uses the project's sole map of the type, or returns
 > `ambiguous_map` (surfaced as "pass --map"). Back-compatible — single-map projects are unaffected,

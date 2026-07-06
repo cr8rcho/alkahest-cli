@@ -1,10 +1,12 @@
-import { createNote } from "../core/notes.js";
+import { createNote, getNote, pullNotes, updateNote } from "../core/notes.js";
+import type { NoteLinkReport } from "../core/notes.js";
 
 /**
- * CLI surface of the hosted Note Map (cloud ADR-017). `notes add` creates a note (a node of the
- * mindmap) through the notes-post edge function via src/core/notes.ts; nothing is stored locally.
- * There's no pull/update yet — the interactive canvas on the hosted viewer is where notes are read,
- * arranged, and connected.
+ * CLI surface of the hosted Note Map (cloud ADR-017 canvas + ADR-027 wiki). `notes add` creates a
+ * note, `notes list`/`show` read the map (notes-pull), and `notes update` edits one in place
+ * (notes-update) — nothing is stored locally. Note bodies are the link surface: [[slug-or-title]]
+ * links notes, [[issue:<uuid>]] cites an issue, [[code:s:…]] cites a code-map node; the server
+ * materializes them on every write and the write commands print what resolved.
  */
 
 const die = (msg: string): void => {
@@ -18,21 +20,98 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
     forbidden: "✗ Only the project owner or a collaborator can do this.",
     not_found: `✗ ${message ?? "Not found."}`,
     no_slug: message ?? "No published map for this project yet.",
+    slug_taken: `✗ ${message ?? "That note slug is already taken in this map."}`,
     ambiguous_map: `✗ ${message ?? "This project has several note maps."}\n  See them with 'alkahest maps list', or make a new one with 'alkahest maps create <slug> --type note'.`,
   };
   return known[code ?? ""] ?? `${action} failed: ${message}`;
 };
 
+/** One-line summary of a write's link report (what the body's [[wikilinks]] resolved to). */
+const linkSummary = (links?: NoteLinkReport): string[] => {
+  if (!links) return [];
+  const out: string[] = [];
+  if (links.notes.length) out.push(`  links → ${links.notes.map((n) => n.slug).join(", ")}`);
+  if (links.code.length) out.push(`  code  → ${links.code.join(", ")}`);
+  if (links.issues.length) out.push(`  issues → ${links.issues.join(", ")}`);
+  if (links.backlinks.length) out.push(`  backlinks ← ${links.backlinks.map((n) => n.slug).join(", ")}`);
+  if (links.unresolved.length) out.push(`  unresolved: ${links.unresolved.map((t) => `[[${t}]]`).join(", ")} (will link when a matching note appears)`);
+  return out;
+};
+
 export interface NotesAddOptions {
   api?: string; slug?: string; path?: string; map?: string;
-  body?: string; parent?: string;
+  body?: string; parent?: string; noteSlug?: string;
 }
 
 export async function notesAdd(title: string, options: NotesAddOptions): Promise<void> {
   const res = await createNote(options.path || ".", {
     api: options.api, slug: options.slug, mapSlug: options.map,
-    title, body: options.body, parent_id: options.parent,
+    title, body: options.body, parent_id: options.parent, note_slug: options.noteSlug,
   });
   if (!res.ok || !res.note) return die(failMessage(res.code, res.message, "notes add"));
-  console.log(`[alkahest] created note "${res.note.title}" — id ${res.note.id}`);
+  console.log(`[alkahest] created note "${res.note.title}" — slug ${res.note.slug} (id ${res.note.id})`);
+  for (const line of linkSummary(res.links)) console.log(line);
+}
+
+export interface NotesUpdateOptions {
+  api?: string; slug?: string; path?: string; map?: string;
+  title?: string; body?: string; clearBody?: boolean; rename?: string;
+}
+
+export async function notesUpdate(note: string, options: NotesUpdateOptions): Promise<void> {
+  if (!options.title && options.body === undefined && !options.clearBody && !options.rename) {
+    return die("Nothing to update — pass --title, --body (or --clear-body), and/or --rename.");
+  }
+  const res = await updateNote(options.path || ".", {
+    api: options.api, slug: options.slug, mapSlug: options.map,
+    note,
+    title: options.title,
+    body: options.clearBody ? null : options.body,
+    new_slug: options.rename,
+  });
+  if (!res.ok || !res.note) return die(failMessage(res.code, res.message, "notes update"));
+  console.log(`[alkahest] updated note "${res.note.title}" — slug ${res.note.slug}`);
+  for (const line of linkSummary(res.links)) console.log(line);
+}
+
+export interface NotesListOptions {
+  api?: string; slug?: string; path?: string; map?: string; q?: string;
+}
+
+export async function notesList(options: NotesListOptions): Promise<void> {
+  const res = await pullNotes(options.path || ".", {
+    api: options.api, slug: options.slug, mapSlug: options.map, q: options.q,
+  });
+  if (!res.ok || !res.maps) return die(failMessage(res.code, res.message, "notes list"));
+  if (!res.maps.length) return console.log("[alkahest] no note maps in this project.");
+  for (const m of res.maps) {
+    const bodyEdges = m.edges.filter((e) => e.origin === "body").length;
+    console.log(`[alkahest] ${res.project?.slug}/${m.slug} — ${m.notes.length} note(s), ${m.edges.length} edge(s) (${bodyEdges} from wikilinks)`);
+    for (const n of m.notes) {
+      const links = m.edges.filter((e) => e.from_note === n.id).length;
+      const backlinks = m.edges.filter((e) => e.to_note === n.id).length;
+      const counts = links || backlinks ? `  (→${links} ←${backlinks})` : "";
+      console.log(`  ${n.slug}  ${n.title}${counts}`);
+    }
+  }
+}
+
+export interface NotesShowOptions {
+  api?: string; slug?: string; path?: string; map?: string;
+}
+
+export async function notesShow(note: string, options: NotesShowOptions): Promise<void> {
+  const res = await getNote(options.path || ".", {
+    api: options.api, slug: options.slug, mapSlug: options.map, note,
+  });
+  if (!res.ok || !res.note) return die(failMessage(res.code, res.message, "notes show"));
+  const n = res.note;
+  console.log(`[alkahest] ${res.project?.slug}/${res.map?.slug}/${n.slug} — ${n.title}`);
+  if (n.body) console.log(`\n${n.body}\n`);
+  const name = (x: { slug?: string; title?: string; id: string }) => x.slug ?? x.title ?? x.id;
+  for (const e of res.outgoing ?? []) console.log(`  → ${name(e.note)} (${e.kind}${e.origin === "body" ? ", wikilink" : ""})`);
+  for (const e of res.incoming ?? []) console.log(`  ← ${name(e.note)} (${e.kind}${e.origin === "body" ? ", wikilink" : ""})`);
+  for (const k of res.code_links ?? []) console.log(`  code → ${k}`);
+  for (const i of res.issues ?? []) console.log(`  issue → ${i.title ?? i.id}${i.status ? ` [${i.status}]` : ""}`);
+  if (res.unresolved?.length) console.log(`  unresolved: ${res.unresolved.map((t) => `[[${t}]]`).join(", ")}`);
 }

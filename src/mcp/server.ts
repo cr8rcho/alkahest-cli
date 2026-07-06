@@ -16,7 +16,7 @@ import {
   postIssueComment,
   resolveIssueComment,
 } from "../core/issues.js";
-import { createNote } from "../core/notes.js";
+import { createNote, getNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
 import { listHistory } from "../core/history.js";
@@ -506,29 +506,105 @@ export function buildServer(): McpServer {
     },
   );
 
-  // ---- notes: the Note Map — a mindmap of notes on the hosted viewer (ADR-017) ----
+  // ---- notes: the Note Map — wiki-style linked notes on the hosted viewer (ADR-017/027) ----
+  // The note BODY is the link surface: [[slug-or-title]] links another note in the map,
+  // [[issue:<uuid>]] cites an issue, [[code:s:…]]/[[code:r:…]] cites a code-map node. The server
+  // parses and materializes them on every write; unresolved [[refs]] stay plain text and
+  // auto-link when a matching note is created or renamed.
+  server.registerTool(
+    "notes",
+    {
+      title: "Note map (wiki) graph",
+      description:
+        "Read this project's Note Map — wiki-style linked notes drawn as a graph on the hosted viewer. Returns each " +
+        "map's notes (with per-map slug addresses), edges (origin 'body' = derived from [[wikilinks]] in note bodies, " +
+        "'manual' = drawn on the canvas), and cross-map links (cited code nodes / issues). ALWAYS check this before " +
+        "add_note when recording knowledge: if a note on the topic exists, update_note it instead of adding a near-" +
+        "duplicate. `q` searches title/slug/body. Needs a publish token and a published project.",
+      inputSchema: {
+        path: z.string().optional().describe("Project root (default: cwd)"),
+        q: z.string().optional().describe("Filter notes by title/slug/body substring"),
+        map: z.string().optional().describe("Restrict to one note map (default: all readable). List them with the maps tool."),
+      },
+    },
+    async ({ path, q, map }) => {
+      const res = await pullNotes(rootOf(path), { mapSlug: map, q });
+      if (!res.ok || !res.maps) return issueFail("Read notes", res.code, res.message, res.mapList);
+      return json({ ok: true, project: res.project, count: res.maps.reduce((n, m) => n + m.notes.length, 0), maps: res.maps });
+    },
+  );
+
+  server.registerTool(
+    "get_note",
+    {
+      title: "Read one note",
+      description:
+        "One note in full: body, outgoing links, backlinks (notes whose bodies cite this one), cited code nodes and " +
+        "issues, and unresolved [[refs]] (targets that don't exist yet — writing a note with that slug/title later " +
+        "auto-links them). Address by note slug (see the notes tool), or uuid. Needs a publish token.",
+      inputSchema: {
+        note: z.string().describe("Note slug (or id)"),
+        map: z.string().optional().describe("Which note map (omit when the slug is unique across maps)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ note, map, path }) => {
+      const res = await getNote(rootOf(path), { note, mapSlug: map });
+      if (!res.ok || !res.note) return issueFail("Get note", res.code, res.message, res.mapList);
+      const { ok, code, message, mapList, ...rest } = res;
+      return json({ ok: true, ...rest });
+    },
+  );
+
   server.registerTool(
     "add_note",
     {
       title: "Add a note",
       description:
-        "Create a node on this project's Note Map — a mindmap-style free graph of notes. Use it while brainstorming " +
-        "with the user: each idea becomes a note, and parent_id links it under another note (a 'child' edge). Notes are " +
-        "arranged, connected, and read on the hosted viewer's interactive canvas (there's no pull/update tool yet). If " +
-        "the project has several note maps, pass `map` (list them with the maps tool, or create one with create_map). " +
-        "Needs a publish token; owner or collaborator only.",
+        "Create a note on this project's Note Map (wiki-style linked notes). Use it to record durable knowledge as " +
+        "you work — a policy decided while closing an issue, a convention, a constraint — one topic per note. In the " +
+        "body, link liberally with [[note-slug]] / [[issue:<uuid>]] / [[code:s:…]]; the server materializes the links, " +
+        "and a [[ref]] that doesn't exist yet is fine (it auto-links when that note is written). Check the notes tool " +
+        "first — if a note on the topic exists, update_note it instead. parent_id draws a mindmap child edge instead. " +
+        "If the project has several note maps, pass `map`. Needs a publish token; owner or collaborator only.",
       inputSchema: {
         title: z.string().describe("Note title (the node label)"),
-        body: z.string().optional().describe("Note body as markdown (details, context)"),
+        body: z.string().optional().describe("Note body as markdown; [[wikilinks]] in it are parsed and linked server-side"),
+        note_slug: z.string().optional().describe("Explicit wiki address (default: derived from the title)"),
         parent_id: z.string().optional().describe("Parent note id — creates a child edge (parent → new)"),
         map: z.string().optional().describe("Which note map to add to (a project can hold several; omit when there's one). List them with the maps tool, or create one with create_map."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, body, parent_id, map, path }) => {
-      const res = await createNote(rootOf(path), { title, body, parent_id, mapSlug: map });
+    async ({ title, body, note_slug, parent_id, map, path }) => {
+      const res = await createNote(rootOf(path), { title, body, note_slug, parent_id, mapSlug: map });
       if (!res.ok || !res.note) return issueFail("Add note", res.code, res.message, res.maps);
-      return json({ ok: true, note: res.note });
+      return json({ ok: true, note: res.note, links: res.links });
+    },
+  );
+
+  server.registerTool(
+    "update_note",
+    {
+      title: "Update a note",
+      description:
+        "Edit a note in place — the wiki's upsert half: when knowledge on a topic evolves, update its note rather " +
+        "than adding a near-duplicate. Replaces title/body (body [[wikilinks]] are re-parsed and reconciled) and can " +
+        "rename the wiki address with new_slug (incoming [[refs]] re-resolve automatically). Address by note slug " +
+        "(see the notes tool), or uuid. Needs a publish token; owner or collaborator only.",
+      inputSchema: {
+        note: z.string().describe("Note slug (or id) to edit"),
+        title: z.string().optional().describe("New title"),
+        body: z.string().optional().describe("New body as markdown (replaces the old one; [[wikilinks]] re-parsed)"),
+        new_slug: z.string().optional().describe("New wiki address (slug)"),
+        map: z.string().optional().describe("Which note map (a project can hold several; omit when there's one)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ note, title, body, new_slug, map, path }) => {
+      const res = await updateNote(rootOf(path), { note, title, body, new_slug, mapSlug: map });
+      if (!res.ok || !res.note) return issueFail("Update note", res.code, res.message, res.maps);
+      return json({ ok: true, note: res.note, links: res.links });
     },
   );
 

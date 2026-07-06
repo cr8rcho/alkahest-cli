@@ -9,7 +9,7 @@ import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
-import { notesAdd } from "./commands/notes.js";
+import { notesAdd, notesList, notesShow, notesUpdate } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
 import { history } from "./commands/history.js";
@@ -235,18 +235,50 @@ issues
 
 const notes = program
   .command("notes")
-  .description("the hosted Note Map — a mindmap of notes you arrange on the viewer (cloud ADR-017)");
+  .description("the hosted Note Map — wiki-style linked notes on the viewer (cloud ADR-017/027); [[wikilinks]] in bodies link notes, issues and code nodes");
 notes
   .command("add")
-  .description("create a note (a node of the mindmap; arrange & connect it on the hosted viewer)")
+  .description("create a note; [[refs]] in --body auto-link to other notes / [[issue:<id>]] / [[code:s:…]]")
   .argument("<title>", "note title")
-  .option("--body <markdown>", "note body")
+  .option("--body <markdown>", "note body ([[wikilinks]] are parsed and linked server-side)")
+  .option("--note-slug <slug>", "explicit wiki address (default: derived from the title)")
   .option("--parent <id>", "parent note — creates a child edge (parent → new)")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--map <slug>", "which note map to add to (a project can hold several)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((title: string, opts: Parameters<typeof notesAdd>[1]) => notesAdd(title, opts));
+notes
+  .command("list")
+  .description("list a note map's notes and links (--q to search title/slug/body)")
+  .option("--q <text>", "filter notes by title/slug/body substring")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "restrict to one note map (default: all readable)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((opts: Parameters<typeof notesList>[0]) => notesList(opts));
+notes
+  .command("show")
+  .description("one note in full: body, links, backlinks, cited issues/code nodes, unresolved [[refs]]")
+  .argument("<note>", "note slug (or id)")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "which note map (a project can hold several)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((note: string, opts: Parameters<typeof notesShow>[1]) => notesShow(note, opts));
+notes
+  .command("update")
+  .description("edit a note in place — the wiki's upsert half (update, don't re-add)")
+  .argument("<note>", "note slug (or id)")
+  .option("--title <text>", "new title")
+  .option("--body <markdown>", "new body (replaces; [[wikilinks]] re-parsed)")
+  .option("--clear-body", "clear the body", false)
+  .option("--rename <slug>", "new wiki address (slug)")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "which note map (a project can hold several)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((note: string, opts: Parameters<typeof notesUpdate>[1]) => notesUpdate(note, opts));
 
 const maps = program
   .command("maps")

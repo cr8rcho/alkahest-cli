@@ -100,7 +100,9 @@ alkahest comments issue <ids…>  # file the given comments as ONE GitHub issue 
 alkahest issues pull   # pull the project's Issue Map (graph-shaped issue tracker) → .alkahest/issues.json
 alkahest issues add <title>     # create an issue (--parent epic, --target s:…/r:…//route, --type/--status, --priority/--due/--assignee)
 alkahest issues done <id>       # mark an issue finished (other ops: status / priority / due / assign / link / rm)
-alkahest notes add <title>      # create a note on the project's mindmap Note Map (--body, --parent, --map); arrange it on the viewer
+alkahest notes add <title>      # create a note on the wiki-style Note Map; [[refs]] in --body auto-link notes/issues/code nodes
+alkahest notes list             # list a note map's notes + links (--q to search); show <slug> for one note with backlinks
+alkahest notes update <slug>    # edit a note in place (--title/--body/--rename) — update, don't re-add
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 

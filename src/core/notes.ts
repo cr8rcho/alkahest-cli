@@ -2,11 +2,15 @@ import { loadCredentials, resolveApiUrl, resolveToken } from "./credentials.js";
 import { resolveProject } from "./project.js";
 
 /**
- * Client for the hosted Note Map (alkahest ADR-017): a mindmap-style free graph of notes per
- * published project — notes as nodes, free note→note edges. Notes live only in the cloud (the web
- * viewer edits them on an interactive canvas via RLS); the CLI/MCP author them through the
- * notes-post edge function with an alk_ token. There is no pull/update endpoint yet — creation
- * only (the canvas is where you read/arrange them).
+ * Client for the hosted Note Map (alkahest ADR-017 canvas + ADR-027 wiki): a linked-notes graph
+ * per published project. Notes live only in the cloud; the CLI/MCP talk to the notes-post /
+ * notes-update / notes-pull edge functions with an alk_ token.
+ *
+ * Wiki semantics (ADR-027): every note has a per-map `slug` address, and the note BODY is the
+ * link surface — `[[slug-or-title]]` links to another note in the map, `[[issue:<uuid>]]` to an
+ * issue, `[[code:s:…]]`/`[[code:r:…]]` to a code-map node. The server (a DB trigger) parses and
+ * materializes them on every write; write results carry a link report including `unresolved`
+ * (refs that don't exist yet — they auto-link when a matching note is created or renamed).
  *
  * Like publish.ts/issues.ts, everything returns a structured result and never writes to
  * stdout/stderr.
@@ -14,6 +18,7 @@ import { resolveProject } from "./project.js";
 
 export interface Note {
   id: string;
+  slug: string;
   title: string;
   body: string | null;
   created_by: string | null;
@@ -21,14 +26,70 @@ export interface Note {
   updated_at: string;
 }
 
+/** What the note's body [[wikilinks]] resolved to (server-derived, ADR-027). */
+export interface NoteLinkReport {
+  /** Outgoing body links to other notes in the map. */
+  notes: { id: string; slug: string; title: string }[];
+  /** Code-map node keys cited as [[code:…]]. */
+  code: string[];
+  /** Issue ids cited as [[issue:…]] (only ones that exist in the project). */
+  issues: string[];
+  /** Other notes whose bodies link to THIS note. */
+  backlinks: { id: string; slug: string; title: string }[];
+  /** [[refs]] that don't resolve yet — they materialize when a matching note appears. */
+  unresolved: string[];
+}
+
 export interface NoteWriteResult {
   ok: boolean;
   note?: Note;
-  /** no_api | no_token | no_slug | no_title | not_found | ambiguous_map | invalid_token | forbidden | network | <server error>. */
+  links?: NoteLinkReport;
+  /** no_api | no_token | no_slug | no_title | not_found | ambiguous_map | slug_taken | invalid_token | forbidden | network | <server error>. */
   code?: string;
   message?: string;
   /** Present on ambiguous_map / unknown-slug: the project's note maps (slug + name). */
   maps?: { slug: string; name: string | null }[];
+}
+
+export interface NoteEdge {
+  from_note: string;
+  to_note: string;
+  kind: string;
+  /** 'manual' (drawn on the canvas) or 'body' (derived from a [[wikilink]]). */
+  origin: string;
+}
+
+export interface NoteMapGraph {
+  slug: string;
+  name: string | null;
+  notes: (Note & { x: number | null; y: number | null })[];
+  edges: NoteEdge[];
+  code_links: { note_id: string; node_key: string }[];
+  issue_links: { note_id: string; issue: { id: string; title?: string; status?: string } }[];
+}
+
+export interface NotesPullResult {
+  ok: boolean;
+  project?: { slug: string; name: string | null };
+  maps?: NoteMapGraph[];
+  code?: string;
+  message?: string;
+  mapList?: { slug: string; name: string | null }[];
+}
+
+export interface NoteDetailResult {
+  ok: boolean;
+  project?: { slug: string; name: string | null };
+  map?: { slug: string; name: string | null };
+  note?: Note & { x: number | null; y: number | null };
+  outgoing?: { kind: string; origin: string; note: { id: string; slug?: string; title?: string } }[];
+  incoming?: { kind: string; origin: string; note: { id: string; slug?: string; title?: string } }[];
+  code_links?: string[];
+  issues?: { id: string; title?: string; status?: string }[];
+  unresolved?: string[];
+  code?: string;
+  message?: string;
+  mapList?: { slug: string; name: string | null }[];
 }
 
 interface AuthContext {
@@ -100,6 +161,8 @@ export interface CreateNoteParams {
   mapSlug?: string;
   title: string;
   body?: string;
+  /** Explicit wiki address (omit → derived from the title server-side). */
+  note_slug?: string;
   /** Existing note id — creates a 'child' edge parent→new. */
   parent_id?: string;
 }
@@ -114,8 +177,97 @@ export async function createNote(path: string, params: CreateNoteParams): Promis
     mapSlug: params.mapSlug,
     title: params.title.trim(),
     body: params.body,
+    note_slug: params.note_slug,
     parent_id: params.parent_id,
   });
   if (!res.ok) return fail(res, "create");
-  return { ok: true, note: res.body?.note };
+  return { ok: true, note: res.body?.note, links: res.body?.links };
+}
+
+export interface UpdateNoteParams {
+  api?: string;
+  token?: string;
+  slug?: string;
+  /** Which note map the note lives in. Omit → the sole one (else error). */
+  mapSlug?: string;
+  /** The note's wiki address (its slug), or a uuid. */
+  note: string;
+  title?: string;
+  /** New body (replaces; null clears). Re-parsed for [[wikilinks]] server-side. */
+  body?: string | null;
+  /** Rename the note's wiki address. */
+  new_slug?: string;
+}
+
+export async function updateNote(path: string, params: UpdateNoteParams): Promise<NoteWriteResult> {
+  const ctx = authContext(path, params, true);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.note?.trim()) return { ok: false, code: "no_note", message: "A note slug (or id) is required." };
+
+  const res = await request(`${ctx.apiUrl}/notes-update`, ctx.token, {
+    slug: ctx.slug,
+    mapSlug: params.mapSlug,
+    note: params.note.trim(),
+    title: params.title,
+    body: params.body,
+    new_slug: params.new_slug,
+  });
+  if (!res.ok) return fail(res, "update");
+  return { ok: true, note: res.body?.note, links: res.body?.links };
+}
+
+export interface PullNotesParams {
+  api?: string;
+  token?: string;
+  slug?: string;
+  /** Restrict to one note map (omit → every readable one). */
+  mapSlug?: string;
+  /** Filter notes by title/slug/body substring. */
+  q?: string;
+}
+
+export async function pullNotes(path: string, params: PullNotesParams = {}): Promise<NotesPullResult> {
+  const ctx = authContext(path, params, true);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+
+  const qs = new URLSearchParams({ slug: ctx.slug! });
+  if (params.mapSlug) qs.set("map", params.mapSlug);
+  if (params.q) qs.set("q", params.q);
+  const res = await request(`${ctx.apiUrl}/notes-pull?${qs}`, ctx.token);
+  if (!res.ok) {
+    const f = fail(res, "pull");
+    return { ok: false, code: f.code, message: f.message, mapList: f.maps };
+  }
+  return { ok: true, project: res.body?.project, maps: res.body?.maps ?? [] };
+}
+
+export interface GetNoteParams extends PullNotesParams {
+  /** The note's wiki address (its slug), or a uuid. */
+  note: string;
+}
+
+export async function getNote(path: string, params: GetNoteParams): Promise<NoteDetailResult> {
+  const ctx = authContext(path, params, true);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.note?.trim()) return { ok: false, code: "no_note", message: "A note slug (or id) is required." };
+
+  const qs = new URLSearchParams({ slug: ctx.slug!, note: params.note.trim() });
+  if (params.mapSlug) qs.set("map", params.mapSlug);
+  const res = await request(`${ctx.apiUrl}/notes-pull?${qs}`, ctx.token);
+  if (!res.ok) {
+    const f = fail(res, "get");
+    return { ok: false, code: f.code, message: f.message, mapList: f.maps };
+  }
+  const b = res.body ?? {};
+  return {
+    ok: true,
+    project: b.project,
+    map: b.map,
+    note: b.note,
+    outgoing: b.outgoing ?? [],
+    incoming: b.incoming ?? [],
+    code_links: b.code_links ?? [],
+    issues: b.issues ?? [],
+    unresolved: b.unresolved ?? [],
+  };
 }
