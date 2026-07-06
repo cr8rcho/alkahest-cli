@@ -2,15 +2,12 @@ import { loadCredentials, resolveApiUrl, resolveToken } from "./credentials.js";
 import { resolveProject } from "./project.js";
 
 /**
- * Client for the hosted Note Map (alkahest ADR-017 canvas + ADR-027 wiki): a linked-notes graph
- * per published project. Notes live only in the cloud; the CLI/MCP talk to the notes-post /
- * notes-update / notes-pull edge functions with an alk_ token.
+ * Client for the hosted Note Map (alkahest ADR-017 canvas + ADR-027 documents): notes are
+ * addressable markdown documents (per-map `slug`) arranged on a canvas. The CLI/MCP talk to
+ * the notes-post / notes-update / notes-pull edge functions with an alk_ token.
  *
- * Wiki semantics (ADR-027): every note has a per-map `slug` address, and the note BODY is the
- * link surface — `[[slug-or-title]]` links to another note in the map, `[[issue:<uuid>]]` to an
- * issue, `[[code:s:…]]`/`[[code:r:…]]` to a code-map node. The server (a DB trigger) parses and
- * materializes them on every write; write results carry a link report including `unresolved`
- * (refs that don't exist yet — they auto-link when a matching note is created or renamed).
+ * The body is PLAIN markdown (ADR-028): it is never parsed for links. Connections are the
+ * canvas's hand-drawn edges (or, in the future, explicit link calls).
  *
  * Like publish.ts/issues.ts, everything returns a structured result and never writes to
  * stdout/stderr.
@@ -26,24 +23,9 @@ export interface Note {
   updated_at: string;
 }
 
-/** What the note's body [[wikilinks]] resolved to (server-derived, ADR-027). */
-export interface NoteLinkReport {
-  /** Outgoing body links to other notes in the map. */
-  notes: { id: string; slug: string; title: string }[];
-  /** Code-map node keys cited as [[code:…]]. */
-  code: string[];
-  /** Issue ids cited as [[issue:…]] (only ones that exist in the project). */
-  issues: string[];
-  /** Other notes whose bodies link to THIS note. */
-  backlinks: { id: string; slug: string; title: string }[];
-  /** [[refs]] that don't resolve yet — they materialize when a matching note appears. */
-  unresolved: string[];
-}
-
 export interface NoteWriteResult {
   ok: boolean;
   note?: Note;
-  links?: NoteLinkReport;
   /** no_api | no_token | no_slug | no_title | not_found | ambiguous_map | slug_taken | invalid_token | forbidden | network | <server error>. */
   code?: string;
   message?: string;
@@ -55,8 +37,6 @@ export interface NoteEdge {
   from_note: string;
   to_note: string;
   kind: string;
-  /** 'manual' (drawn on the canvas) or 'body' (derived from a [[wikilink]]). */
-  origin: string;
 }
 
 export interface NoteMapGraph {
@@ -82,11 +62,10 @@ export interface NoteDetailResult {
   project?: { slug: string; name: string | null };
   map?: { slug: string; name: string | null };
   note?: Note & { x: number | null; y: number | null };
-  outgoing?: { kind: string; origin: string; note: { id: string; slug?: string; title?: string } }[];
-  incoming?: { kind: string; origin: string; note: { id: string; slug?: string; title?: string } }[];
+  outgoing?: { kind: string; note: { id: string; slug?: string; title?: string } }[];
+  incoming?: { kind: string; note: { id: string; slug?: string; title?: string } }[];
   code_links?: string[];
   issues?: { id: string; title?: string; status?: string }[];
-  unresolved?: string[];
   code?: string;
   message?: string;
   mapList?: { slug: string; name: string | null }[];
@@ -181,7 +160,7 @@ export async function createNote(path: string, params: CreateNoteParams): Promis
     parent_id: params.parent_id,
   });
   if (!res.ok) return fail(res, "create");
-  return { ok: true, note: res.body?.note, links: res.body?.links };
+  return { ok: true, note: res.body?.note };
 }
 
 export interface UpdateNoteParams {
@@ -193,7 +172,7 @@ export interface UpdateNoteParams {
   /** The note's wiki address (its slug), or a uuid. */
   note: string;
   title?: string;
-  /** New body (replaces; null clears). Re-parsed for [[wikilinks]] server-side. */
+  /** New body (replaces; null clears). */
   body?: string | null;
   /** Rename the note's wiki address. */
   new_slug?: string;
@@ -213,7 +192,7 @@ export async function updateNote(path: string, params: UpdateNoteParams): Promis
     new_slug: params.new_slug,
   });
   if (!res.ok) return fail(res, "update");
-  return { ok: true, note: res.body?.note, links: res.body?.links };
+  return { ok: true, note: res.body?.note };
 }
 
 export interface PullNotesParams {
@@ -268,6 +247,5 @@ export async function getNote(path: string, params: GetNoteParams): Promise<Note
     incoming: b.incoming ?? [],
     code_links: b.code_links ?? [],
     issues: b.issues ?? [],
-    unresolved: b.unresolved ?? [],
   };
 }

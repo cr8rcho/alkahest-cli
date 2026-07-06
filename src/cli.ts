@@ -235,13 +235,13 @@ issues
 
 const notes = program
   .command("notes")
-  .description("the hosted Note Map — wiki-style linked notes on the viewer (cloud ADR-017/027); [[wikilinks]] in bodies link notes, issues and code nodes");
+  .description("the hosted Note Map — markdown notes on a mindmap canvas (cloud ADR-017/027)");
 notes
   .command("add")
-  .description("create a note; [[refs]] in --body auto-link to other notes / [[issue:<id>]] / [[code:s:…]]")
+  .description("create a note (a markdown document node; connect it on the canvas)")
   .argument("<title>", "note title")
-  .option("--body <markdown>", "note body ([[wikilinks]] are parsed and linked server-side)")
-  .option("--note-slug <slug>", "explicit wiki address (default: derived from the title)")
+  .option("--body <markdown>", "note body (markdown)")
+  .option("--note-slug <slug>", "explicit note address (default: derived from the title)")
   .option("--parent <id>", "parent note — creates a child edge (parent → new)")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
@@ -259,7 +259,7 @@ notes
   .action((opts: Parameters<typeof notesList>[0]) => notesList(opts));
 notes
   .command("show")
-  .description("one note in full: body, links, backlinks, cited issues/code nodes, unresolved [[refs]]")
+  .description("one note in full: body, connections and backlinks")
   .argument("<note>", "note slug (or id)")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
@@ -271,9 +271,9 @@ notes
   .description("edit a note in place — the wiki's upsert half (update, don't re-add)")
   .argument("<note>", "note slug (or id)")
   .option("--title <text>", "new title")
-  .option("--body <markdown>", "new body (replaces; [[wikilinks]] re-parsed)")
+  .option("--body <markdown>", "new body (replaces)")
   .option("--clear-body", "clear the body", false)
-  .option("--rename <slug>", "new wiki address (slug)")
+  .option("--rename <slug>", "new note address (slug)")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--map <slug>", "which note map (a project can hold several)")
