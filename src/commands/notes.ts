@@ -89,7 +89,8 @@ export async function notesShow(note: string, options: NotesShowOptions): Promis
   });
   if (!res.ok || !res.note) return die(failMessage(res.code, res.message, "notes show"));
   const n = res.note;
-  console.log(`[alkahest] ${res.project?.slug}/${res.map?.slug}/${n.slug} — ${n.title}`);
+  const where = res.maps?.length ? res.maps.map((m) => m.slug).join(", ") : "no map";
+  console.log(`[alkahest] ${res.project?.slug}/${n.slug} — ${n.title}  [${where}]`);
   if (n.body) console.log(`\n${n.body}\n`);
   const name = (x: { slug?: string; title?: string; id: string }) => x.slug ?? x.title ?? x.id;
   for (const e of res.outgoing ?? []) console.log(`  → ${name(e.note)} (${e.kind})`);

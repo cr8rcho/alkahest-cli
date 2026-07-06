@@ -42,6 +42,7 @@ export interface NoteEdge {
 export interface NoteMapGraph {
   slug: string;
   name: string | null;
+  /** x/y = this map's layout for the note (membership row, cloud ADR-029). */
   notes: (Note & { x: number | null; y: number | null })[];
   edges: NoteEdge[];
   code_links: { note_id: string; node_key: string }[];
@@ -60,8 +61,9 @@ export interface NotesPullResult {
 export interface NoteDetailResult {
   ok: boolean;
   project?: { slug: string; name: string | null };
-  map?: { slug: string; name: string | null };
-  note?: Note & { x: number | null; y: number | null };
+  /** Which note maps the note sits on (pool model, cloud ADR-029 — can be several or none). */
+  maps?: { slug: string; name: string | null }[];
+  note?: Note;
   outgoing?: { kind: string; note: { id: string; slug?: string; title?: string } }[];
   incoming?: { kind: string; note: { id: string; slug?: string; title?: string } }[];
   code_links?: string[];
@@ -241,7 +243,7 @@ export async function getNote(path: string, params: GetNoteParams): Promise<Note
   return {
     ok: true,
     project: b.project,
-    map: b.map,
+    maps: b.maps ?? [],
     note: b.note,
     outgoing: b.outgoing ?? [],
     incoming: b.incoming ?? [],
