@@ -251,3 +251,32 @@ export async function getNote(path: string, params: GetNoteParams): Promise<Note
     issues: b.issues ?? [],
   };
 }
+
+export interface LinkNotesParams {
+  api?: string;
+  token?: string;
+  slug?: string;
+  /** Note addresses (project-unique slugs, or uuids). */
+  from: string;
+  to: string;
+  /** 'link' (arrow, default) | 'child' (dotted) | 'relates' (dashed). */
+  kind?: "link" | "child" | "relates";
+  /** true → delete the from→to edge(s) instead (all kinds when kind omitted). */
+  remove?: boolean;
+}
+
+export async function linkNotes(path: string, params: LinkNotesParams): Promise<NoteWriteResult & { removed?: boolean }> {
+  const ctx = authContext(path, params, true);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.from?.trim() || !params.to?.trim()) return { ok: false, code: "bad_request", message: "from and to notes are required." };
+
+  const res = await request(`${ctx.apiUrl}/notes-link`, ctx.token, {
+    slug: ctx.slug,
+    from: params.from.trim(),
+    to: params.to.trim(),
+    kind: params.kind,
+    remove: params.remove === true,
+  });
+  if (!res.ok) return fail(res, params.remove ? "unlink" : "link");
+  return { ok: true, removed: !!res.body?.removed };
+}

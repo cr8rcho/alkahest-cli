@@ -1,4 +1,4 @@
-import { createNote, getNote, pullNotes, updateNote } from "../core/notes.js";
+import { createNote, getNote, linkNotes, pullNotes, updateNote } from "../core/notes.js";
 
 /**
  * CLI surface of the hosted Note Map (cloud ADR-017 canvas + ADR-027 documents). `notes add`
@@ -97,4 +97,23 @@ export async function notesShow(note: string, options: NotesShowOptions): Promis
   for (const e of res.incoming ?? []) console.log(`  ← ${name(e.note)} (${e.kind})`);
   for (const k of res.code_links ?? []) console.log(`  code → ${k}`);
   for (const i of res.issues ?? []) console.log(`  issue → ${i.title ?? i.id}${i.status ? ` [${i.status}]` : ""}`);
+}
+
+export interface NotesLinkOptions {
+  api?: string; slug?: string; path?: string;
+  style?: string; remove?: boolean;
+}
+
+const STYLE_TO_KIND: Record<string, "link" | "child" | "relates"> = { arrow: "link", dotted: "child", dashed: "relates" };
+
+export async function notesLink(from: string, to: string, options: NotesLinkOptions): Promise<void> {
+  const kind = options.style ? STYLE_TO_KIND[options.style] : undefined;
+  if (options.style && !kind) return die("--style must be arrow | dotted | dashed.");
+  const res = await linkNotes(options.path || ".", {
+    api: options.api, slug: options.slug, from, to, kind, remove: options.remove,
+  });
+  if (!res.ok) return die(failMessage(res.code, res.message, options.remove ? "notes unlink" : "notes link"));
+  console.log(options.remove
+    ? `[alkahest] unlinked ${from} → ${to}`
+    : `[alkahest] linked ${from} → ${to}${options.style ? ` (${options.style})` : ""}`);
 }

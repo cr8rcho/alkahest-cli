@@ -16,7 +16,7 @@ import {
   postIssueComment,
   resolveIssueComment,
 } from "../core/issues.js";
-import { createNote, getNote, pullNotes, updateNote } from "../core/notes.js";
+import { createNote, getNote, linkNotes, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
 import { listHistory } from "../core/history.js";
@@ -575,6 +575,31 @@ export function buildServer(): McpServer {
       const res = await createNote(rootOf(path), { title, body, note_slug, parent_id, mapSlug: map });
       if (!res.ok || !res.note) return issueFail("Add note", res.code, res.message, res.maps);
       return json({ ok: true, note: res.note });
+    },
+  );
+
+  server.registerTool(
+    "link_notes",
+    {
+      title: "Link two notes",
+      description:
+        "Connect two notes with an edge — the note map's lines are EXPLICIT (bodies are never parsed), " +
+        "and this is how an agent draws them. kind sets the visual: link = arrow (directional flow, default), " +
+        "child = dotted (hierarchy), relates = dashed (loose association). The edge renders on every note map " +
+        "where BOTH notes are members. remove=true disconnects instead. Address notes by their project-unique " +
+        "slug (see the notes tool). Needs a publish token; owner or collaborator only.",
+      inputSchema: {
+        from: z.string().describe("Source note slug (or id)"),
+        to: z.string().describe("Target note slug (or id)"),
+        kind: z.enum(["link", "child", "relates"]).optional().describe("Edge visual: link=arrow (default), child=dotted, relates=dashed"),
+        remove: z.boolean().optional().describe("true → disconnect from→to instead (all kinds unless kind is given)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ from, to, kind, remove, path }) => {
+      const res = await linkNotes(rootOf(path), { from, to, kind, remove });
+      if (!res.ok) return issueFail(remove ? "Unlink notes" : "Link notes", res.code, res.message, res.maps);
+      return json({ ok: true, ...(remove ? { removed: `${from} → ${to}` } : { linked: `${from} → ${to}`, kind: kind ?? "link" }) });
     },
   );
 

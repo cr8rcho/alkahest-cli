@@ -9,7 +9,7 @@ import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
-import { notesAdd, notesList, notesShow, notesUpdate } from "./commands/notes.js";
+import { notesAdd, notesLink, notesList, notesShow, notesUpdate } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
 import { history } from "./commands/history.js";
@@ -266,6 +266,17 @@ notes
   .option("--map <slug>", "which note map (a project can hold several)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((note: string, opts: Parameters<typeof notesShow>[1]) => notesShow(note, opts));
+notes
+  .command("link")
+  .description("connect two notes with an edge (drawn on every map where both are members)")
+  .argument("<from>", "source note slug (or id)")
+  .argument("<to>", "target note slug (or id)")
+  .option("--style <style>", "arrow (default) | dotted | dashed")
+  .option("--remove", "disconnect instead (all styles unless --style is given)", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((from: string, to: string, opts: Parameters<typeof notesLink>[2]) => notesLink(from, to, opts));
 notes
   .command("update")
   .description("edit a note in place — the wiki's upsert half (update, don't re-add)")
