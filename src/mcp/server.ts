@@ -581,25 +581,29 @@ export function buildServer(): McpServer {
   server.registerTool(
     "link_notes",
     {
-      title: "Link two notes",
+      title: "Link a note to a note, an issue, or a code-map node",
       description:
-        "Connect two notes with an edge — the note map's lines are EXPLICIT (bodies are never parsed), " +
-        "and this is how an agent draws them. kind sets the visual: link = arrow (directional flow, default), " +
-        "child = dotted (hierarchy), relates = dashed (loose association). The edge renders on every note map " +
-        "where BOTH notes are members. remove=true disconnects instead. Address notes by their project-unique " +
-        "slug (see the notes tool). Needs a publish token; owner or collaborator only.",
+        "Connect a note to another note, an issue, or a code-map node — all links are EXPLICIT (bodies are " +
+        "never parsed), and this is how an agent draws them. Note↔note: an edge on every note map where BOTH " +
+        "notes are members; kind sets the visual (link = arrow, directional flow, default; child = dotted, " +
+        "hierarchy; relates = dashed, loose association). Cross targets record provenance and show in the " +
+        "note's document view: to='issue:<uuid>' cites the issue a decision came out of (use it when a " +
+        "completed issue's outcome is distilled into a note); to='code:s:<screen id>' / 'code:r:<resource id>' " +
+        "ties the note to a code-map node (node ids come from the overview/scan tools). kind only applies to " +
+        "note↔note. remove=true disconnects instead. Address notes by their project-unique slug (see the notes " +
+        "tool). Needs a publish token; owner or collaborator only.",
       inputSchema: {
         from: z.string().describe("Source note slug (or id)"),
-        to: z.string().describe("Target note slug (or id)"),
-        kind: z.enum(["link", "child", "relates"]).optional().describe("Edge visual: link=arrow (default), child=dotted, relates=dashed"),
-        remove: z.boolean().optional().describe("true → disconnect from→to instead (all kinds unless kind is given)"),
+        to: z.string().describe("Target: note slug (or id), 'issue:<uuid>', or 'code:s:…' / 'code:r:…'"),
+        kind: z.enum(["link", "child", "relates"]).optional().describe("Note↔note edge visual: link=arrow (default), child=dotted, relates=dashed"),
+        remove: z.boolean().optional().describe("true → disconnect from→to instead (note↔note: all kinds unless kind is given)"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
     async ({ from, to, kind, remove, path }) => {
       const res = await linkNotes(rootOf(path), { from, to, kind, remove });
       if (!res.ok) return issueFail(remove ? "Unlink notes" : "Link notes", res.code, res.message, res.maps);
-      return json({ ok: true, ...(remove ? { removed: `${from} → ${to}` } : { linked: `${from} → ${to}`, kind: kind ?? "link" }) });
+      return json({ ok: true, ...(remove ? { removed: `${from} → ${to}` } : { linked: `${from} → ${to}`, ...(kind ? { kind } : {}) }) });
     },
   );
 

@@ -268,10 +268,10 @@ notes
   .action((note: string, opts: Parameters<typeof notesShow>[1]) => notesShow(note, opts));
 notes
   .command("link")
-  .description("connect two notes with an edge (drawn on every map where both are members)")
+  .description("connect a note to another note, an issue, or a code-map node")
   .argument("<from>", "source note slug (or id)")
-  .argument("<to>", "target note slug (or id)")
-  .option("--style <style>", "arrow (default) | dotted | dashed")
+  .argument("<to>", "target: note slug (or id), issue:<uuid>, or code:s:…/code:r:…")
+  .option("--style <style>", "note↔note only: arrow (default) | dotted | dashed")
   .option("--remove", "disconnect instead (all styles unless --style is given)", false)
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")

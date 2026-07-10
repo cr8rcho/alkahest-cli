@@ -256,12 +256,13 @@ export interface LinkNotesParams {
   api?: string;
   token?: string;
   slug?: string;
-  /** Note addresses (project-unique slugs, or uuids). */
+  /** The note's address (project-unique slug, or uuid). */
   from: string;
+  /** A note address, or a cross target (ADR-030): 'issue:<uuid>' | 'code:s:…' / 'code:r:…'. */
   to: string;
-  /** 'link' (arrow, default) | 'child' (dotted) | 'relates' (dashed). */
+  /** Note↔note only: 'link' (arrow, default) | 'child' (dotted) | 'relates' (dashed). */
   kind?: "link" | "child" | "relates";
-  /** true → delete the from→to edge(s) instead (all kinds when kind omitted). */
+  /** true → delete the link instead (note↔note: all kinds when kind omitted). */
   remove?: boolean;
 }
 
