@@ -20,9 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Node 24 (not 20): the npm upgrade below resolves `latest` to npm 12+, which requires
+      # Node >=22 — on Node 20 the publish job dies with EBADENGINE (v0.1.37/v0.1.38 failures).
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
       # Guard: the release tag (vX.Y.Z) must match package.json version, so we
@@ -38,7 +40,7 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      # OIDC trusted publishing needs npm >= 11.5.1; node 20's bundled npm is older.
+      # OIDC trusted publishing needs npm >= 11.5.1; the bundled npm can lag behind.
       - run: npm install -g npm@latest
 
       # No NODE_AUTH_TOKEN: npm publish authenticates via OIDC and attaches
