@@ -89,4 +89,16 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
 
   console.log(`[alkahest] published ${res.slug}${res.mapSlug ? ` (map: ${res.mapSlug})` : ""}`);
   console.log(`  → ${res.viewerUrl ?? res.mapUrl}`);
+
+  // Needs tail (cloud ADR-032): the server counts what's waiting on you in this project —
+  // pull the human back to the web at the moment they're already looking at the terminal.
+  const n = res.needs;
+  const waiting = (n?.decisions ?? 0) + (n?.assigned ?? 0);
+  if (n && waiting > 0) {
+    const parts = [
+      n.decisions > 0 ? `${n.decisions} decision${n.decisions === 1 ? "" : "s"}` : null,
+      n.assigned > 0 ? `${n.assigned} assigned issue${n.assigned === 1 ? "" : "s"}` : null,
+    ].filter(Boolean);
+    console.log(`  ⏳ waiting on you: ${parts.join(" · ")}${n.url ? ` → ${n.url}` : ""}`);
+  }
 }

@@ -51,6 +51,10 @@ export interface PublishResult {
   mapUrl?: string;
   /** Whether this was the project's first publish (a new slug was created). */
   created?: boolean;
+  /** What in this project is waiting on the token's user (server-computed on publish, cloud
+   *  ADR-032): unresolved decision questions + non-terminal issues assigned to them. Absent
+   *  when the server predates ADR-032 or its count failed (best-effort). */
+  needs?: { decisions: number; assigned: number; url: string | null } | null;
   /** Machine-readable failure code: no_map | no_api | no_token | ambiguous_map | network | <server error>. */
   code?: string;
   /** Human-readable failure message. */
@@ -214,5 +218,6 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     viewerUrl: pub.body.viewerUrl ?? null,
     mapUrl: pub.body.mapUrl,
     created,
+    needs: pub.body.needs ?? null,
   };
 }

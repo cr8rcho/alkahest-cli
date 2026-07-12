@@ -213,11 +213,24 @@ export function buildServer(): McpServer {
         return text(`Publish failed (${res.code}): ${res.message}.${hint}${maps}${cands}`);
       }
       const v = await cachedUpdateStatus().catch(() => null);
+      // Needs tail (cloud ADR-032): the server counts what's waiting on the token's user in this
+      // project (unresolved decision questions + assigned issues). Surface it with an explicit
+      // relay hint so agent-driven users hear about blocked decisions in their terminal.
+      const waiting = (res.needs?.decisions ?? 0) + (res.needs?.assigned ?? 0);
       return json({
         ok: true,
         slug: res.slug,
         url: res.viewerUrl ?? res.mapUrl,
         created: res.created,
+        ...(res.needs && waiting > 0
+          ? {
+              needs: res.needs,
+              needsHint: `Tell the user: ${[
+                res.needs.decisions > 0 ? `${res.needs.decisions} decision${res.needs.decisions === 1 ? "" : "s"}` : null,
+                res.needs.assigned > 0 ? `${res.needs.assigned} assigned issue${res.needs.assigned === 1 ? "" : "s"}` : null,
+              ].filter(Boolean).join(" and ")} waiting on them${res.needs.url ? ` at ${res.needs.url}` : ""}.`,
+            }
+          : {}),
         ...(v?.behind
           ? { updateAvailable: `${v.current} → ${v.latest}`, updateHint: "Tell the user to run: alkahest update" }
           : {}),
