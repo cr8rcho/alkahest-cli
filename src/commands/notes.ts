@@ -27,13 +27,13 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
 
 export interface NotesAddOptions {
   api?: string; slug?: string; path?: string; map?: string;
-  body?: string; parent?: string; noteSlug?: string;
+  body?: string; parent?: string; noteSlug?: string; folder?: string;
 }
 
 export async function notesAdd(title: string, options: NotesAddOptions): Promise<void> {
   const res = await createNote(options.path || ".", {
     api: options.api, slug: options.slug, mapSlug: options.map,
-    title, body: options.body, parent_id: options.parent, note_slug: options.noteSlug,
+    title, body: options.body, parent_id: options.parent, note_slug: options.noteSlug, folder: options.folder,
   });
   if (!res.ok || !res.note) return die(failMessage(res.code, res.message, "notes add"));
   console.log(`[alkahest] created note "${res.note.title}" — slug ${res.note.slug} (id ${res.note.id})`);
@@ -42,11 +42,12 @@ export async function notesAdd(title: string, options: NotesAddOptions): Promise
 export interface NotesUpdateOptions {
   api?: string; slug?: string; path?: string; map?: string;
   title?: string; body?: string; clearBody?: boolean; rename?: string;
+  folder?: string; unfile?: boolean;
 }
 
 export async function notesUpdate(note: string, options: NotesUpdateOptions): Promise<void> {
-  if (!options.title && options.body === undefined && !options.clearBody && !options.rename) {
-    return die("Nothing to update — pass --title, --body (or --clear-body), and/or --rename.");
+  if (!options.title && options.body === undefined && !options.clearBody && !options.rename && options.folder === undefined && !options.unfile) {
+    return die("Nothing to update — pass --title, --body (or --clear-body), --folder (or --unfile), and/or --rename.");
   }
   const res = await updateNote(options.path || ".", {
     api: options.api, slug: options.slug, mapSlug: options.map,
@@ -54,6 +55,7 @@ export async function notesUpdate(note: string, options: NotesUpdateOptions): Pr
     title: options.title,
     body: options.clearBody ? null : options.body,
     new_slug: options.rename,
+    folder: options.unfile ? null : options.folder,
   });
   if (!res.ok || !res.note) return die(failMessage(res.code, res.message, "notes update"));
   console.log(`[alkahest] updated note "${res.note.title}" — slug ${res.note.slug}`);

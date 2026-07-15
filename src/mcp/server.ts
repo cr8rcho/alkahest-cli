@@ -584,12 +584,13 @@ export function buildServer(): McpServer {
         body: z.string().optional().describe("Note body as a markdown document (details, context)"),
         note_slug: z.string().optional().describe("Explicit note address (default: derived from the title)"),
         parent_id: z.string().optional().describe("Parent note id — creates a child edge (parent → new)"),
+        folder: z.string().optional().describe("Tree-sidebar path like 'raw/articles' (omit = unfiled) — the web viewer's Obsidian-style tree groups by it"),
         map: z.string().optional().describe("Which note map to add to (a project can hold several; omit when there's one). List them with the maps tool, or create one with create_map."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, body, note_slug, parent_id, map, path }) => {
-      const res = await createNote(rootOf(path), { title, body, note_slug, parent_id, mapSlug: map });
+    async ({ title, body, note_slug, parent_id, folder, map, path }) => {
+      const res = await createNote(rootOf(path), { title, body, note_slug, parent_id, folder, mapSlug: map });
       if (!res.ok || !res.note) return issueFail("Add note", res.code, res.message, res.maps);
       return json({ ok: true, note: res.note });
     },
@@ -653,19 +654,20 @@ export function buildServer(): McpServer {
       title: "Update a note",
       description:
         "Edit a note in place — when knowledge on a topic evolves, update its note rather than adding a near-" +
-        "duplicate. Replaces title and/or markdown body; new_slug renames the note's address. Address by note slug " +
+        "duplicate. Replaces title and/or markdown body; new_slug renames the note's address; folder moves it in the tree sidebar. Address by note slug " +
         "(see the notes tool), or uuid. Needs a publish token; owner or collaborator only.",
       inputSchema: {
         note: z.string().describe("Note slug (or id) to edit"),
         title: z.string().optional().describe("New title"),
         body: z.string().optional().describe("New body as markdown (replaces the old one)"),
         new_slug: z.string().optional().describe("New note address (slug)"),
+        folder: z.string().nullable().optional().describe("Tree-sidebar path like 'raw/articles'; null unfiles the note; omit = untouched"),
         map: z.string().optional().describe("Which note map (a project can hold several; omit when there's one)"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ note, title, body, new_slug, map, path }) => {
-      const res = await updateNote(rootOf(path), { note, title, body, new_slug, mapSlug: map });
+    async ({ note, title, body, new_slug, folder, map, path }) => {
+      const res = await updateNote(rootOf(path), { note, title, body, new_slug, folder, mapSlug: map });
       if (!res.ok || !res.note) return issueFail("Update note", res.code, res.message, res.maps);
       return json({ ok: true, note: res.note });
     },

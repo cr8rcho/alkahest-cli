@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, extname, join } from "node:path";
+import { basename, dirname, extname, join, relative, sep } from "node:path";
 import { createNote, linkNotes, mapNote, pullNotes, updateNote } from "./notes.js";
 
 /**
@@ -30,6 +30,8 @@ export interface ImportFilePlan {
   name: string;
   /** Body with the YAML frontmatter stripped. */
   body: string;
+  /** Tree path = the file's subdirectory relative to the import root ('' at the root). */
+  folder: string;
   /** Normalized [[wikilink]] targets found in the body (deduped, self-links dropped). */
   links: string[];
   /** What the import will do with it: create | update. */
@@ -137,7 +139,10 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
     const body = rest.trim();
     const links = extractLinks(body).filter((t) => t.toLowerCase() !== name.toLowerCase());
     const action = existingByTitle.has(title.trim().toLowerCase()) ? "update" as const : "create" as const;
-    return { file, title, name, body, links, action };
+    // The vault's directory structure becomes the note's tree path (cloud ADR-035).
+    const rel = relative(params.dir, dirname(file));
+    const folder = rel && rel !== "." ? rel.split(sep).join("/") : "";
+    return { file, title, name, body, links, action, folder };
   });
 
   // Link-resolution index: an imported file's basename, or an existing note's title.
@@ -164,7 +169,7 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
     const shared = { api: params.api, token: params.token, slug: params.slug };
     const existing = existingByTitle.get(p.title.trim().toLowerCase());
     if (existing) {
-      const res = await updateNote(path, { ...shared, note: existing.id, body: p.body });
+      const res = await updateNote(path, { ...shared, note: existing.id, body: p.body, folder: p.folder || null });
       if (!res.ok || !res.note) { failures.push({ file: p.file, message: res.message ?? res.code ?? "update failed" }); continue; }
       // The note may live on other maps only — make sure it sits on the target map too.
       const mem = await mapNote(path, { ...shared, noteRef: existing.id, mapSlug: params.mapSlug });
@@ -172,7 +177,7 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
       idByName.set(p.name.toLowerCase(), existing.id);
       updated++;
     } else {
-      const res = await createNote(path, { ...shared, mapSlug: params.mapSlug, title: p.title, body: p.body });
+      const res = await createNote(path, { ...shared, mapSlug: params.mapSlug, title: p.title, body: p.body, folder: p.folder || undefined });
       if (!res.ok || !res.note) { failures.push({ file: p.file, message: res.message ?? res.code ?? "create failed" }); continue; }
       idByName.set(p.name.toLowerCase(), res.note.id);
       existingByTitle.set(p.title.trim().toLowerCase(), { id: res.note.id, slug: res.note.slug });

@@ -21,6 +21,8 @@ export interface Note {
   body?: string | null;
   /** Present (true) when an 'excerpt' listing truncated this body — get the note for the rest. */
   body_more?: boolean;
+  /** Tree-sidebar path like 'raw/articles' (cloud ADR-035); null = unfiled. */
+  folder?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -149,6 +151,8 @@ export interface CreateNoteParams {
   note_slug?: string;
   /** Existing note id — creates a 'child' edge parent→new. */
   parent_id?: string;
+  /** Tree-sidebar path like 'raw/articles' (cloud ADR-035). Omit = unfiled. */
+  folder?: string;
 }
 
 export async function createNote(path: string, params: CreateNoteParams): Promise<NoteWriteResult> {
@@ -161,6 +165,7 @@ export async function createNote(path: string, params: CreateNoteParams): Promis
     mapSlug: params.mapSlug,
     title: params.title.trim(),
     body: params.body,
+    folder: params.folder,
     note_slug: params.note_slug,
     parent_id: params.parent_id,
   });
@@ -181,6 +186,8 @@ export interface UpdateNoteParams {
   body?: string | null;
   /** Rename the note's wiki address. */
   new_slug?: string;
+  /** Tree path (cloud ADR-035): string to set, null to unfile, undefined = untouched. */
+  folder?: string | null;
 }
 
 export async function updateNote(path: string, params: UpdateNoteParams): Promise<NoteWriteResult> {
@@ -194,6 +201,7 @@ export async function updateNote(path: string, params: UpdateNoteParams): Promis
     note: params.note.trim(),
     title: params.title,
     body: params.body,
+    folder: params.folder,
     new_slug: params.new_slug,
   });
   if (!res.ok) return fail(res, "update");
