@@ -159,8 +159,8 @@ export async function issuesMap(id: string, options: IssuesMapOptions): Promise<
   });
   if (!res.ok) return die(failMessage(res.code, res.message, options.remove ? "issues unmap" : "issues map"));
   console.log(options.remove
-    ? `[alkahest] removed issue ${res.issue ?? id} from map ${res.map} (the issue stays in the project pool)`
-    : `[alkahest] placed issue ${res.issue ?? id} on map ${res.map}`);
+    ? `[alkahest] removed issue “${res.issue?.title ?? id}” from map ${res.map?.slug ?? ""} (the issue stays in the project pool)`
+    : `[alkahest] placed issue “${res.issue?.title ?? id}” on map ${res.map?.slug ?? ""}`);
 }
 
 export async function issuesRm(id: string, options: IssuesWriteOptions): Promise<void> {

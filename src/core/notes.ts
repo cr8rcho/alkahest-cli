@@ -283,10 +283,10 @@ export interface MapNoteParams {
 
 export interface NoteMembershipResult {
   ok: boolean;
-  /** The note's project-unique slug (echoed by the server). */
-  note?: string;
-  /** The resolved note-map slug. */
-  map?: string;
+  /** The note row (id, project-unique slug, title) echoed by the server. */
+  note?: { id: string; slug: string | null; title: string };
+  /** The resolved note map (id + slug). */
+  map?: { id: string; slug: string };
   /** Whether the note sits on the map after the call. */
   member?: boolean;
   code?: string;

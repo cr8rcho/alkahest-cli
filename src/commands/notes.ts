@@ -110,8 +110,8 @@ export async function notesMap(note: string, options: NotesMapOptions): Promise<
   });
   if (!res.ok) return die(failMessage(res.code, res.message, options.remove ? "notes unmap" : "notes map"));
   console.log(options.remove
-    ? `[alkahest] removed ${res.note ?? note} from map ${res.map} (the note stays in the project pool)`
-    : `[alkahest] placed ${res.note ?? note} on map ${res.map}`);
+    ? `[alkahest] removed ${res.note?.slug ?? note} from map ${res.map?.slug ?? ""} (the note stays in the project pool)`
+    : `[alkahest] placed ${res.note?.slug ?? note} on map ${res.map?.slug ?? ""}`);
 }
 
 export interface NotesLinkOptions {

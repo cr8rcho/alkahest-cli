@@ -299,10 +299,10 @@ export interface MapIssueParams {
 
 export interface IssueMembershipResult {
   ok: boolean;
-  /** The issue id (echoed by the server). */
-  issue?: string;
-  /** The resolved issue-map slug. */
-  map?: string;
+  /** The issue row (id + title) echoed by the server. */
+  issue?: { id: string; title: string };
+  /** The resolved issue map (id + slug). */
+  map?: { id: string; slug: string };
   /** Whether the issue sits on the map after the call. */
   member?: boolean;
   code?: string;
