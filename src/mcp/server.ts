@@ -15,8 +15,9 @@ import {
   pullIssueComments,
   postIssueComment,
   resolveIssueComment,
+  mapIssue,
 } from "../core/issues.js";
-import { createNote, getNote, linkNotes, pullNotes, updateNote } from "../core/notes.js";
+import { createNote, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
 import { listHistory } from "../core/history.js";
@@ -621,6 +622,29 @@ export function buildServer(): McpServer {
   );
 
   server.registerTool(
+    "map_note",
+    {
+      title: "Place a note on / off a note map",
+      description:
+        "Place an existing pool note onto a note map (note maps are lenses over the project's note pool — a note " +
+        "can sit on several maps at once), or take it off with remove:true. The note itself is never deleted — " +
+        "membership only changes which lenses show it. Adding is idempotent. Address the note by its project-unique " +
+        "slug (see the notes tool). Needs a publish token; owner or collaborator only.",
+      inputSchema: {
+        note: z.string().describe("Note slug (or id) from the project's pool"),
+        map: z.string().optional().describe("Which note map (a project can hold several; omit when there's one). List them with the maps tool."),
+        remove: z.boolean().optional().describe("true → take the note off the map (the note itself is never deleted)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ note, map, remove, path }) => {
+      const res = await mapNote(rootOf(path), { noteRef: note, mapSlug: map, remove });
+      if (!res.ok) return issueFail(remove ? "Unmap note" : "Map note", res.code, res.message, res.maps);
+      return json({ ok: true, note: res.note, map: res.map, member: res.member });
+    },
+  );
+
+  server.registerTool(
     "update_note",
     {
       title: "Update a note",
@@ -825,6 +849,29 @@ export function buildServer(): McpServer {
       const res = await updateIssue(rootOf(path), { id: from, ...(remove ? { remove_edges: edge } : { add_edges: edge }) });
       if (!res.ok) return issueFail("Link issues", res.code, res.message);
       return json({ ok: true, from, to, kind: kind ?? "blocks", removed: Boolean(remove) });
+    },
+  );
+
+  server.registerTool(
+    "map_issue",
+    {
+      title: "Place an issue on / off an issue map",
+      description:
+        "Place an existing issue onto an issue map (issue maps are lenses over the project's issue pool — an issue " +
+        "can appear on several maps at once), or take it off with remove:true. The issue itself is never deleted — " +
+        "membership only changes which maps show it. Adding is idempotent. Use it to compose per-workstream issue " +
+        "maps. Needs a publish token; owner or collaborator only.",
+      inputSchema: {
+        issue: z.string().describe("Issue id (from the issues tool)"),
+        map: z.string().optional().describe("Which issue map (a project can hold several; omit when there's one). List them with the maps tool."),
+        remove: z.boolean().optional().describe("true → take the issue off the map (the issue itself is never deleted)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ issue, map, remove, path }) => {
+      const res = await mapIssue(rootOf(path), { issueId: issue, mapSlug: map, remove });
+      if (!res.ok) return issueFail(remove ? "Unmap issue" : "Map issue", res.code, res.message, res.maps);
+      return json({ ok: true, issue: res.issue, map: res.map, member: res.member });
     },
   );
 

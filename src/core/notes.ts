@@ -266,6 +266,57 @@ export interface LinkNotesParams {
   remove?: boolean;
 }
 
+export interface MapNoteParams {
+  api?: string;
+  token?: string;
+  slug?: string;
+  /** The note's address (project-unique slug, or uuid). */
+  noteRef: string;
+  /** Which note map to place it on. Omit → the sole one (else `ambiguous_map`). */
+  mapSlug?: string;
+  /** true → take the note OFF the map instead. The note itself is never deleted. */
+  remove?: boolean;
+  /** Canvas position on that map (add only; omit → the server picks). */
+  x?: number;
+  y?: number;
+}
+
+export interface NoteMembershipResult {
+  ok: boolean;
+  /** The note's project-unique slug (echoed by the server). */
+  note?: string;
+  /** The resolved note-map slug. */
+  map?: string;
+  /** Whether the note sits on the map after the call. */
+  member?: boolean;
+  code?: string;
+  message?: string;
+  /** Present on ambiguous_map / unknown-slug: the project's note maps (slug + name). */
+  maps?: { slug: string; name: string | null }[];
+}
+
+/**
+ * Place a pool note on a note map, or take it off (cloud ADR-029 membership). Note maps are
+ * lenses over the project's note pool — a note can sit on several maps at once, and removing
+ * it from one never deletes the note. Add is an idempotent upsert (x/y update the layout).
+ */
+export async function mapNote(path: string, params: MapNoteParams): Promise<NoteMembershipResult> {
+  const ctx = authContext(path, params, true);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.noteRef?.trim()) return { ok: false, code: "no_note", message: "A note slug (or id) is required." };
+
+  const res = await request(`${ctx.apiUrl}/notes-map`, ctx.token, {
+    slug: ctx.slug,
+    note: params.noteRef.trim(),
+    map: params.mapSlug,
+    remove: params.remove === true,
+    x: params.x,
+    y: params.y,
+  });
+  if (!res.ok) return fail(res, params.remove ? "unmap" : "map");
+  return { ok: true, note: res.body?.note, map: res.body?.map, member: !!res.body?.member };
+}
+
 export async function linkNotes(path: string, params: LinkNotesParams): Promise<NoteWriteResult & { removed?: boolean }> {
   const ctx = authContext(path, params, true);
   if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };

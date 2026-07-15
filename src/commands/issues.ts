@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { OUTPUT_DIR } from "../core/emit.js";
 import {
-  pullIssues, createIssue, updateIssue, deriveIssueStates, terminalStatuses,
+  pullIssues, createIssue, updateIssue, mapIssue, deriveIssueStates, terminalStatuses,
   pullIssueComments, postIssueComment, resolveIssueComment,
   type IssueGraph, type IssueEdge,
 } from "../core/issues.js";
@@ -148,6 +148,19 @@ export async function issuesLink(from: string, to: string, options: IssuesLinkOp
   });
   if (!res.ok) return die(failMessage(res.code, res.message, "issues link"));
   console.log(`[alkahest] ${options.remove ? "removed" : "linked"}: ${from} —${kind}→ ${to}`);
+}
+
+export interface IssuesMapOptions extends IssuesWriteOptions { map?: string; remove?: boolean; }
+
+/** Place an issue on an issue map (or take it off) — maps are lenses; the issue is never deleted. */
+export async function issuesMap(id: string, options: IssuesMapOptions): Promise<void> {
+  const res = await mapIssue(options.path || ".", {
+    api: options.api, slug: options.slug, issueId: id, mapSlug: options.map, remove: options.remove,
+  });
+  if (!res.ok) return die(failMessage(res.code, res.message, options.remove ? "issues unmap" : "issues map"));
+  console.log(options.remove
+    ? `[alkahest] removed issue ${res.issue ?? id} from map ${res.map} (the issue stays in the project pool)`
+    : `[alkahest] placed issue ${res.issue ?? id} on map ${res.map}`);
 }
 
 export async function issuesRm(id: string, options: IssuesWriteOptions): Promise<void> {

@@ -1,4 +1,4 @@
-import { createNote, getNote, linkNotes, pullNotes, updateNote } from "../core/notes.js";
+import { createNote, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 
 /**
  * CLI surface of the hosted Note Map (cloud ADR-017 canvas + ADR-027 documents). `notes add`
@@ -97,6 +97,21 @@ export async function notesShow(note: string, options: NotesShowOptions): Promis
   for (const e of res.incoming ?? []) console.log(`  ← ${name(e.note)} (${e.kind})`);
   for (const k of res.code_links ?? []) console.log(`  code → ${k}`);
   for (const i of res.issues ?? []) console.log(`  issue → ${i.title ?? i.id}${i.status ? ` [${i.status}]` : ""}`);
+}
+
+export interface NotesMapOptions {
+  api?: string; slug?: string; path?: string; map?: string; remove?: boolean;
+}
+
+/** Place a pool note on a note map (or take it off) — maps are lenses; the note is never deleted. */
+export async function notesMap(note: string, options: NotesMapOptions): Promise<void> {
+  const res = await mapNote(options.path || ".", {
+    api: options.api, slug: options.slug, noteRef: note, mapSlug: options.map, remove: options.remove,
+  });
+  if (!res.ok) return die(failMessage(res.code, res.message, options.remove ? "notes unmap" : "notes map"));
+  console.log(options.remove
+    ? `[alkahest] removed ${res.note ?? note} from map ${res.map} (the note stays in the project pool)`
+    : `[alkahest] placed ${res.note ?? note} on map ${res.map}`);
 }
 
 export interface NotesLinkOptions {

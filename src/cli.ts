@@ -8,8 +8,8 @@ import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
-import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
-import { notesAdd, notesLink, notesList, notesShow, notesUpdate } from "./commands/notes.js";
+import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
+import { notesAdd, notesLink, notesList, notesMap, notesShow, notesUpdate } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
 import { history } from "./commands/history.js";
@@ -190,6 +190,16 @@ issues
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((from: string, to: string, opts: { kind?: string; remove?: boolean; path?: string; api?: string }) => issuesLink(from, to, opts));
 issues
+  .command("map")
+  .description("place an issue on an issue map, or take it off with --remove (maps are lenses over the issue pool; the issue is never deleted)")
+  .argument("<id>", "issue id (from 'issues pull')")
+  .option("--map <slug>", "target issue map (omit when the project has just one)")
+  .option("--remove", "take the issue off the map instead of placing it", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: Parameters<typeof issuesMap>[1]) => issuesMap(id, opts));
+issues
   .command("rm")
   .description("delete an issue (author or project owner only; its edges go with it)")
   .argument("<id>", "issue id")
@@ -277,6 +287,16 @@ notes
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((from: string, to: string, opts: Parameters<typeof notesLink>[2]) => notesLink(from, to, opts));
+notes
+  .command("map")
+  .description("place a pool note on a note map, or take it off with --remove (maps are lenses over the note pool; the note is never deleted)")
+  .argument("<note>", "note slug (or id)")
+  .option("--map <slug>", "target note map (omit when the project has just one)")
+  .option("--remove", "take the note off the map instead of placing it", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((note: string, opts: Parameters<typeof notesMap>[1]) => notesMap(note, opts));
 notes
   .command("update")
   .description("edit a note in place — the wiki's upsert half (update, don't re-add)")

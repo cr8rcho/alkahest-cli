@@ -100,9 +100,11 @@ alkahest comments issue <ids…>  # file the given comments as ONE GitHub issue 
 alkahest issues pull   # pull the project's Issue Map (graph-shaped issue tracker) → .alkahest/issues.json
 alkahest issues add <title>     # create an issue (--parent epic, --target s:…/r:…//route, --type/--status, --priority/--due/--assignee)
 alkahest issues done <id>       # mark an issue finished (other ops: status / priority / due / assign / link / rm)
+alkahest issues map <id>        # place an issue on an issue map (--map), or take it off with --remove (never deletes the issue)
 alkahest notes add <title>      # create a markdown note on the Note Map (--body, --parent, --map)
 alkahest notes list             # list a note map's notes (--q to search); show <slug> for one note with connections
 alkahest notes update <slug>    # edit a note in place (--title/--body/--rename) — update, don't re-add
+alkahest notes map <slug>       # place a pool note on a note map (--map), or take it off with --remove (never deletes the note)
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 
@@ -170,6 +172,13 @@ Or add it to any MCP-capable agent's config directly:
 | `add_issue` | create an issue while planning with the user — `parent_id` groups under an epic, `target` ties it to the code map (existing node key, or a planned `/route` that converges when the screen ships) (needs a token) |
 | `update_issue` | move status (e.g. to done when the work ships — progress gets painted onto the map), edit fields, or delete (needs a token) |
 | `link_issues` | add/remove an edge between issues: `blocks` (dependency), `contains` (epic→task), `relates` (needs a token) |
+| `map_issue` | place an issue on an issue map, or take it off with `remove` — issue maps are lenses over the project's issue pool, so an issue can appear on several maps; removing it from one never deletes the issue (needs a token) |
+| `notes` | read the project's **Note Map** — markdown notes drawn as a mindmap, with per-project slug addresses and hand-drawn edges. Check it before adding: update an existing note instead of creating a near-duplicate (needs a token) |
+| `get_note` | one note in full: markdown body, connections and backlinks, plus its issue/code links (needs a token) |
+| `add_note` | create a markdown note to record durable knowledge — a decision, a convention, a constraint; `parent_id` draws a mindmap child edge (needs a token) |
+| `update_note` | edit a note in place when knowledge on a topic evolves — update, don't re-add (needs a token) |
+| `link_notes` | connect a note to another note, an issue (`issue:<uuid>`), or a code-map node (`code:s:…`/`code:r:…`) — all links are explicit; bodies are never parsed (needs a token) |
+| `map_note` | place a pool note on a note map, or take it off with `remove` — note maps are lenses over the project's note pool, so a note can sit on several maps; removing it from one never deletes the note (needs a token) |
 | `check_version` | report installed vs latest GitHub release (so the agent can suggest `alkahest update`) |
 
 The agent reads with `get_screen` / `who_calls` and writes back with `set_summary` / `set_prd`; both write into `map.json` and re-render `index.html`, so the dashboard always reflects the latest.

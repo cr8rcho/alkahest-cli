@@ -282,6 +282,57 @@ export async function updateIssue(path: string, params: UpdateIssueParams): Prom
   return res.body?.deleted ? { ok: true, deleted: true } : { ok: true, issue: res.body?.issue };
 }
 
+export interface MapIssueParams {
+  api?: string;
+  token?: string;
+  slug?: string;
+  /** Issue id (uuid, from 'issues pull' / the issues tool). */
+  issueId: string;
+  /** Which issue map to place it on. Omit → the sole one (else `ambiguous_map`). */
+  mapSlug?: string;
+  /** true → take the issue OFF the map instead. The issue itself is never deleted. */
+  remove?: boolean;
+  /** Canvas position on that map (add only; omit → the server picks). */
+  x?: number;
+  y?: number;
+}
+
+export interface IssueMembershipResult {
+  ok: boolean;
+  /** The issue id (echoed by the server). */
+  issue?: string;
+  /** The resolved issue-map slug. */
+  map?: string;
+  /** Whether the issue sits on the map after the call. */
+  member?: boolean;
+  code?: string;
+  message?: string;
+  /** Present on ambiguous_map / unknown-slug: the project's issue maps (slug + name). */
+  maps?: { slug: string; name: string | null }[];
+}
+
+/**
+ * Place an issue on an issue map, or take it off (map membership). Issue maps are lenses
+ * over the project's issue pool — an issue can appear on several maps at once, and removing
+ * it from one never deletes the issue. Add is an idempotent upsert (x/y update the layout).
+ */
+export async function mapIssue(path: string, params: MapIssueParams): Promise<IssueMembershipResult> {
+  const ctx = authContext(path, params, true);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.issueId?.trim()) return { ok: false, code: "no_id", message: "Issue id is required." };
+
+  const res = await request(`${ctx.apiUrl}/issues-map`, ctx.token, {
+    slug: ctx.slug,
+    issue: params.issueId.trim(),
+    map: params.mapSlug,
+    remove: params.remove === true,
+    x: params.x,
+    y: params.y,
+  });
+  if (!res.ok) return fail(res, params.remove ? "unmap" : "map");
+  return { ok: true, issue: res.body?.issue, map: res.body?.map, member: !!res.body?.member };
+}
+
 // ── Issue discussion thread (ADR-020 decision channel) ─────────────────────────────────
 // The per-issue Q&A loop: an agent posts a `question` to ask the user a decision while
 // working, a member replies (the decision), resolving the question closes it, and a
