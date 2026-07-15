@@ -9,7 +9,7 @@ import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
-import { notesAdd, notesLink, notesList, notesMap, notesShow, notesUpdate } from "./commands/notes.js";
+import { notesAdd, notesImport, notesLink, notesList, notesMap, notesShow, notesUpdate } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
 import { history } from "./commands/history.js";
@@ -297,6 +297,17 @@ notes
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((note: string, opts: Parameters<typeof notesMap>[1]) => notesMap(note, opts));
+notes
+  .command("import")
+  .description("import a folder of Obsidian-style .md files — one note per file, [[wikilinks]] become explicit edges (re-run to refresh: matches by title)")
+  .argument("<dir>", "folder to walk recursively (dot-dirs like .obsidian are skipped)")
+  .option("--map <slug>", "which note map the notes land on (omit when the project has just one)")
+  .option("--exclude <name...>", "basenames to skip, e.g. --exclude index log")
+  .option("--dry-run", "plan only: show what would be created/updated/linked", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((dir: string, opts: Parameters<typeof notesImport>[1]) => notesImport(dir, opts));
 notes
   .command("update")
   .description("edit a note in place — the wiki's upsert half (update, don't re-add)")

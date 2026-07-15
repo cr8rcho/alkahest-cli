@@ -105,6 +105,7 @@ alkahest notes add <title>      # create a markdown note on the Note Map (--body
 alkahest notes list             # list a note map's notes (--q to search); show <slug> for one note with connections
 alkahest notes update <slug>    # edit a note in place (--title/--body/--rename) — update, don't re-add
 alkahest notes map <slug>       # place a pool note on a note map (--map), or take it off with --remove (never deletes the note)
+alkahest notes import <dir>     # import an Obsidian-style folder of .md files: one note per file, [[wikilinks]] → explicit edges (--map, --exclude, --dry-run; re-run to refresh)
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 

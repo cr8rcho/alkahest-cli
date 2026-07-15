@@ -529,17 +529,20 @@ export function buildServer(): McpServer {
       title: "Note map graph",
       description:
         "Read this project's Note Map — markdown notes drawn as a mindmap on the hosted viewer. Returns each map's " +
-        "notes (with per-map slug addresses and markdown bodies) and its hand-drawn edges. ALWAYS check this before " +
-        "add_note when recording knowledge: if a note on the topic exists, update_note it instead of adding a near-" +
-        "duplicate. `q` searches title/slug/body. Needs a publish token and a published project.",
+        "notes (with per-map slug addresses) and its hand-drawn edges. Bodies come back as EXCERPTS (first 240 chars, " +
+        "body_more marks truncation) so listing a big wiki stays cheap — read one full document with get_note, or " +
+        "pass full_bodies only when you truly need every document at once. ALWAYS check this before add_note when " +
+        "recording knowledge: if a note on the topic exists, update_note it instead of adding a near-duplicate. " +
+        "`q` searches title/slug/FULL body server-side. Needs a publish token and a published project.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
-        q: z.string().optional().describe("Filter notes by title/slug/body substring"),
+        q: z.string().optional().describe("Filter notes by title/slug/body substring (matches the full body)"),
         map: z.string().optional().describe("Restrict to one note map (default: all readable). List them with the maps tool."),
+        full_bodies: z.boolean().optional().describe("Return complete bodies instead of 240-char excerpts (heavy on a big wiki)"),
       },
     },
-    async ({ path, q, map }) => {
-      const res = await pullNotes(rootOf(path), { mapSlug: map, q });
+    async ({ path, q, map, full_bodies }) => {
+      const res = await pullNotes(rootOf(path), { mapSlug: map, q, bodies: full_bodies ? undefined : "excerpt" });
       if (!res.ok || !res.maps) return issueFail("Read notes", res.code, res.message, res.mapList);
       return json({ ok: true, project: res.project, count: res.maps.reduce((n, m) => n + m.notes.length, 0), maps: res.maps });
     },

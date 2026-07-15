@@ -17,7 +17,10 @@ export interface Note {
   id: string;
   slug: string;
   title: string;
-  body: string | null;
+  /** Omitted when listing with bodies:'none'; truncated (body_more=true) with 'excerpt'. */
+  body?: string | null;
+  /** Present (true) when an 'excerpt' listing truncated this body — get the note for the rest. */
+  body_more?: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -205,6 +208,10 @@ export interface PullNotesParams {
   mapSlug?: string;
   /** Filter notes by title/slug/body substring. */
   q?: string;
+  /** List payload size (server-side, cloud ADR-033 scale follow-up): omit → full bodies;
+   *  'excerpt' → first 240 chars + body_more flag; 'none' → body omitted. Search (`q`)
+   *  always matches the full body regardless. */
+  bodies?: "excerpt" | "none";
 }
 
 export async function pullNotes(path: string, params: PullNotesParams = {}): Promise<NotesPullResult> {
@@ -214,6 +221,7 @@ export async function pullNotes(path: string, params: PullNotesParams = {}): Pro
   const qs = new URLSearchParams({ slug: ctx.slug! });
   if (params.mapSlug) qs.set("map", params.mapSlug);
   if (params.q) qs.set("q", params.q);
+  if (params.bodies) qs.set("bodies", params.bodies);
   const res = await request(`${ctx.apiUrl}/notes-pull?${qs}`, ctx.token);
   if (!res.ok) {
     const f = fail(res, "pull");

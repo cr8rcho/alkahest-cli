@@ -1,4 +1,5 @@
 import { createNote, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
+import { importNotes } from "../core/notesImport.js";
 
 /**
  * CLI surface of the hosted Note Map (cloud ADR-017 canvas + ADR-027 documents). `notes add`
@@ -63,8 +64,9 @@ export interface NotesListOptions {
 }
 
 export async function notesList(options: NotesListOptions): Promise<void> {
+  // The list prints slug/title/link counts only — skip the bodies server-side.
   const res = await pullNotes(options.path || ".", {
-    api: options.api, slug: options.slug, mapSlug: options.map, q: options.q,
+    api: options.api, slug: options.slug, mapSlug: options.map, q: options.q, bodies: "none",
   });
   if (!res.ok || !res.maps) return die(failMessage(res.code, res.message, "notes list"));
   if (!res.maps.length) return console.log("[alkahest] no note maps in this project.");
@@ -112,6 +114,32 @@ export async function notesMap(note: string, options: NotesMapOptions): Promise<
   console.log(options.remove
     ? `[alkahest] removed ${res.note?.slug ?? note} from map ${res.map?.slug ?? ""} (the note stays in the project pool)`
     : `[alkahest] placed ${res.note?.slug ?? note} on map ${res.map?.slug ?? ""}`);
+}
+
+export interface NotesImportOptions {
+  api?: string; slug?: string; path?: string; map?: string;
+  exclude?: string[]; dryRun?: boolean;
+}
+
+/** Import a folder of Obsidian-style .md files: one note per file, [[wikilinks]] → explicit edges. */
+export async function notesImport(dir: string, options: NotesImportOptions): Promise<void> {
+  const res = await importNotes(options.path || ".", {
+    api: options.api, slug: options.slug, mapSlug: options.map,
+    dir, exclude: options.exclude, dryRun: options.dryRun,
+  });
+  if (!res.ok) {
+    if (res.code === "ambiguous_map" && res.maps?.length) {
+      return die(`${res.message}\n  Pass --map with one of: ${res.maps.map((m) => m.slug).join(", ")}`);
+    }
+    return die(failMessage(res.code, res.message, "notes import"));
+  }
+  const label = options.dryRun ? "would import" : "imported";
+  console.log(`[alkahest] ${label} ${res.files?.length ?? 0} file(s): ${res.created} new, ${res.updated} updated, ${res.linked} link(s)`);
+  if (res.unresolved?.length) {
+    console.log(`[alkahest] unresolved [[targets]] (no matching file or note): ${res.unresolved.join(", ")}`);
+  }
+  for (const f of res.failures ?? []) console.error(`[alkahest] ✗ ${f.file}: ${f.message}`);
+  if (res.failures?.length) process.exitCode = 1;
 }
 
 export interface NotesLinkOptions {
