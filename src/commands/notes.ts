@@ -123,7 +123,7 @@ export interface NotesImportOptions {
   exclude?: string[]; dryRun?: boolean;
 }
 
-/** Import a folder of Obsidian-style .md files: one note per file, [[wikilinks]] → explicit edges. */
+/** Import a folder of Obsidian-style .md files — one note per file; [[wikilinks]] stay in the text and render at read time. */
 export async function notesImport(dir: string, options: NotesImportOptions): Promise<void> {
   const res = await importNotes(options.path || ".", {
     api: options.api, slug: options.slug, mapSlug: options.map,
@@ -136,7 +136,7 @@ export async function notesImport(dir: string, options: NotesImportOptions): Pro
     return die(failMessage(res.code, res.message, "notes import"));
   }
   const label = options.dryRun ? "would import" : "imported";
-  console.log(`[alkahest] ${label} ${res.files?.length ?? 0} file(s): ${res.created} new, ${res.updated} updated, ${res.linked} link(s)`);
+  console.log(`[alkahest] ${label} ${res.files?.length ?? 0} file(s): ${res.created} new, ${res.updated} updated — ${res.linked} [[ref]](s) resolve (drawn from the text at read time)`);
   if (res.unresolved?.length) {
     console.log(`[alkahest] unresolved [[targets]] (no matching file or note): ${res.unresolved.join(", ")}`);
   }

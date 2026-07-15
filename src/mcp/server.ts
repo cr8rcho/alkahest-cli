@@ -529,7 +529,7 @@ export function buildServer(): McpServer {
       title: "Note map graph",
       description:
         "Read this project's Note Map — markdown notes drawn as a mindmap on the hosted viewer. Returns each map's " +
-        "notes (with per-map slug addresses) and its hand-drawn edges. Bodies come back as EXCERPTS (first 240 chars, " +
+        "notes (with per-map slug addresses) and its connections — explicit agent-drawn edges AND the [[wikilink]] references derived from bodies at read time (kind 'wikilink', derived:true). Bodies come back as EXCERPTS (first 240 chars, " +
         "body_more marks truncation) so listing a big wiki stays cheap — read one full document with get_note, or " +
         "pass full_bodies only when you truly need every document at once. ALWAYS check this before add_note when " +
         "recording knowledge: if a note on the topic exists, update_note it instead of adding a near-duplicate. " +
@@ -553,7 +553,7 @@ export function buildServer(): McpServer {
     {
       title: "Read one note",
       description:
-        "One note in full: markdown body, outgoing connections and backlinks (canvas edges). Address by note slug " +
+        "One note in full: markdown body, outgoing connections and backlinks — explicit edges plus [[wikilink]] references derived from bodies at read time (kind 'wikilink'). Address by note slug " +
         "(see the notes tool), or uuid. Needs a publish token.",
       inputSchema: {
         note: z.string().describe("Note slug (or id)"),

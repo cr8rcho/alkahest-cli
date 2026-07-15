@@ -1,12 +1,12 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, extname, join, relative, sep } from "node:path";
-import { createNote, linkNotes, mapNote, pullNotes, updateNote } from "./notes.js";
+import { createNote, mapNote, pullNotes, updateNote } from "./notes.js";
 
 /**
  * Obsidian-vault importer: walk a folder of .md files and mirror it into the hosted note
- * pool — one note per file, then the files' [[wikilinks]] materialized as EXPLICIT note
- * edges (one-time, at import; cloud ADR-028 keeps bodies plain and never live-parses them,
- * so this is the sanctioned bridge for vaults that already speak [[…]]).
+ * pool — one note per file. The files' [[wikilinks]] need no materialization: the hosted
+ * viewer AND notes-pull derive them from the bodies at read time (cloud ADR-034), so the
+ * text stays the sole owner of the links; import only reports how many resolve.
  *
  * Obsidian semantics honored:
  *  - the FILENAME is the page's canonical name (title = frontmatter `title:` > basename);
@@ -16,7 +16,7 @@ import { createNote, linkNotes, mapNote, pullNotes, updateNote } from "./notes.j
  *
  * Idempotent by title: a file whose title matches an existing note (case-insensitive)
  * updates that note's body instead of creating a duplicate, so re-running an import
- * refreshes the map. Edges upsert server-side (notes-link), so links never duplicate.
+ * refreshes the map.
  *
  * Like notes.ts, everything returns a structured result and never writes to stdout.
  */
@@ -145,14 +145,11 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
     return { file, title, name, body, links, action, folder };
   });
 
-  // Link-resolution index: an imported file's basename, or an existing note's title.
-  const idByName = new Map<string, string>();
-  const wantsResolution = new Set(plans.flatMap((p) => p.links.map((t) => t.toLowerCase())));
-
   if (params.dryRun) {
     const resolvable = new Set(plans.map((p) => p.name.toLowerCase()));
     for (const t of existingByTitle.keys()) resolvable.add(t);
-    const unresolved = [...wantsResolution].filter((t) => !resolvable.has(t));
+    const wants = new Set(plans.flatMap((p) => p.links.map((t) => t.toLowerCase())));
+    const unresolved = [...wants].filter((t) => !resolvable.has(t));
     return {
       ok: true, files: plans,
       created: plans.filter((p) => p.action === "create").length,
@@ -174,36 +171,24 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
       // The note may live on other maps only — make sure it sits on the target map too.
       const mem = await mapNote(path, { ...shared, noteRef: existing.id, mapSlug: params.mapSlug });
       if (!mem.ok) { failures.push({ file: p.file, message: mem.message ?? mem.code ?? "map failed" }); continue; }
-      idByName.set(p.name.toLowerCase(), existing.id);
       updated++;
     } else {
       const res = await createNote(path, { ...shared, mapSlug: params.mapSlug, title: p.title, body: p.body, folder: p.folder || undefined });
       if (!res.ok || !res.note) { failures.push({ file: p.file, message: res.message ?? res.code ?? "create failed" }); continue; }
-      idByName.set(p.name.toLowerCase(), res.note.id);
       existingByTitle.set(p.title.trim().toLowerCase(), { id: res.note.id, slug: res.note.slug });
       created++;
     }
   }
-  // Targets that aren't imported files can still hit pre-existing pool notes by title.
-  for (const [title, n] of existingByTitle) if (!idByName.has(title)) idByName.set(title, n.id);
-
-  // Write pass 2 — the [[wikilinks]], as explicit arrow edges (upserted server-side).
+  // [[refs]] are NOT written as edges — the hosted side derives them from the bodies at read
+  // time (web canvas + notes-pull kind:'wikilink'). Just report what resolves.
+  const resolvable = new Set(plans.map((p) => p.name.toLowerCase()));
+  for (const t of existingByTitle.keys()) resolvable.add(t);
   let linked = 0;
   const unresolvedSet = new Set<string>();
-  const seenPairs = new Set<string>();
   for (const p of plans) {
-    const fromId = idByName.get(p.name.toLowerCase());
-    if (!fromId) continue; // its write failed — already in failures
     for (const t of p.links) {
-      const toId = idByName.get(t.toLowerCase());
-      if (!toId) { unresolvedSet.add(t); continue; }
-      if (toId === fromId) continue;
-      const pair = `${fromId}→${toId}`;
-      if (seenPairs.has(pair)) continue;
-      seenPairs.add(pair);
-      const res = await linkNotes(path, { api: params.api, token: params.token, slug: params.slug, from: fromId, to: toId, kind: "link" });
-      if (!res.ok) failures.push({ file: p.file, message: `link → ${t}: ${res.message ?? res.code}` });
-      else linked++;
+      if (resolvable.has(t.toLowerCase())) linked++;
+      else unresolvedSet.add(t);
     }
   }
 
