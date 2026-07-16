@@ -51,6 +51,10 @@ export interface PublishResult {
   mapUrl?: string;
   /** Whether this was the project's first publish (a new slug was created). */
   created?: boolean;
+  /** Set when the server answered with a DIFFERENT slug than the one sent — the project/map
+   *  was renamed (ADR-037 aliases) and the local config has been rewritten to the new one. */
+  renamedFrom?: string;
+  mapRenamedFrom?: string;
   /** What in this project is waiting on the token's user (server-computed on publish, cloud
    *  ADR-032): unresolved decision questions + non-terminal issues assigned to them. Absent
    *  when the server predates ADR-032 or its count failed (best-effort). */
@@ -218,6 +222,11 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     viewerUrl: pub.body.viewerUrl ?? null,
     mapUrl: pub.body.mapUrl,
     created,
+    // The server answers with CANONICAL slugs (ADR-037): a mismatch vs what we sent means a
+    // rename happened server-side — the persistence above already rewrote the local config,
+    // these let the caller tell the user.
+    ...(targetSlug && pub.body.slug && targetSlug !== pub.body.slug ? { renamedFrom: targetSlug } : {}),
+    ...(targetMap && pub.body.mapSlug && targetMap !== pub.body.mapSlug ? { mapRenamedFrom: targetMap } : {}),
     needs: pub.body.needs ?? null,
   };
 }

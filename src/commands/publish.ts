@@ -90,6 +90,15 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
   console.log(`[alkahest] published ${res.slug}${res.mapSlug ? ` (map: ${res.mapSlug})` : ""}`);
   console.log(`  → ${res.viewerUrl ?? res.mapUrl}`);
 
+  // The address changed server-side (project/map slug rename, ADR-037) — the local config is
+  // already rewritten to the new one; say so, since links the user hands out should use it.
+  if (res.renamedFrom) {
+    console.log(`  ↪ project slug renamed: ${res.renamedFrom} → ${res.slug} (local config updated)`);
+  }
+  if (res.mapRenamedFrom) {
+    console.log(`  ↪ map slug renamed: ${res.mapRenamedFrom} → ${res.mapSlug} (local config updated)`);
+  }
+
   // Needs tail (cloud ADR-032): the server counts what's waiting on you in this project —
   // pull the human back to the web at the moment they're already looking at the terminal.
   const n = res.needs;
