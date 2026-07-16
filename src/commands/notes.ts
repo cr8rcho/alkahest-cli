@@ -27,13 +27,13 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
 
 export interface NotesAddOptions {
   api?: string; slug?: string; path?: string; map?: string;
-  body?: string; parent?: string; noteSlug?: string; folder?: string;
+  body?: string; noteSlug?: string; folder?: string;
 }
 
 export async function notesAdd(title: string, options: NotesAddOptions): Promise<void> {
   const res = await createNote(options.path || ".", {
     api: options.api, slug: options.slug, mapSlug: options.map,
-    title, body: options.body, parent_id: options.parent, note_slug: options.noteSlug, folder: options.folder,
+    title, body: options.body, note_slug: options.noteSlug, folder: options.folder,
   });
   if (!res.ok || !res.note) return die(failMessage(res.code, res.message, "notes add"));
   console.log(`[alkahest] created note "${res.note.title}" — slug ${res.note.slug} (id ${res.note.id})`);
@@ -146,19 +146,15 @@ export async function notesImport(dir: string, options: NotesImportOptions): Pro
 
 export interface NotesLinkOptions {
   api?: string; slug?: string; path?: string;
-  style?: string; remove?: boolean;
+  remove?: boolean;
 }
 
-const STYLE_TO_KIND: Record<string, "link" | "child" | "relates"> = { arrow: "link", dotted: "child", dashed: "relates" };
-
 export async function notesLink(from: string, to: string, options: NotesLinkOptions): Promise<void> {
-  const kind = options.style ? STYLE_TO_KIND[options.style] : undefined;
-  if (options.style && !kind) return die("--style must be arrow | dotted | dashed.");
   const res = await linkNotes(options.path || ".", {
-    api: options.api, slug: options.slug, from, to, kind, remove: options.remove,
+    api: options.api, slug: options.slug, from, to, remove: options.remove,
   });
   if (!res.ok) return die(failMessage(res.code, res.message, options.remove ? "notes unlink" : "notes link"));
   console.log(options.remove
     ? `[alkahest] unlinked ${from} → ${to}`
-    : `[alkahest] linked ${from} → ${to}${options.style ? ` (${options.style})` : ""}`);
+    : `[alkahest] linked ${from} → ${to}`);
 }

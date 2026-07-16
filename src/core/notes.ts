@@ -6,8 +6,9 @@ import { resolveProject } from "./project.js";
  * addressable markdown documents (per-map `slug`) arranged on a canvas. The CLI/MCP talk to
  * the notes-post / notes-update / notes-pull edge functions with an alk_ token.
  *
- * The body is PLAIN markdown (ADR-028): it is never parsed for links. Connections are the
- * canvas's hand-drawn edges (or, in the future, explicit link calls).
+ * The body is PLAIN markdown (ADR-028) — and since cloud ADR-036 it's the sole OWNER of
+ * note↔note links: [[refs]] derive the graph at read time (edges come back with kind
+ * 'wikilink'); explicit links exist only for cross targets (issue:/code:).
  *
  * Like publish.ts/issues.ts, everything returns a structured result and never writes to
  * stdout/stderr.
@@ -149,8 +150,6 @@ export interface CreateNoteParams {
   body?: string;
   /** Explicit wiki address (omit → derived from the title server-side). */
   note_slug?: string;
-  /** Existing note id — creates a 'child' edge parent→new. */
-  parent_id?: string;
   /** Tree-sidebar path like 'raw/articles' (cloud ADR-035). Omit = unfiled. */
   folder?: string;
 }
@@ -167,7 +166,6 @@ export async function createNote(path: string, params: CreateNoteParams): Promis
     body: params.body,
     folder: params.folder,
     note_slug: params.note_slug,
-    parent_id: params.parent_id,
   });
   if (!res.ok) return fail(res, "create");
   return { ok: true, note: res.body?.note };
@@ -274,11 +272,10 @@ export interface LinkNotesParams {
   slug?: string;
   /** The note's address (project-unique slug, or uuid). */
   from: string;
-  /** A note address, or a cross target (ADR-030): 'issue:<uuid>' | 'code:s:…' / 'code:r:…'. */
+  /** A cross target (ADR-030): 'issue:<uuid>' | 'code:s:…' / 'code:r:…'. Note↔note links live
+   *  in the BODY as [[refs]] (cloud ADR-036) — the server rejects a plain note target. */
   to: string;
-  /** Note↔note only: 'link' (arrow, default) | 'child' (dotted) | 'relates' (dashed). */
-  kind?: "link" | "child" | "relates";
-  /** true → delete the link instead (note↔note: all kinds when kind omitted). */
+  /** true → delete the link instead. */
   remove?: boolean;
 }
 
@@ -342,7 +339,6 @@ export async function linkNotes(path: string, params: LinkNotesParams): Promise<
     slug: ctx.slug,
     from: params.from.trim(),
     to: params.to.trim(),
-    kind: params.kind,
     remove: params.remove === true,
   });
   if (!res.ok) return fail(res, params.remove ? "unlink" : "link");

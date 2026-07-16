@@ -253,7 +253,6 @@ notes
   .option("--body <markdown>", "note body (markdown)")
   .option("--note-slug <slug>", "explicit note address (default: derived from the title)")
   .option("--folder <path>", "tree-sidebar path like 'raw/articles' (omit = unfiled)")
-  .option("--parent <id>", "parent note — creates a child edge (parent → new)")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--map <slug>", "which note map to add to (a project can hold several)")
@@ -279,11 +278,10 @@ notes
   .action((note: string, opts: Parameters<typeof notesShow>[1]) => notesShow(note, opts));
 notes
   .command("link")
-  .description("connect a note to another note, an issue, or a code-map node")
+  .description("connect a note to an issue or a code-map node (note↔note links live in the body as [[refs]])")
   .argument("<from>", "source note slug (or id)")
-  .argument("<to>", "target: note slug (or id), issue:<uuid>, or code:s:…/code:r:…")
-  .option("--style <style>", "note↔note only: arrow (default) | dotted | dashed")
-  .option("--remove", "disconnect instead (all styles unless --style is given)", false)
+  .argument("<to>", "target: issue:<uuid>, or code:s:…/code:r:…")
+  .option("--remove", "disconnect instead", false)
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")

@@ -577,20 +577,19 @@ export function buildServer(): McpServer {
         "Create a note on this project's Note Map. Use it to record durable knowledge as you work — a policy decided " +
         "while closing an issue, a convention, a constraint — one topic per note, body as a markdown document. Check " +
         "the notes tool first: if a note on the topic exists, update_note it instead of adding a near-duplicate. " +
-        "parent_id draws a mindmap child edge (parent → new); other connections are drawn on the canvas. If the " +
+        "Connect it to other notes by writing [[Title]] refs in the body — the graph derives them at read time. If the " +
         "project has several note maps, pass `map`. Needs a publish token; owner or collaborator only.",
       inputSchema: {
         title: z.string().describe("Note title (the node label)"),
         body: z.string().optional().describe("Note body as a markdown document (details, context)"),
         note_slug: z.string().optional().describe("Explicit note address (default: derived from the title)"),
-        parent_id: z.string().optional().describe("Parent note id — creates a child edge (parent → new)"),
         folder: z.string().optional().describe("Tree-sidebar path like 'raw/articles' (omit = unfiled) — the web viewer's Obsidian-style tree groups by it"),
         map: z.string().optional().describe("Which note map to add to (a project can hold several; omit when there's one). List them with the maps tool, or create one with create_map."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, body, note_slug, parent_id, folder, map, path }) => {
-      const res = await createNote(rootOf(path), { title, body, note_slug, parent_id, folder, mapSlug: map });
+    async ({ title, body, note_slug, folder, map, path }) => {
+      const res = await createNote(rootOf(path), { title, body, note_slug, folder, mapSlug: map });
       if (!res.ok || !res.note) return issueFail("Add note", res.code, res.message, res.maps);
       return json({ ok: true, note: res.note });
     },
@@ -599,29 +598,25 @@ export function buildServer(): McpServer {
   server.registerTool(
     "link_notes",
     {
-      title: "Link a note to a note, an issue, or a code-map node",
+      title: "Link a note to an issue or a code-map node",
       description:
-        "Connect a note to another note, an issue, or a code-map node — all links are EXPLICIT (bodies are " +
-        "never parsed), and this is how an agent draws them. Note↔note: an edge on every note map where BOTH " +
-        "notes are members; kind sets the visual (link = arrow, directional flow, default; child = dotted, " +
-        "hierarchy; relates = dashed, loose association). Cross targets record provenance and show in the " +
+        "Connect a note to an ISSUE or a CODE-MAP node — cross links that record provenance and show in the " +
         "note's document view: to='issue:<uuid>' cites the issue a decision came out of (use it when a " +
         "completed issue's outcome is distilled into a note); to='code:s:<screen id>' / 'code:r:<resource id>' " +
-        "ties the note to a code-map node (node ids come from the overview/scan tools). kind only applies to " +
-        "note↔note. remove=true disconnects instead. Address notes by their project-unique slug (see the notes " +
-        "tool). Needs a publish token; owner or collaborator only.",
+        "ties the note to a code-map node (node ids come from the overview/scan tools). NOTE↔NOTE links are " +
+        "NOT made here: write a [[Title]] ref into the note's body (update_note) — the graph derives it at " +
+        "read time. remove=true disconnects instead. Needs a publish token; owner or collaborator only.",
       inputSchema: {
         from: z.string().describe("Source note slug (or id)"),
-        to: z.string().describe("Target: note slug (or id), 'issue:<uuid>', or 'code:s:…' / 'code:r:…'"),
-        kind: z.enum(["link", "child", "relates"]).optional().describe("Note↔note edge visual: link=arrow (default), child=dotted, relates=dashed"),
-        remove: z.boolean().optional().describe("true → disconnect from→to instead (note↔note: all kinds unless kind is given)"),
+        to: z.string().describe("Target: 'issue:<uuid>', or 'code:s:…' / 'code:r:…'"),
+        remove: z.boolean().optional().describe("true → disconnect from→to instead"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ from, to, kind, remove, path }) => {
-      const res = await linkNotes(rootOf(path), { from, to, kind, remove });
+    async ({ from, to, remove, path }) => {
+      const res = await linkNotes(rootOf(path), { from, to, remove });
       if (!res.ok) return issueFail(remove ? "Unlink notes" : "Link notes", res.code, res.message, res.maps);
-      return json({ ok: true, ...(remove ? { removed: `${from} → ${to}` } : { linked: `${from} → ${to}`, ...(kind ? { kind } : {}) }) });
+      return json({ ok: true, ...(remove ? { removed: `${from} → ${to}` } : { linked: `${from} → ${to}` }) });
     },
   );
 
