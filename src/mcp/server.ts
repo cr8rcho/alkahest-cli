@@ -531,7 +531,9 @@ export function buildServer(): McpServer {
         "Read this project's Note Map — markdown notes drawn as a mindmap on the hosted viewer. Returns each map's " +
         "notes (with per-map slug addresses) and its connections — explicit agent-drawn edges AND the [[wikilink]] references derived from bodies at read time (kind 'wikilink', derived:true). Bodies come back as EXCERPTS (first 240 chars, " +
         "body_more marks truncation) so listing a big wiki stays cheap — read one full document with get_note, or " +
-        "pass full_bodies only when you truly need every document at once. ALWAYS check this before add_note when " +
+        "pass full_bodies only when you truly need every document at once. Each map payload carries prop_defs — " +
+        "the notebook's property schema (key/type/options); notes carry their props values (reserved key `tags`). " +
+        "ALWAYS check this before add_note when " +
         "recording knowledge: if a note on the topic exists, update_note it instead of adding a near-duplicate. " +
         "`q` searches title/slug/FULL body server-side. Needs a publish token and a published project.",
       inputSchema: {
@@ -584,12 +586,13 @@ export function buildServer(): McpServer {
         body: z.string().optional().describe("Note body as a markdown document (details, context)"),
         note_slug: z.string().optional().describe("Explicit note address (default: derived from the title)"),
         folder: z.string().optional().describe("Tree-sidebar path like 'raw/articles' (omit = unfiled) — the web viewer's Obsidian-style tree groups by it"),
+        props: z.record(z.any()).optional().describe("Notebook properties (flat key→value): reserved key `tags` = string array; other keys should match the map's schema (see prop_defs in the notes tool) — unknown keys are kept but show as unregistered"),
         map: z.string().optional().describe("Which note map to add to (a project can hold several; omit when there's one). List them with the maps tool, or create one with create_map."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, body, note_slug, folder, map, path }) => {
-      const res = await createNote(rootOf(path), { title, body, note_slug, folder, mapSlug: map });
+    async ({ title, body, note_slug, folder, props, map, path }) => {
+      const res = await createNote(rootOf(path), { title, body, note_slug, folder, props, mapSlug: map });
       if (!res.ok || !res.note) return issueFail("Add note", res.code, res.message, res.maps);
       return json({ ok: true, note: res.note });
     },
@@ -623,23 +626,22 @@ export function buildServer(): McpServer {
   server.registerTool(
     "map_note",
     {
-      title: "Place a note on / off a note map",
+      title: "Move a note to a note map",
       description:
-        "Place an existing pool note onto a note map (note maps are lenses over the project's note pool — a note " +
-        "can sit on several maps at once), or take it off with remove:true. The note itself is never deleted — " +
-        "membership only changes which lenses show it. Adding is idempotent. Address the note by its project-unique " +
-        "slug (see the notes tool). Needs a publish token; owner or collaborator only.",
+        "MOVE an existing note to another note map. A note lives on exactly ONE map — the maps are separate " +
+        "notebooks (e.g. an llm-wiki and a company-wiki), so this re-homes the note rather than adding a second " +
+        "placement. Its folder path and layout carry along. Address the note by its project-unique slug (see the " +
+        "notes tool). Needs a publish token; owner or collaborator only.",
       inputSchema: {
-        note: z.string().describe("Note slug (or id) from the project's pool"),
-        map: z.string().optional().describe("Which note map (a project can hold several; omit when there's one). List them with the maps tool."),
-        remove: z.boolean().optional().describe("true → take the note off the map (the note itself is never deleted)"),
+        note: z.string().describe("Note slug (or id)"),
+        map: z.string().optional().describe("Target note map (a project can hold several; omit when there's one). List them with the maps tool."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ note, map, remove, path }) => {
-      const res = await mapNote(rootOf(path), { noteRef: note, mapSlug: map, remove });
-      if (!res.ok) return issueFail(remove ? "Unmap note" : "Map note", res.code, res.message, res.maps);
-      return json({ ok: true, note: res.note, map: res.map, member: res.member });
+    async ({ note, map, path }) => {
+      const res = await mapNote(rootOf(path), { noteRef: note, mapSlug: map });
+      if (!res.ok) return issueFail("Move note", res.code, res.message, res.maps);
+      return json({ ok: true, note: res.note, map: res.map });
     },
   );
 
@@ -649,7 +651,8 @@ export function buildServer(): McpServer {
       title: "Update a note",
       description:
         "Edit a note in place — when knowledge on a topic evolves, update its note rather than adding a near-" +
-        "duplicate. Replaces title and/or markdown body; new_slug renames the note's address; folder moves it in the tree sidebar. Address by note slug " +
+        "duplicate. Replaces title and/or markdown body; new_slug renames the note's address; folder moves it in the tree sidebar; " +
+        "props patches notebook properties. Address by note slug " +
         "(see the notes tool), or uuid. Needs a publish token; owner or collaborator only.",
       inputSchema: {
         note: z.string().describe("Note slug (or id) to edit"),
@@ -657,12 +660,13 @@ export function buildServer(): McpServer {
         body: z.string().optional().describe("New body as markdown (replaces the old one)"),
         new_slug: z.string().optional().describe("New note address (slug)"),
         folder: z.string().nullable().optional().describe("Tree-sidebar path like 'raw/articles'; null unfiles the note; omit = untouched"),
+        props: z.record(z.any()).optional().describe("Notebook properties, SHALLOW-MERGED onto the note's current values — pass only the keys to change; a null value deletes that key; reserved key `tags` = string array"),
         map: z.string().optional().describe("Which note map (a project can hold several; omit when there's one)"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ note, title, body, new_slug, folder, map, path }) => {
-      const res = await updateNote(rootOf(path), { note, title, body, new_slug, folder, mapSlug: map });
+    async ({ note, title, body, new_slug, folder, props, map, path }) => {
+      const res = await updateNote(rootOf(path), { note, title, body, new_slug, folder, props, mapSlug: map });
       if (!res.ok || !res.note) return issueFail("Update note", res.code, res.message, res.maps);
       return json({ ok: true, note: res.note });
     },

@@ -104,18 +104,16 @@ export async function notesShow(note: string, options: NotesShowOptions): Promis
 }
 
 export interface NotesMapOptions {
-  api?: string; slug?: string; path?: string; map?: string; remove?: boolean;
+  api?: string; slug?: string; path?: string; map?: string;
 }
 
-/** Place a pool note on a note map (or take it off) — maps are lenses; the note is never deleted. */
+/** MOVE a note to a note map (cloud ADR-043 single-home — a note lives on exactly one map). */
 export async function notesMap(note: string, options: NotesMapOptions): Promise<void> {
   const res = await mapNote(options.path || ".", {
-    api: options.api, slug: options.slug, noteRef: note, mapSlug: options.map, remove: options.remove,
+    api: options.api, slug: options.slug, noteRef: note, mapSlug: options.map,
   });
-  if (!res.ok) return die(failMessage(res.code, res.message, options.remove ? "notes unmap" : "notes map"));
-  console.log(options.remove
-    ? `[alkahest] removed ${res.note?.slug ?? note} from map ${res.map?.slug ?? ""} (the note stays in the project pool)`
-    : `[alkahest] placed ${res.note?.slug ?? note} on map ${res.map?.slug ?? ""}`);
+  if (!res.ok) return die(failMessage(res.code, res.message, "notes map"));
+  console.log(`[alkahest] moved ${res.note?.slug ?? note} to map ${res.map?.slug ?? ""}`);
 }
 
 export interface NotesImportOptions {
@@ -137,6 +135,12 @@ export async function notesImport(dir: string, options: NotesImportOptions): Pro
   }
   const label = options.dryRun ? "would import" : "imported";
   console.log(`[alkahest] ${label} ${res.files?.length ?? 0} file(s): ${res.created} new, ${res.updated} updated — ${res.linked} [[ref]](s) resolve (drawn from the text at read time)`);
+  if (res.withProps) {
+    const schema = options.dryRun
+      ? "schema will be registered on the map"
+      : `schema registered: ${res.defsAdded ?? 0} definition(s) added${res.defsMerged ? `, ${res.defsMerged} option set(s) merged` : ""}`;
+    console.log(`[alkahest] frontmatter properties harvested from ${res.withProps} file(s) — ${schema}`);
+  }
   if (res.unresolved?.length) {
     console.log(`[alkahest] unresolved [[targets]] (no matching file or note): ${res.unresolved.join(", ")}`);
   }

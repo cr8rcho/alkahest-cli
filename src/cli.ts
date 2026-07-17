@@ -288,17 +288,16 @@ notes
   .action((from: string, to: string, opts: Parameters<typeof notesLink>[2]) => notesLink(from, to, opts));
 notes
   .command("map")
-  .description("place a pool note on a note map, or take it off with --remove (maps are lenses over the note pool; the note is never deleted)")
+  .description("move a note to a note map (a note lives on exactly ONE map — the maps are separate notebooks)")
   .argument("<note>", "note slug (or id)")
   .option("--map <slug>", "target note map (omit when the project has just one)")
-  .option("--remove", "take the note off the map instead of placing it", false)
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((note: string, opts: Parameters<typeof notesMap>[1]) => notesMap(note, opts));
 notes
   .command("import")
-  .description("import a folder of Obsidian-style .md files — one note per file, [[wikilinks]] become explicit edges (re-run to refresh: matches by title)")
+  .description("import a folder of Obsidian-style .md files — one note per file, frontmatter properties harvested (tags etc. → props + registered schema), [[wikilinks]] render from the text (re-run to refresh: matches by title)")
   .argument("<dir>", "folder to walk recursively (dot-dirs like .obsidian are skipped)")
   .option("--map <slug>", "which note map the notes land on (omit when the project has just one)")
   .option("--exclude <name...>", "basenames to skip, e.g. --exclude index log")
