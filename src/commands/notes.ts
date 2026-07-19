@@ -44,12 +44,24 @@ export async function notesAdd(title: string, options: NotesAddOptions): Promise
 export interface NotesUpdateOptions {
   api?: string; slug?: string; path?: string; map?: string;
   title?: string; body?: string; clearBody?: boolean; rename?: string;
-  folder?: string; unfile?: boolean;
+  folder?: string; unfile?: boolean; props?: string;
 }
 
 export async function notesUpdate(note: string, options: NotesUpdateOptions): Promise<void> {
-  if (!options.title && options.body === undefined && !options.clearBody && !options.rename && options.folder === undefined && !options.unfile) {
-    return die("Nothing to update — pass --title, --body (or --clear-body), --folder (or --unfile), and/or --rename.");
+  if (!options.title && options.body === undefined && !options.clearBody && !options.rename && options.folder === undefined && !options.unfile && options.props === undefined) {
+    return die("Nothing to update — pass --title, --body (or --clear-body), --folder (or --unfile), --props, and/or --rename.");
+  }
+  // --props is a JSON object of property VALUES, shallow-merged onto the note (a null value
+  // deletes that key) — same semantics as the MCP update_note `props` param.
+  let props: Record<string, unknown> | undefined;
+  if (options.props !== undefined) {
+    let parsed: unknown;
+    try { parsed = JSON.parse(options.props); }
+    catch { return die(`--props must be a JSON object, e.g. --props '{"status": "done", "topic": null}' (couldn't parse it).`); }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return die(`--props must be a JSON object (key→value), not ${Array.isArray(parsed) ? "an array" : typeof parsed}.`);
+    }
+    props = parsed as Record<string, unknown>;
   }
   const res = await updateNote(options.path || ".", {
     api: options.api, slug: options.slug, mapSlug: options.map,
@@ -58,6 +70,7 @@ export async function notesUpdate(note: string, options: NotesUpdateOptions): Pr
     body: options.clearBody ? null : options.body,
     new_slug: options.rename,
     folder: options.unfile ? null : options.folder,
+    props,
   });
   if (!res.ok || !res.note) return die(failMessage(res.code, res.message, "notes update"));
   console.log(`[alkahest] updated note "${res.note.title}" — slug ${res.note.slug}`);

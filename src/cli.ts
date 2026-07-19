@@ -316,6 +316,7 @@ notes
   .option("--rename <slug>", "new note address (slug)")
   .option("--folder <path>", "move the note in the tree sidebar (path like 'raw/articles')")
   .option("--unfile", "clear the folder (back to the tree root)", false)
+  .option("--props <json>", "notebook property VALUES as a JSON object, shallow-merged (a null value deletes that key), e.g. --props '{\"status\": \"done\", \"topic\": null}'")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--map <slug>", "which note map (a project can hold several)")
