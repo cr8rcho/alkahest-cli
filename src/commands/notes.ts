@@ -1,4 +1,4 @@
-import { createNote, getNote, linkNotes, mapNote, pullNotes, removePropDefs, updateNote } from "../core/notes.js";
+import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote, type PropDefInput } from "../core/notes.js";
 import { importNotes } from "../core/notesImport.js";
 
 /**
@@ -27,15 +27,36 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
   return known[code ?? ""] ?? `${action} failed: ${message}`;
 };
 
+/**
+ * Parse a `--props` JSON string into a property-VALUES object (same semantics as the MCP
+ * `props` param: shallow-merged, a null value deletes that key). Returns { props } on success
+ * or { error } with a caller-ready message — object only, arrays/scalars are rejected.
+ */
+function parseProps(raw: string): { props: Record<string, unknown> } | { error: string } {
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); }
+  catch { return { error: `--props must be a JSON object, e.g. --props '{"status": "done", "topic": null}' (couldn't parse it).` }; }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { error: `--props must be a JSON object (key→value), not ${Array.isArray(parsed) ? "an array" : parsed === null ? "null" : typeof parsed}.` };
+  }
+  return { props: parsed as Record<string, unknown> };
+}
+
 export interface NotesAddOptions {
   api?: string; slug?: string; path?: string; map?: string;
-  body?: string; noteSlug?: string; folder?: string;
+  body?: string; noteSlug?: string; folder?: string; props?: string;
 }
 
 export async function notesAdd(title: string, options: NotesAddOptions): Promise<void> {
+  let props: Record<string, unknown> | undefined;
+  if (options.props !== undefined) {
+    const p = parseProps(options.props);
+    if ("error" in p) return die(p.error);
+    props = p.props;
+  }
   const res = await createNote(options.path || ".", {
     api: options.api, slug: options.slug, mapSlug: options.map,
-    title, body: options.body, note_slug: options.noteSlug, folder: options.folder,
+    title, body: options.body, note_slug: options.noteSlug, folder: options.folder, props,
   });
   if (!res.ok || !res.note) return die(failMessage(res.code, res.message, "notes add"));
   console.log(`[alkahest] created note "${res.note.title}" — slug ${res.note.slug} (id ${res.note.id})`);
@@ -55,13 +76,9 @@ export async function notesUpdate(note: string, options: NotesUpdateOptions): Pr
   // deletes that key) — same semantics as the MCP update_note `props` param.
   let props: Record<string, unknown> | undefined;
   if (options.props !== undefined) {
-    let parsed: unknown;
-    try { parsed = JSON.parse(options.props); }
-    catch { return die(`--props must be a JSON object, e.g. --props '{"status": "done", "topic": null}' (couldn't parse it).`); }
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return die(`--props must be a JSON object (key→value), not ${Array.isArray(parsed) ? "an array" : typeof parsed}.`);
-    }
-    props = parsed as Record<string, unknown>;
+    const p = parseProps(options.props);
+    if ("error" in p) return die(p.error);
+    props = p.props;
   }
   const res = await updateNote(options.path || ".", {
     api: options.api, slug: options.slug, mapSlug: options.map,
@@ -194,20 +211,45 @@ export async function notesImport(dir: string, options: NotesImportOptions): Pro
   if (res.failures?.length) process.exitCode = 1;
 }
 
+const PROP_TYPES = new Set(["text", "select", "multi", "date", "number", "checkbox"]);
+
+/**
+ * Parse a `--define` spec `key:type[:opt1,opt2]` into a PropDefInput. `options` only apply to
+ * select/multi. Returns { def } or { error } with a caller-ready message.
+ */
+function parseDefine(spec: string): { def: PropDefInput } | { error: string } {
+  const [key, type, optsRaw] = spec.split(":");
+  const k = (key ?? "").trim();
+  const t = (type ?? "").trim();
+  if (!k || !PROP_TYPES.has(t)) {
+    return { error: `--define must be 'key:type[:opt1,opt2]' with type ∈ text|select|multi|date|number|checkbox (got '${spec}').` };
+  }
+  const options = optsRaw ? optsRaw.split(",").map((o) => o.trim()).filter(Boolean) : undefined;
+  return { def: { key: k, type: t as PropDefInput["type"], ...(options?.length ? { options } : {}) } };
+}
+
 export interface NotesPropsOptions {
   api?: string; slug?: string; path?: string; map?: string;
-  remove?: string[];
+  define?: string[]; remove?: string[];
 }
 
 /**
- * Prune a note map's property SCHEMA — unregister harvested definitions the notebook no longer
- * needs (cloud ADR-044 §5). Non-destructive: the note values survive as "unregistered".
+ * Edit a note map's property SCHEMA (cloud ADR-044 §5): --define registers/merges definitions,
+ * --remove unregisters them. Remove is non-destructive — note values survive as "unregistered".
  */
 export async function notesProps(options: NotesPropsOptions): Promise<void> {
   const remove = (options.remove ?? []).map((k) => k.trim()).filter(Boolean);
-  if (!remove.length) return die("Nothing to do — pass --remove <key...> to unregister property definitions.");
-  const res = await removePropDefs(options.path || ".", {
-    api: options.api, slug: options.slug, mapSlug: options.map, remove,
+  const defs: PropDefInput[] = [];
+  for (const spec of options.define ?? []) {
+    const p = parseDefine(spec);
+    if ("error" in p) return die(p.error);
+    defs.push(p.def);
+  }
+  if (!defs.length && !remove.length) {
+    return die("Nothing to do — pass --define <key:type> to register or --remove <key...> to unregister property definitions.");
+  }
+  const res = await editPropDefs(options.path || ".", {
+    api: options.api, slug: options.slug, mapSlug: options.map, defs, remove,
   });
   if (!res.ok) {
     if (res.code === "ambiguous_map" && res.maps?.length) {
@@ -215,8 +257,12 @@ export async function notesProps(options: NotesPropsOptions): Promise<void> {
     }
     return die(failMessage(res.code, res.message, "notes props"));
   }
-  const skipped = res.skipped ? `, ${res.skipped} skipped (unknown or reserved)` : "";
-  console.log(`[alkahest] unregistered ${res.removed ?? 0} property definition(s)${skipped} — note values are kept (shown as "unregistered").`);
+  const parts: string[] = [];
+  if (res.added) parts.push(`${res.added} registered`);
+  if (res.merged) parts.push(`${res.merged} option set(s) merged`);
+  if (res.removed) parts.push(`${res.removed} unregistered`);
+  if (res.skipped) parts.push(`${res.skipped} skipped (unknown, reserved, or type-mismatch)`);
+  console.log(`[alkahest] property schema updated: ${parts.join(", ") || "no change"} — removed defs keep their note values (shown "unregistered").`);
 }
 
 export interface NotesLinkOptions {

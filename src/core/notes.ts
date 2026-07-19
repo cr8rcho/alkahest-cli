@@ -402,26 +402,38 @@ export async function registerPropDefs(
 }
 
 /**
- * Unregister property DEFINITIONS on a note map (cloud ADR-044 §5 schema cleanup). Mirrors the
- * web ⚙ dialog's deleteDef — non-destructive: it drops the def row only, so note VALUES survive
- * as "unregistered". `tags` is reserved (server rejects it); unknown keys are silent no-ops.
+ * Edit a note map's property SCHEMA in one call (cloud ADR-044 §5): register/merge `defs`
+ * and/or unregister `remove` keys. Register merge semantics are the web import's (unknown key
+ * INSERT, same-type options UNION, type mismatch skip); remove mirrors the web ⚙ deleteDef —
+ * non-destructive, it drops the def row only so note VALUES survive as "unregistered". `tags`
+ * is reserved (server rejects it in both); unknown remove keys are silent no-ops.
  */
-export async function removePropDefs(
+export async function editPropDefs(
   path: string,
-  params: { api?: string; token?: string; slug?: string; mapSlug?: string; remove: string[] },
+  params: { api?: string; token?: string; slug?: string; mapSlug?: string; defs?: PropDefInput[]; remove?: string[] },
 ): Promise<RegisterPropDefsResult> {
   const ctx = authContext(path, params, true);
   if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
-  const keys = [...new Set((params.remove ?? []).map((k) => String(k).trim()).filter(Boolean))];
-  if (!keys.length) return { ok: false, code: "bad_request", message: "Pass at least one property key to remove." };
+  const defs = params.defs ?? [];
+  const remove = [...new Set((params.remove ?? []).map((k) => String(k).trim()).filter(Boolean))];
+  if (!defs.length && !remove.length) {
+    return { ok: false, code: "bad_request", message: "Pass at least one definition to register (defs) or a key to remove." };
+  }
 
   const res = await request(`${ctx.apiUrl}/notes-props`, ctx.token, {
     slug: ctx.slug,
     map: params.mapSlug,
-    remove: keys,
+    ...(defs.length ? { defs } : {}),
+    ...(remove.length ? { remove } : {}),
   });
   if (!res.ok) return fail(res, "props");
-  return { ok: true, removed: res.body?.removed ?? 0, skipped: res.body?.skipped ?? 0 };
+  return {
+    ok: true,
+    added: res.body?.added ?? 0,
+    merged: res.body?.merged ?? 0,
+    skipped: res.body?.skipped ?? 0,
+    removed: res.body?.removed ?? 0,
+  };
 }
 
 export async function linkNotes(path: string, params: LinkNotesParams): Promise<NoteWriteResult & { removed?: boolean }> {

@@ -17,7 +17,7 @@ import {
   resolveIssueComment,
   mapIssue,
 } from "../core/issues.js";
-import { createNote, getNote, linkNotes, mapNote, pullNotes, removePropDefs, updateNote } from "../core/notes.js";
+import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
 import { listHistory } from "../core/history.js";
@@ -692,24 +692,32 @@ export function buildServer(): McpServer {
   server.registerTool(
     "note_props",
     {
-      title: "Prune note-map property schema",
+      title: "Edit note-map property schema",
       description:
-        "Clean up a note map's property SCHEMA — unregister definitions the notebook no longer needs. The " +
-        "notebook's property definitions (key/type/options) come from `notes import` harvesting a vault's " +
-        "frontmatter; over time some go stale (e.g. every note now shares one value). This is the cleanup verb: " +
-        "pass `remove` = the definition keys to drop. Non-destructive — the note VALUES ride notes.props and " +
-        "survive as 'unregistered'; only the schema row goes. The reserved `tags` key is refused, and unknown " +
-        "keys are silent no-ops. See prop_defs in the notes tool for the current schema. Needs a publish token.",
+        "Register or unregister a note map's property DEFINITIONS (key/type/options — the notebook's schema; " +
+        "values ride notes.props). `define` adds definitions so the web shows typed rows instead of 'unregistered' " +
+        "badges — same merge as `notes import` (unknown key inserts, same-type select/multi options union, type " +
+        "mismatch skips). `remove` is the cleanup verb — drops the def row only, non-destructively (note VALUES " +
+        "survive as 'unregistered'). Pass either or both. The reserved `tags` key is refused in both; unknown " +
+        "remove keys are silent no-ops. See prop_defs in the notes tool for the current schema. Needs a publish token.",
       inputSchema: {
-        remove: z.array(z.string()).min(1).describe("Property definition key(s) to unregister; note values are kept. Reserved key `tags` is refused."),
+        define: z.array(z.object({
+          key: z.string().describe("Property key (≤64 chars; `tags` is reserved)"),
+          type: z.enum(["text", "select", "multi", "date", "number", "checkbox"]).describe("Property type"),
+          options: z.array(z.string()).optional().describe("Shared option vocabulary — select/multi only"),
+        })).optional().describe("Definitions to register/merge onto the note map's schema"),
+        remove: z.array(z.string()).optional().describe("Property definition key(s) to unregister; note values are kept. Reserved key `tags` is refused."),
         map: z.string().optional().describe("Which note map (a project can hold several; omit when there's one)"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ remove, map, path }) => {
-      const res = await removePropDefs(rootOf(path), { remove, mapSlug: map });
-      if (!res.ok) return issueFail("Prune note props", res.code, res.message, res.maps);
-      return json({ ok: true, removed: res.removed ?? 0, skipped: res.skipped ?? 0 });
+    async ({ define, remove, map, path }) => {
+      if (!define?.length && !remove?.length) {
+        return json({ ok: false, error: "bad_request", message: "Pass `define` (definitions to register) and/or `remove` (keys to unregister)." });
+      }
+      const res = await editPropDefs(rootOf(path), { defs: define, remove, mapSlug: map });
+      if (!res.ok) return issueFail("Edit note props", res.code, res.message, res.maps);
+      return json({ ok: true, added: res.added ?? 0, merged: res.merged ?? 0, removed: res.removed ?? 0, skipped: res.skipped ?? 0 });
     },
   );
 

@@ -253,6 +253,7 @@ notes
   .option("--body <markdown>", "note body (markdown)")
   .option("--note-slug <slug>", "explicit note address (default: derived from the title)")
   .option("--folder <path>", "tree-sidebar path like 'raw/articles' (omit = unfiled)")
+  .option("--props <json>", "notebook property VALUES as a JSON object, e.g. --props '{\"status\": \"done\", \"topic\": \"ios\"}' (reserved key `tags` = string array)")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--map <slug>", "which note map to add to (a project can hold several)")
@@ -334,7 +335,8 @@ notes
   .action((note: string, opts: Parameters<typeof notesDelete>[1]) => notesDelete(note, opts));
 notes
   .command("props")
-  .description("prune a note map's property schema — unregister harvested definitions the notebook no longer needs (values are kept, shown as 'unregistered')")
+  .description("edit a note map's property schema — --define registers definitions, --remove unregisters them (removed defs keep their note values, shown 'unregistered')")
+  .option("--define <spec...>", "register a definition 'key:type[:opt1,opt2]' (type ∈ text|select|multi|date|number|checkbox; options only for select/multi), e.g. --define status:select:todo,done topic:text")
   .option("--remove <key...>", "property definition key(s) to unregister (the reserved 'tags' key is refused)")
   .option("--map <slug>", "which note map (a project can hold several)")
   .option("--path <dir>", "project path", ".")
