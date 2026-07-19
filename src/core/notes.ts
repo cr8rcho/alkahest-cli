@@ -32,7 +32,16 @@ export interface Note {
 export interface NoteWriteResult {
   ok: boolean;
   note?: Note;
-  /** no_api | no_token | no_slug | no_title | not_found | ambiguous_map | slug_taken | invalid_token | forbidden | network | <server error>. */
+  /** Present after delete:true — the note was soft-deleted to the project Trash (ADR-048). */
+  deleted?: boolean;
+  /** Present after restore:true — the note came back from the Trash (`note` carries the row). */
+  restored?: boolean;
+  /** With `deleted`: the note was already in the Trash (idempotent no-op). */
+  unchanged?: boolean;
+  /** Echoed on delete (the full note row is not returned): the note's id + project slug. */
+  id?: string;
+  noteSlug?: string | null;
+  /** no_api | no_token | no_slug | no_title | reason_required | note_deleted | not_found | ambiguous_map | slug_taken | invalid_token | forbidden | network | <server error>. */
   code?: string;
   message?: string;
   /** Present on ambiguous_map / unknown-slug: the project's note maps (slug + name). */
@@ -191,12 +200,21 @@ export interface UpdateNoteParams {
   folder?: string | null;
   /** Notebook properties (cloud ADR-044): SHALLOW-MERGED onto the note's values; a null value deletes that key. */
   props?: Record<string, unknown>;
+  /** true → SOFT-delete the note to the project Trash (ADR-048; restorable for 30 days). Requires `reason`. */
+  delete?: boolean;
+  /** One-line reason (≤200 chars), REQUIRED with delete — shown to the user in the Trash + activity journal. */
+  reason?: string;
+  /** true → restore a trashed note (undoes a soft delete). */
+  restore?: boolean;
 }
 
 export async function updateNote(path: string, params: UpdateNoteParams): Promise<NoteWriteResult> {
   const ctx = authContext(path, params, true);
   if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
   if (!params.note?.trim()) return { ok: false, code: "no_note", message: "A note slug (or id) is required." };
+  if (params.delete && !params.reason?.trim()) {
+    return { ok: false, code: "reason_required", message: "Deleting requires a one-line reason (≤200 chars) — it shows in the Trash and the activity journal." };
+  }
 
   const res = await request(`${ctx.apiUrl}/notes-update`, ctx.token, {
     slug: ctx.slug,
@@ -207,8 +225,15 @@ export async function updateNote(path: string, params: UpdateNoteParams): Promis
     folder: params.folder,
     props: params.props,
     new_slug: params.new_slug,
+    delete: params.delete === true ? true : undefined,
+    reason: params.reason?.trim(),
+    restore: params.restore === true ? true : undefined,
   });
-  if (!res.ok) return fail(res, "update");
+  if (!res.ok) return fail(res, params.delete ? "delete" : params.restore ? "restore" : "update");
+  if (res.body?.deleted) {
+    return { ok: true, deleted: true, unchanged: !!res.body?.unchanged, id: res.body?.id, noteSlug: res.body?.slug ?? null };
+  }
+  if (res.body?.restored) return { ok: true, restored: true, note: res.body?.note };
   return { ok: true, note: res.body?.note };
 }
 

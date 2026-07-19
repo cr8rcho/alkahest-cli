@@ -653,7 +653,11 @@ export function buildServer(): McpServer {
         "Edit a note in place — when knowledge on a topic evolves, update its note rather than adding a near-" +
         "duplicate. Replaces title and/or markdown body; new_slug renames the note's address; folder moves it in the tree sidebar; " +
         "props patches notebook properties. Address by note slug " +
-        "(see the notes tool), or uuid. Needs a publish token; owner or collaborator only.",
+        "(see the notes tool), or uuid. Also the DELETE verb: delete:true SOFT-deletes the note to the project's " +
+        "Trash — restorable for 30 days, then purged — and requires `reason`, a one-line why shown to the user in " +
+        "the Trash and the activity journal (write something meaningful like 'stale mirror, superseded by [[X]]', " +
+        "not 'cleanup'). restore:true brings a trashed note back; edits to a trashed note fail with note_deleted " +
+        "until restored. Note author or workspace owner/admin only for delete. Needs a publish token.",
       inputSchema: {
         note: z.string().describe("Note slug (or id) to edit"),
         title: z.string().optional().describe("New title"),
@@ -661,13 +665,26 @@ export function buildServer(): McpServer {
         new_slug: z.string().optional().describe("New note address (slug)"),
         folder: z.string().nullable().optional().describe("Tree-sidebar path like 'raw/articles'; null unfiles the note; omit = untouched"),
         props: z.record(z.any()).optional().describe("Notebook properties, SHALLOW-MERGED onto the note's current values — pass only the keys to change; a null value deletes that key; reserved key `tags` = string array"),
+        delete: z.boolean().optional().describe("true → soft-delete the note to the project Trash (restorable for 30 days) instead of editing; requires `reason`"),
+        reason: z.string().optional().describe("REQUIRED with delete (≤200 chars): a one-line reason the user sees in the Trash and the activity journal — say WHY the note should go, not just 'cleanup'"),
+        restore: z.boolean().optional().describe("true → restore the note from the Trash (undoes a soft delete)"),
         map: z.string().optional().describe("Which note map (a project can hold several; omit when there's one)"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ note, title, body, new_slug, folder, props, map, path }) => {
-      const res = await updateNote(rootOf(path), { note, title, body, new_slug, folder, props, mapSlug: map });
-      if (!res.ok || !res.note) return issueFail("Update note", res.code, res.message, res.maps);
+    async ({ note, title, body, new_slug, folder, props, delete: del, reason, restore, map, path }) => {
+      const res = await updateNote(rootOf(path), { note, title, body, new_slug, folder, props, delete: del, reason, restore, mapSlug: map });
+      const what = del ? "Delete note" : restore ? "Restore note" : "Update note";
+      if (!res.ok) return issueFail(what, res.code, res.message, res.maps);
+      if (res.deleted) {
+        return json({
+          ok: true, deleted: true, id: res.id, slug: res.noteSlug,
+          ...(res.unchanged ? { unchanged: true } : {}),
+          trash: "in the project Trash — restorable for 30 days (restore: true, or the web Trash view)",
+        });
+      }
+      if (res.restored) return json({ ok: true, restored: true, note: res.note });
+      if (!res.note) return issueFail(what, res.code, res.message, res.maps);
       return json({ ok: true, note: res.note });
     },
   );

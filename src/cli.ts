@@ -9,7 +9,7 @@ import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
-import { notesAdd, notesImport, notesLink, notesList, notesMap, notesShow, notesUpdate } from "./commands/notes.js";
+import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
 import { history } from "./commands/history.js";
@@ -321,6 +321,25 @@ notes
   .option("--map <slug>", "which note map (a project can hold several)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((note: string, opts: Parameters<typeof notesUpdate>[1]) => notesUpdate(note, opts));
+notes
+  .command("delete")
+  .description("move a note to the project Trash (soft delete — restorable for 30 days); --reason is required")
+  .argument("<note>", "note slug (or id)")
+  .requiredOption("--reason <text>", "one-line reason (≤200 chars) — shown in the Trash and the activity journal")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "which note map (a project can hold several)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((note: string, opts: Parameters<typeof notesDelete>[1]) => notesDelete(note, opts));
+notes
+  .command("restore")
+  .description("bring a note back from the Trash (undoes a soft delete)")
+  .argument("<note>", "note slug (or id)")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--map <slug>", "which note map (a project can hold several)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((note: string, opts: Parameters<typeof notesRestore>[1]) => notesRestore(note, opts));
 
 const maps = program
   .command("maps")

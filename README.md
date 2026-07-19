@@ -104,6 +104,7 @@ alkahest issues map <id>        # place an issue on an issue map (--map), or tak
 alkahest notes add <title>      # create a markdown note on the Note Map (--body, --parent, --map)
 alkahest notes list             # list a note map's notes (--q to search); show <slug> for one note with connections
 alkahest notes update <slug>    # edit a note in place (--title/--body/--rename) — update, don't re-add
+alkahest notes delete <slug>    # move a note to the Trash (soft delete; --reason "<why>" required, restorable for 30 days); restore <slug> undoes
 alkahest notes map <slug>       # place a pool note on a note map (--map), or take it off with --remove (never deletes the note)
 alkahest notes import <dir>     # import an Obsidian-style folder of .md files: one note per file, [[wikilinks]] → explicit edges (--map, --exclude, --dry-run; re-run to refresh)
 alkahest update        # update to the latest GitHub release (--check to only check)
@@ -177,7 +178,7 @@ Or add it to any MCP-capable agent's config directly:
 | `notes` | read the project's **Note Map** — markdown notes drawn as a mindmap, with per-project slug addresses and hand-drawn edges. Check it before adding: update an existing note instead of creating a near-duplicate (needs a token) |
 | `get_note` | one note in full: markdown body, connections and backlinks, plus its issue/code links (needs a token) |
 | `add_note` | create a markdown note to record durable knowledge — a decision, a convention, a constraint; `parent_id` draws a mindmap child edge (needs a token) |
-| `update_note` | edit a note in place when knowledge on a topic evolves — update, don't re-add (needs a token) |
+| `update_note` | edit a note in place when knowledge on a topic evolves — update, don't re-add; `delete: true` + a one-line `reason` soft-deletes it to the Trash (restorable 30 days), `restore: true` brings it back (needs a token) |
 | `link_notes` | connect a note to another note, an issue (`issue:<uuid>`), or a code-map node (`code:s:…`/`code:r:…`) — all links are explicit; bodies are never parsed (needs a token) |
 | `map_note` | place a pool note on a note map, or take it off with `remove` — note maps are lenses over the project's note pool, so a note can sit on several maps; removing it from one never deletes the note (needs a token) |
 | `check_version` | report installed vs latest GitHub release (so the agent can suggest `alkahest update`) |

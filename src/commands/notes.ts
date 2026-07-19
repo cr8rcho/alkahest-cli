@@ -21,6 +21,8 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
     no_slug: message ?? "No published map for this project yet.",
     slug_taken: `✗ ${message ?? "That note slug is already taken in this map."}`,
     ambiguous_map: `✗ ${message ?? "This project has several note maps."}\n  See them with 'alkahest maps list', or make a new one with 'alkahest maps create <slug> --type note'.`,
+    reason_required: `✗ ${message ?? "Deleting requires a one-line reason."}\n  Pass --reason \"<why>\" — it shows in the Trash and the activity journal.`,
+    note_deleted: `✗ ${message ?? "This note is in the Trash."}\n  Restore it first with 'alkahest notes restore <note>'.`,
   };
   return known[code ?? ""] ?? `${action} failed: ${message}`;
 };
@@ -59,6 +61,37 @@ export async function notesUpdate(note: string, options: NotesUpdateOptions): Pr
   });
   if (!res.ok || !res.note) return die(failMessage(res.code, res.message, "notes update"));
   console.log(`[alkahest] updated note "${res.note.title}" — slug ${res.note.slug}`);
+}
+
+export interface NotesDeleteOptions {
+  api?: string; slug?: string; path?: string; map?: string;
+  reason: string;
+}
+
+/** Soft-delete a note to the project Trash (cloud ADR-048) — restorable for 30 days. */
+export async function notesDelete(note: string, options: NotesDeleteOptions): Promise<void> {
+  const res = await updateNote(options.path || ".", {
+    api: options.api, slug: options.slug, mapSlug: options.map,
+    note, delete: true, reason: options.reason,
+  });
+  if (!res.ok || !res.deleted) return die(failMessage(res.code, res.message, "notes delete"));
+  if (res.unchanged) return console.log(`[alkahest] note ${res.noteSlug ?? note} is already in the Trash — nothing to do.`);
+  console.log(`[alkahest] deleted note ${res.noteSlug ?? note} — "${options.reason.trim()}"`);
+  console.log(`[alkahest] it's in the project Trash, restorable for 30 days ('alkahest notes restore ${res.noteSlug ?? note}' or the web Trash view).`);
+}
+
+export interface NotesRestoreOptions {
+  api?: string; slug?: string; path?: string; map?: string;
+}
+
+/** Bring a note back from the Trash (undoes a soft delete). */
+export async function notesRestore(note: string, options: NotesRestoreOptions): Promise<void> {
+  const res = await updateNote(options.path || ".", {
+    api: options.api, slug: options.slug, mapSlug: options.map,
+    note, restore: true,
+  });
+  if (!res.ok || !res.restored) return die(failMessage(res.code, res.message, "notes restore"));
+  console.log(`[alkahest] restored note "${res.note?.title ?? note}" — slug ${res.note?.slug ?? note} (back from the Trash)`);
 }
 
 export interface NotesListOptions {

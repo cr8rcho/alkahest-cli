@@ -103,6 +103,7 @@ alkahest issues done <id>       # 이슈 완료 처리 (그 외: status / link /
 alkahest issues map <id>        # 이슈를 이슈 맵에 올리기 (--map), --remove 로 내리기 (이슈 자체는 삭제되지 않음)
 alkahest notes add <제목>       # 프로젝트의 마인드맵 Note Map에 노트 생성 (--body, --parent, --map); 뷰어 캔버스에서 배치/연결
 alkahest notes map <slug>       # 풀의 노트를 노트 맵에 올리기 (--map), --remove 로 내리기 (노트 자체는 삭제되지 않음)
+alkahest notes delete <slug>    # 노트를 휴지통으로 (소프트 삭제; --reason "<이유>" 필수, 30일간 복원 가능) — restore <slug> 로 복원
 alkahest update        # 최신 GitHub 릴리스로 업데이트 (--check: 확인만)
 ```
 
@@ -158,7 +159,7 @@ claude mcp add alkahest -s project -- alkahest mcp
 | `notes` | 프로젝트의 **Note Map** 읽기 — 마인드맵으로 그려지는 마크다운 노트(프로젝트 단위 slug 주소 + 손으로 그린 엣지). 추가 전에 먼저 확인: 같은 주제 노트가 있으면 새로 만들지 말고 갱신 (토큰 필요) |
 | `get_note` | 노트 하나 전체 보기: 마크다운 본문·연결·백링크, 이슈/코드 링크 포함 (토큰 필요) |
 | `add_note` | 지속 가치가 있는 지식을 마크다운 노트로 기록 — 결정, 컨벤션, 제약; `parent_id` 는 마인드맵 child 엣지 (토큰 필요) |
-| `update_note` | 주제의 지식이 진화하면 노트를 제자리에서 수정 — 재추가 말고 갱신 (토큰 필요) |
+| `update_note` | 주제의 지식이 진화하면 노트를 제자리에서 수정 — 재추가 말고 갱신; `delete: true` + 한 줄 `reason` 으로 휴지통에 소프트 삭제(30일 복원 가능), `restore: true` 로 복원 (토큰 필요) |
 | `link_notes` | 노트를 다른 노트·이슈(`issue:<uuid>`)·코드맵 노드(`code:s:…`/`code:r:…`)에 연결 — 모든 링크는 명시적이며 본문은 절대 파싱하지 않음 (토큰 필요) |
 | `map_note` | 풀의 노트를 노트 맵에 올리거나 `remove` 로 내리기 — 노트 맵은 프로젝트 노트 풀을 보는 렌즈라 한 노트가 여러 맵에 동시에 올라갈 수 있고, 맵에서 내려도 노트 자체는 삭제되지 않음 (토큰 필요) |
 | `check_version` | 설치 버전 vs 최신 GitHub 릴리스 보고 (에이전트가 `alkahest update` 안내 가능) |
