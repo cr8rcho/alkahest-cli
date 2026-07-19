@@ -9,7 +9,7 @@ import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
-import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
+import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
 import { history } from "./commands/history.js";
@@ -331,6 +331,15 @@ notes
   .option("--map <slug>", "which note map (a project can hold several)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((note: string, opts: Parameters<typeof notesDelete>[1]) => notesDelete(note, opts));
+notes
+  .command("props")
+  .description("prune a note map's property schema — unregister harvested definitions the notebook no longer needs (values are kept, shown as 'unregistered')")
+  .option("--remove <key...>", "property definition key(s) to unregister (the reserved 'tags' key is refused)")
+  .option("--map <slug>", "which note map (a project can hold several)")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((opts: Parameters<typeof notesProps>[0]) => notesProps(opts));
 notes
   .command("restore")
   .description("bring a note back from the Trash (undoes a soft delete)")

@@ -373,6 +373,7 @@ export interface RegisterPropDefsResult {
   added?: number;
   merged?: number;
   skipped?: number;
+  removed?: number;
   code?: string;
   message?: string;
   maps?: { slug: string; name: string | null }[];
@@ -398,6 +399,29 @@ export async function registerPropDefs(
   });
   if (!res.ok) return fail(res, "props");
   return { ok: true, added: res.body?.added ?? 0, merged: res.body?.merged ?? 0, skipped: res.body?.skipped ?? 0 };
+}
+
+/**
+ * Unregister property DEFINITIONS on a note map (cloud ADR-044 §5 schema cleanup). Mirrors the
+ * web ⚙ dialog's deleteDef — non-destructive: it drops the def row only, so note VALUES survive
+ * as "unregistered". `tags` is reserved (server rejects it); unknown keys are silent no-ops.
+ */
+export async function removePropDefs(
+  path: string,
+  params: { api?: string; token?: string; slug?: string; mapSlug?: string; remove: string[] },
+): Promise<RegisterPropDefsResult> {
+  const ctx = authContext(path, params, true);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  const keys = [...new Set((params.remove ?? []).map((k) => String(k).trim()).filter(Boolean))];
+  if (!keys.length) return { ok: false, code: "bad_request", message: "Pass at least one property key to remove." };
+
+  const res = await request(`${ctx.apiUrl}/notes-props`, ctx.token, {
+    slug: ctx.slug,
+    map: params.mapSlug,
+    remove: keys,
+  });
+  if (!res.ok) return fail(res, "props");
+  return { ok: true, removed: res.body?.removed ?? 0, skipped: res.body?.skipped ?? 0 };
 }
 
 export async function linkNotes(path: string, params: LinkNotesParams): Promise<NoteWriteResult & { removed?: boolean }> {

@@ -1,4 +1,4 @@
-import { createNote, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
+import { createNote, getNote, linkNotes, mapNote, pullNotes, removePropDefs, updateNote } from "../core/notes.js";
 import { importNotes } from "../core/notesImport.js";
 
 /**
@@ -179,6 +179,31 @@ export async function notesImport(dir: string, options: NotesImportOptions): Pro
   }
   for (const f of res.failures ?? []) console.error(`[alkahest] ✗ ${f.file}: ${f.message}`);
   if (res.failures?.length) process.exitCode = 1;
+}
+
+export interface NotesPropsOptions {
+  api?: string; slug?: string; path?: string; map?: string;
+  remove?: string[];
+}
+
+/**
+ * Prune a note map's property SCHEMA — unregister harvested definitions the notebook no longer
+ * needs (cloud ADR-044 §5). Non-destructive: the note values survive as "unregistered".
+ */
+export async function notesProps(options: NotesPropsOptions): Promise<void> {
+  const remove = (options.remove ?? []).map((k) => k.trim()).filter(Boolean);
+  if (!remove.length) return die("Nothing to do — pass --remove <key...> to unregister property definitions.");
+  const res = await removePropDefs(options.path || ".", {
+    api: options.api, slug: options.slug, mapSlug: options.map, remove,
+  });
+  if (!res.ok) {
+    if (res.code === "ambiguous_map" && res.maps?.length) {
+      return die(`${res.message}\n  Pass --map with one of: ${res.maps.map((m) => m.slug).join(", ")}`);
+    }
+    return die(failMessage(res.code, res.message, "notes props"));
+  }
+  const skipped = res.skipped ? `, ${res.skipped} skipped (unknown or reserved)` : "";
+  console.log(`[alkahest] unregistered ${res.removed ?? 0} property definition(s)${skipped} — note values are kept (shown as "unregistered").`);
 }
 
 export interface NotesLinkOptions {

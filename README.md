@@ -107,6 +107,7 @@ alkahest notes update <slug>    # edit a note in place (--title/--body/--rename)
 alkahest notes delete <slug>    # move a note to the Trash (soft delete; --reason "<why>" required, restorable for 30 days); restore <slug> undoes
 alkahest notes map <slug>       # place a pool note on a note map (--map), or take it off with --remove (never deletes the note)
 alkahest notes import <dir>     # import an Obsidian-style folder of .md files: one note per file, [[wikilinks]] → explicit edges (--map, --exclude, --dry-run; re-run to refresh)
+alkahest notes props            # prune a note map's property schema — --remove <key…> unregisters harvested definitions (values kept, shown "unregistered"; --map)
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 

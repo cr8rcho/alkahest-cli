@@ -17,7 +17,7 @@ import {
   resolveIssueComment,
   mapIssue,
 } from "../core/issues.js";
-import { createNote, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
+import { createNote, getNote, linkNotes, mapNote, pullNotes, removePropDefs, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
 import { listHistory } from "../core/history.js";
@@ -686,6 +686,30 @@ export function buildServer(): McpServer {
       if (res.restored) return json({ ok: true, restored: true, note: res.note });
       if (!res.note) return issueFail(what, res.code, res.message, res.maps);
       return json({ ok: true, note: res.note });
+    },
+  );
+
+  server.registerTool(
+    "note_props",
+    {
+      title: "Prune note-map property schema",
+      description:
+        "Clean up a note map's property SCHEMA — unregister definitions the notebook no longer needs. The " +
+        "notebook's property definitions (key/type/options) come from `notes import` harvesting a vault's " +
+        "frontmatter; over time some go stale (e.g. every note now shares one value). This is the cleanup verb: " +
+        "pass `remove` = the definition keys to drop. Non-destructive — the note VALUES ride notes.props and " +
+        "survive as 'unregistered'; only the schema row goes. The reserved `tags` key is refused, and unknown " +
+        "keys are silent no-ops. See prop_defs in the notes tool for the current schema. Needs a publish token.",
+      inputSchema: {
+        remove: z.array(z.string()).min(1).describe("Property definition key(s) to unregister; note values are kept. Reserved key `tags` is refused."),
+        map: z.string().optional().describe("Which note map (a project can hold several; omit when there's one)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ remove, map, path }) => {
+      const res = await removePropDefs(rootOf(path), { remove, mapSlug: map });
+      if (!res.ok) return issueFail("Prune note props", res.code, res.message, res.maps);
+      return json({ ok: true, removed: res.removed ?? 0, skipped: res.skipped ?? 0 });
     },
   );
 
