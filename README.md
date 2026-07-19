@@ -97,6 +97,7 @@ alkahest projects      # list your account's workspaces & projects (recover a sl
 alkahest history       # a code map's publish timeline — when each publish happened & what changed
 alkahest comments pull # pull comments left on the published map → .alkahest/comments.json
 alkahest comments issue <ids…>  # file the given comments as ONE GitHub issue (gh) + link it back
+alkahest comments resolve <id>  # mark a comment resolved (or --reopen) — author or project owner only
 alkahest issues pull   # pull the project's Issue Map (graph-shaped issue tracker) → .alkahest/issues.json
 alkahest issues add <title>     # create an issue (--parent epic, --target s:…/r:…//route, --type/--status, --priority/--due/--assignee)
 alkahest issues done <id>       # mark an issue finished (other ops: status / priority / due / assign / link / rm)

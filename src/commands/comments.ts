@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { OUTPUT_DIR } from "../core/emit.js";
 import { loadMap } from "../core/pipeline.js";
 import { findProjectRoot } from "../core/project.js";
-import { pullComments, enrichComments, postComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
+import { pullComments, enrichComments, postComment, resolveComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
 
 export interface CommentsPullOptions {
   api?: string;
@@ -123,4 +123,23 @@ export async function commentsReply(id: string, options: CommentsReplyOptions): 
     process.exitCode = 1; return;
   }
   console.log(`[alkahest] replied to ${id} — id ${res.comment?.id}`);
+}
+
+export interface CommentsResolveOptions { reopen?: boolean; api?: string; path?: string; }
+
+/** Mark a map comment resolved (or reopen it with --reopen) — author or project owner only. */
+export async function commentsResolve(id: string, options: CommentsResolveOptions): Promise<void> {
+  const resolved = !options.reopen;
+  const res = await resolveComment(resolve(options.path || "."), id, resolved, { api: options.api });
+  if (!res.ok) {
+    console.error(res.code === "not_found"
+      ? "[alkahest] ✗ No comment with that id."
+      : res.code === "forbidden"
+        ? "[alkahest] ✗ Only the comment author or project owner can resolve it."
+        : res.code === "no_token"
+          ? "[alkahest] ✗ Not authenticated. Run 'alkahest login' first."
+          : `[alkahest] resolve failed: ${res.message}`);
+    process.exitCode = 1; return;
+  }
+  console.log(`[alkahest] ${resolved ? "resolved" : "reopened"} comment ${id}`);
 }

@@ -7,7 +7,7 @@ import { mcp } from "./commands/mcp.js";
 import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
-import { commentsPull, commentsAdd, commentsReply, commentsIssue } from "./commands/comments.js";
+import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
 import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
@@ -107,6 +107,14 @@ comments
   .option("--path <dir>", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string, opts: { body?: string; api?: string; path?: string }) => commentsReply(id, opts));
+comments
+  .command("resolve")
+  .description("mark a comment resolved (or reopen with --reopen) — author or project owner only")
+  .argument("<id>", "comment id (from 'comments pull')")
+  .option("--reopen", "reopen instead of resolving", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: Parameters<typeof commentsResolve>[1]) => commentsResolve(id, opts));
 
 const issues = program
   .command("issues")
