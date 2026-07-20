@@ -177,6 +177,8 @@ Or add it to any MCP-capable agent's config directly:
 | `update_issue` | move status (e.g. to done when the work ships — progress gets painted onto the map), edit fields, or delete (needs a token) |
 | `link_issues` | add/remove an edge between issues: `blocks` (dependency), `contains` (epic→task), `relates` (needs a token) |
 | `map_issue` | place an issue on an issue map, or take it off with `remove` — issue maps are lenses over the project's issue pool, so an issue can appear on several maps; removing it from one never deletes the issue (needs a token) |
+| `list_tasks` | read the project's **tasks** — the lightweight sibling of an issue (a flat checklist item, no map/status/thread). `open` by default; `status: all` includes done (needs a token) |
+| `add_task` | jot a lightweight task when you spot small work — it lands in the user's home Tasks band + activity feed (chipped as the agent), and they can promote it to an issue if it grows; `dedup_key` keeps re-scans idempotent. For a problem that needs a thread/decision or a code link, use `add_issue` instead (needs a token) |
 | `notes` | read the project's **Note Map** — markdown notes drawn as a mindmap, with per-project slug addresses and hand-drawn edges. Check it before adding: update an existing note instead of creating a near-duplicate (needs a token) |
 | `get_note` | one note in full: markdown body, connections and backlinks, plus its issue/code links (needs a token) |
 | `add_note` | create a markdown note to record durable knowledge — a decision, a convention, a constraint; `parent_id` draws a mindmap child edge (needs a token) |

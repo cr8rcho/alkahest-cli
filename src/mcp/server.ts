@@ -17,6 +17,7 @@ import {
   resolveIssueComment,
   mapIssue,
 } from "../core/issues.js";
+import { createTask, pullTasks } from "../core/tasks.js";
 import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
@@ -517,6 +518,56 @@ export function buildServer(): McpServer {
       const res = await createIssue(rootOf(path), { title, type, status, body, priority, due_on, assignee_id, parent_id, mapSlug: map, ...targetFields });
       if (!res.ok || !res.issue) return issueFail("Add issue", res.code, res.message, res.maps);
       return json({ ok: true, issue: res.issue });
+    },
+  );
+
+  // ---- tasks: the lightweight sibling of an issue — a flat checklist item (ADR-049) ----
+  server.registerTool(
+    "list_tasks",
+    {
+      title: "List tasks",
+      description:
+        "Read this project's tasks — the lightweight sibling of an issue (ADR-049): a flat checklist item " +
+        "(title + done + optional due/assignee), NOT a graph node and NOT on any map. Use tasks for quick throughput " +
+        '("do this") and issues for problems that need a thread/decision/code link. Returns open tasks by default ' +
+        "(status:'all' includes done). Needs a publish token and a published project.",
+      inputSchema: {
+        status: z.enum(["open", "all"]).optional().describe("open (default) = not done; all = include done"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ status, path }) => {
+      const res = await pullTasks(rootOf(path), { status });
+      if (!res.ok || !res.tasks) return issueFail("List tasks", res.code, res.message);
+      return json({ ok: true, project: res.slug, count: res.tasks.length, tasks: res.tasks });
+    },
+  );
+
+  server.registerTool(
+    "add_task",
+    {
+      title: "Add a task",
+      description:
+        "Create a lightweight task on this project — a flat checklist item (title + optional due/assignee), the " +
+        "sibling of an issue but without a map, status, or decision thread. Reach for it when you spot small work " +
+        'while doing something else ("add a task to X"); it lands in the user\'s home Tasks band and activity feed ' +
+        "chipped as the agent, and the user can promote it to a full issue if it grows. For a problem that needs a " +
+        "thread/decision or a code-map link, use add_issue instead. Pass dedup_key to stay idempotent across " +
+        "re-scans (same key updates the live task rather than duplicating). Needs a publish token; project member " +
+        "(commenter+) only.",
+      inputSchema: {
+        title: z.string().describe("Task title"),
+        body: z.string().optional().describe("Optional markdown detail"),
+        due_on: z.string().optional().describe("Due date as YYYY-MM-DD"),
+        assignee_id: z.string().optional().describe("Assign to a project member (user id)"),
+        dedup_key: z.string().optional().describe("Stable key for idempotent re-posting (e.g. 'scan:<hash>') — same key updates instead of duplicating"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ title, body, due_on, assignee_id, dedup_key, path }) => {
+      const res = await createTask(rootOf(path), { title, body, due_on, assignee_id, dedup_key });
+      if (!res.ok || !res.task) return issueFail("Add task", res.code, res.message);
+      return json({ ok: true, task: res.task });
     },
   );
 

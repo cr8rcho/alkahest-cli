@@ -105,8 +105,8 @@ interface AuthContext {
   slug?: string;
 }
 
-/** Resolve api/token/slug once; shared by every call below. */
-function authContext(
+/** Resolve api/token/slug once; shared by every call below (and by core/tasks.ts). */
+export function authContext(
   path: string,
   params: { api?: string; token?: string; slug?: string },
   needSlug: boolean,
@@ -127,7 +127,7 @@ function authContext(
   return { apiUrl, token, root, slug };
 }
 
-async function request(
+export async function request(
   url: string,
   token: string,
   body?: unknown,
@@ -150,7 +150,7 @@ async function request(
   return { ok: res.ok, status: String(res.status), body: parsed };
 }
 
-const fail = (res: { status: string; body: any }, what: string) => ({
+export const fail = (res: { status: string; body: any }, what: string) => ({
   ok: false as const,
   code: res.body?.error ?? "http",
   message: res.body?.message ?? res.body?.error ?? `${what} failed (${res.status})`,
