@@ -521,25 +521,26 @@ export function buildServer(): McpServer {
     },
   );
 
-  // ---- tasks: the lightweight sibling of an issue — a flat checklist item (ADR-049) ----
+  // ---- tasks: the PERSONAL lightweight sibling of an issue — a private checklist item (ADR-049/050) ----
   server.registerTool(
     "list_tasks",
     {
       title: "List tasks",
       description:
-        "Read this project's tasks — the lightweight sibling of an issue (ADR-049): a flat checklist item " +
-        "(title + done + optional due/assignee), NOT a graph node and NOT on any map. Use tasks for quick throughput " +
-        '("do this") and issues for problems that need a thread/decision/code link. Returns open tasks by default ' +
-        "(status:'all' includes done). Needs a publish token and a published project.",
+        "Read your PERSONAL tasks (ADR-050) — a private checklist item (title + done + optional due, a project tag, " +
+        "and free tags); only you see it. Use tasks for your own quick throughput and issues for shared/team work that " +
+        "needs a thread/decision/code link. Returns open tasks by default (status:'all' includes done); pass `project` " +
+        "(slug) to see only tasks tagged to it. Needs a publish token — no project or publish required.",
       inputSchema: {
         status: z.enum(["open", "all"]).optional().describe("open (default) = not done; all = include done"),
-        path: z.string().optional().describe("Project root (default: cwd)"),
+        project: z.string().optional().describe("Only tasks tagged to this project (slug)"),
+        path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
       },
     },
-    async ({ status, path }) => {
-      const res = await pullTasks(rootOf(path), { status });
+    async ({ status, project, path }) => {
+      const res = await pullTasks(rootOf(path), { status, project });
       if (!res.ok || !res.tasks) return issueFail("List tasks", res.code, res.message);
-      return json({ ok: true, project: res.slug, count: res.tasks.length, tasks: res.tasks });
+      return json({ ok: true, count: res.tasks.length, tasks: res.tasks });
     },
   );
 
@@ -548,25 +549,30 @@ export function buildServer(): McpServer {
     {
       title: "Add a task",
       description:
-        "Create a lightweight task on this project — a flat checklist item (title + optional due/assignee), the " +
-        "sibling of an issue but without a map, status, or decision thread. Reach for it when you spot small work " +
-        'while doing something else ("add a task to X"); it lands in the user\'s home Tasks band and activity feed ' +
-        "chipped as the agent, and the user can promote it to a full issue if it grows. For a problem that needs a " +
-        "thread/decision or a code-map link, use add_issue instead. Pass dedup_key to stay idempotent across " +
-        "re-scans (same key updates the live task rather than duplicating). Needs a publish token; project member " +
-        "(commenter+) only.",
+        "Add a PERSONAL task to the token user's list (ADR-050) — a private checklist item (title + optional due, a " +
+        "project tag, free tags). Only they see it; it shows in their home Tasks band + activity feed (chipped as the " +
+        'agent). Reach for it when you spot small personal work ("remind me to X", "add a task to Y"). **No project or ' +
+        "publish is required** — omit `project` for a personal Inbox task. For shared/team work that needs a thread, " +
+        "decision, status, or code-map link, use add_issue instead (a task can be promoted to an issue later). Pass " +
+        "`tags` for free labels and `dedup_key` to stay idempotent across re-scans. Needs a publish token.",
       inputSchema: {
         title: z.string().describe("Task title"),
         body: z.string().optional().describe("Optional markdown detail"),
+        project: z.string().optional().describe("Tag the task to a project (slug). Omit for a personal Inbox task. (You must belong to its workspace.)"),
+        workspace: z.string().optional().describe("Which workspace an Inbox task lives in (slug) — only needed with no project AND you belong to several workspaces"),
+        tags: z.array(z.string()).optional().describe("Free personal labels, e.g. ['errand','urgent']"),
         due_on: z.string().optional().describe("Due date as YYYY-MM-DD"),
-        assignee_id: z.string().optional().describe("Assign to a project member (user id)"),
-        dedup_key: z.string().optional().describe("Stable key for idempotent re-posting (e.g. 'scan:<hash>') — same key updates instead of duplicating"),
-        path: z.string().optional().describe("Project root (default: cwd)"),
+        assignee_id: z.string().optional().describe("Assign to a user id"),
+        dedup_key: z.string().optional().describe("Stable key for idempotent re-posting (e.g. 'scan:<hash>')"),
+        path: z.string().optional().describe("Project root (default: cwd — a linked checkout auto-tags its project)"),
       },
     },
-    async ({ title, body, due_on, assignee_id, dedup_key, path }) => {
-      const res = await createTask(rootOf(path), { title, body, due_on, assignee_id, dedup_key });
-      if (!res.ok || !res.task) return issueFail("Add task", res.code, res.message);
+    async ({ title, body, project, workspace, tags, due_on, assignee_id, dedup_key, path }) => {
+      const res = await createTask(rootOf(path), { title, body, slug: project, workspace, tags, due_on, assignee_id, dedup_key });
+      if (!res.ok || !res.task) {
+        const wsHint = res.workspaces?.length ? ` Workspaces: ${JSON.stringify(res.workspaces)}` : "";
+        return issueFail("Add task", res.code, `${res.message ?? ""}${wsHint}`);
+      }
       return json({ ok: true, task: res.task });
     },
   );
