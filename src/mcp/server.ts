@@ -530,7 +530,9 @@ export function buildServer(): McpServer {
         "Read your PERSONAL tasks (ADR-050) — a private checklist item (title + done + optional due, a project tag, " +
         "and free tags); only you see it. Use tasks for your own quick throughput and issues for shared/team work that " +
         "needs a thread/decision/code link. Returns open tasks by default (status:'all' includes done); pass `project` " +
-        "(slug) to see only tasks tagged to it. Needs a publish token — no project or publish required.",
+        "(slug) to see only tasks tagged to it. **Read this before add_task when you are generating several tasks** — " +
+        "update or skip what is already on the list instead of adding a near-duplicate. Needs a publish token — no " +
+        "project or publish required.",
       inputSchema: {
         status: z.enum(["open", "all"]).optional().describe("open (default) = not done; all = include done"),
         project: z.string().optional().describe("Only tasks tagged to this project (slug)"),
@@ -549,26 +551,39 @@ export function buildServer(): McpServer {
     {
       title: "Add a task",
       description:
-        "Add a PERSONAL task to the token user's list (ADR-050) — a private checklist item (title + optional due, a " +
-        "project tag, free tags). Only they see it; it shows in their home Tasks band + activity feed (chipped as the " +
-        'agent). Reach for it when you spot small personal work ("remind me to X", "add a task to Y"). **No project or ' +
-        "publish is required** — omit `project` for a personal Inbox task. For shared/team work that needs a thread, " +
-        "decision, status, or code-map link, use add_issue instead (a task can be promoted to an issue later). Pass " +
-        "`tags` for free labels and `dedup_key` to stay idempotent across re-scans. Needs a publish token.",
+        "Add a PERSONAL task to the token user's list (ADR-050) — a private checklist item (title + optional body, due, " +
+        "a project tag, free tags). Only they see it; it shows in their home Tasks band + activity feed (chipped as the " +
+        'agent). Reach for it when you spot small personal work ("remind me to X", "add a task to Y") or when asked to ' +
+        "surface work that might be getting missed. **No project or publish is required** — omit `project` for a personal " +
+        "Inbox task. For shared/team work that needs a thread, decision, status, or code-map link, use add_issue instead " +
+        "(a task can be promoted to an issue later). Needs a publish token.\n\n" +
+        "WRITE A USEFUL TASK, not just a title:\n" +
+        "- `title` — the action, imperative and specific ('Bump MIN_CLI_VERSION for the 0.2 map schema'), not a topic ('버전').\n" +
+        "- `body` — markdown, and it RENDERS with clickable links, so put the context there: why it matters, what 'done' " +
+        "looks like, and **a link to the evidence** as `[label](url)` — a repo file/PR/issue URL, or a hosted page like " +
+        "`https://alkahest.app/p/<project-slug>/<map-slug>`. There is no separate link field; the body is where a pointer belongs.\n" +
+        "- `dedup_key` — REQUIRED whenever you are re-scanning or generating a batch (anything that could run twice). " +
+        "Re-posting the same key updates that task instead of piling up duplicates. Use a stable key derived from the " +
+        "SUBJECT, not the wording — e.g. 'stale-doc:docs/deploy.md', not a hash of the sentence.\n" +
+        "- `tags` — free labels; also how you carry priority or batch, e.g. ['p1'] or ['audit-2026-07'].\n" +
+        "Generating several at once: one task = one action someone can finish in a sitting. Split anything bigger, and " +
+        "call list_tasks first so you update what is already there instead of re-adding it.",
       inputSchema: {
-        title: z.string().describe("Task title"),
-        body: z.string().optional().describe("Optional markdown detail"),
+        title: z.string().describe("The action, imperative and specific — what someone would actually do"),
+        body: z
+          .string()
+          .optional()
+          .describe("Markdown detail: why it matters, what 'done' looks like, and a [label](url) link to the evidence. Renders with clickable links."),
         project: z.string().optional().describe("Tag the task to a project (slug). Omit for a personal Inbox task. (You must belong to its workspace.)"),
         workspace: z.string().optional().describe("Which workspace an Inbox task lives in (slug) — only needed with no project AND you belong to several workspaces"),
-        tags: z.array(z.string()).optional().describe("Free personal labels, e.g. ['errand','urgent']"),
+        tags: z.array(z.string()).optional().describe("Free personal labels — also priority/batch, e.g. ['p1','audit-2026-07']"),
         due_on: z.string().optional().describe("Due date as YYYY-MM-DD"),
-        assignee_id: z.string().optional().describe("Assign to a user id"),
-        dedup_key: z.string().optional().describe("Stable key for idempotent re-posting (e.g. 'scan:<hash>')"),
+        dedup_key: z.string().optional().describe("Stable per-subject key, required for re-scans/batches (e.g. 'stale-doc:docs/deploy.md') — re-posting updates instead of duplicating"),
         path: z.string().optional().describe("Project root (default: cwd — a linked checkout auto-tags its project)"),
       },
     },
-    async ({ title, body, project, workspace, tags, due_on, assignee_id, dedup_key, path }) => {
-      const res = await createTask(rootOf(path), { title, body, slug: project, workspace, tags, due_on, assignee_id, dedup_key });
+    async ({ title, body, project, workspace, tags, due_on, dedup_key, path }) => {
+      const res = await createTask(rootOf(path), { title, body, slug: project, workspace, tags, due_on, dedup_key });
       if (!res.ok || !res.task) {
         const wsHint = res.workspaces?.length ? ` Workspaces: ${JSON.stringify(res.workspaces)}` : "";
         return issueFail("Add task", res.code, `${res.message ?? ""}${wsHint}`);

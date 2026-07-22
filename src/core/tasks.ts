@@ -62,8 +62,6 @@ export interface CreateTaskParams {
   body?: string;
   /** Due date YYYY-MM-DD. */
   due_on?: string | null;
-  /** Assignee user id. */
-  assignee_id?: string | null;
   /** Free tags (personal labels). */
   tags?: string[];
   /** Per-user idempotency: re-posting the same dedup_key updates the live task instead of duplicating. */
@@ -93,7 +91,8 @@ export async function createTask(path: string, params: CreateTaskParams): Promis
     title: params.title.trim(),
     body: params.body,
     due_on: params.due_on ?? null,
-    assignee_id: params.assignee_id ?? null,
+    // No assignee: a task is PERSONAL (0073 — RLS reads gate on created_by), so pointing one at
+    // someone else only hides it from them. The shared unit of work is an issue.
     tags: params.tags,
     dedup_key: params.dedup_key,
   });
