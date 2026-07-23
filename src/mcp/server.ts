@@ -17,7 +17,7 @@ import {
   resolveIssueComment,
   mapIssue,
 } from "../core/issues.js";
-import { createTask, pullTasks } from "../core/tasks.js";
+import { completeTask, createTask, pullTasks } from "../core/tasks.js";
 import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
@@ -561,13 +561,15 @@ export function buildServer(): McpServer {
         "- `title` — the action, imperative and specific ('Bump MIN_CLI_VERSION for the 0.2 map schema'), not a topic ('버전').\n" +
         "- `body` — markdown, and it RENDERS with clickable links, so put the context there: why it matters, what 'done' " +
         "looks like, and **a link to the evidence** as `[label](url)` — a repo file/PR/issue URL, or a hosted page like " +
-        "`https://alkahest.app/p/<project-slug>/<map-slug>`. There is no separate link field; the body is where a pointer belongs.\n" +
+        "`https://alkahest.app/p/<project-slug>/<map-slug>`. There is no separate link field; the body is where a pointer belongs. " +
+        "A task that falls out of an issue should link that issue the same way, so the reader can jump to the thread.\n" +
         "- `dedup_key` — REQUIRED whenever you are re-scanning or generating a batch (anything that could run twice). " +
         "Re-posting the same key updates that task instead of piling up duplicates. Use a stable key derived from the " +
         "SUBJECT, not the wording — e.g. 'stale-doc:docs/deploy.md', not a hash of the sentence.\n" +
         "- `tags` — free labels; also how you carry priority or batch, e.g. ['p1'] or ['audit-2026-07'].\n" +
         "Generating several at once: one task = one action someone can finish in a sitting. Split anything bigger, and " +
-        "call list_tasks first so you update what is already there instead of re-adding it.",
+        "call list_tasks first so you update what is already there instead of re-adding it. When the work a task " +
+        "describes is finished, close the loop with complete_task.",
       inputSchema: {
         title: z.string().describe("The action, imperative and specific — what someone would actually do"),
         body: z
@@ -588,6 +590,30 @@ export function buildServer(): McpServer {
         const wsHint = res.workspaces?.length ? ` Workspaces: ${JSON.stringify(res.workspaces)}` : "";
         return issueFail("Add task", res.code, `${res.message ?? ""}${wsHint}`);
       }
+      return json({ ok: true, task: res.task });
+    },
+  );
+
+  server.registerTool(
+    "complete_task",
+    {
+      title: "Complete a task",
+      description:
+        "Mark one of your PERSONAL tasks done — the close half of the add_task loop. Call it the moment the work a " +
+        "task describes is actually finished (or the user says it is), so their list reflects reality: the task moves " +
+        "into Done on their Tasks page, and project-tagged tasks log a Completed row in the activity feed. Get the id " +
+        "from list_tasks (or the add_task response). reopen:true puts a done task back on the open list instead. A " +
+        "task that was promoted to an issue is refused — complete the issue itself (complete_issue). Needs a publish " +
+        "token — no project or publish required.",
+      inputSchema: {
+        id: z.string().describe("Task id (from list_tasks / add_task)"),
+        reopen: z.boolean().optional().describe("true → reopen a done task instead of completing it"),
+        path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
+      },
+    },
+    async ({ id, reopen, path }) => {
+      const res = await completeTask(rootOf(path), { id, reopen });
+      if (!res.ok || !res.task) return issueFail(reopen ? "Reopen task" : "Complete task", res.code, res.message);
       return json({ ok: true, task: res.task });
     },
   );

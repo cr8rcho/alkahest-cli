@@ -76,6 +76,29 @@ export interface TaskWriteResult {
   workspaces?: { slug: string; name: string | null }[];
 }
 
+export interface CompleteTaskParams {
+  api?: string;
+  token?: string;
+  /** Task id (from list_tasks / add_task). */
+  id: string;
+  /** true → reopen a done task instead of completing it. */
+  reopen?: boolean;
+}
+
+/** Complete (or reopen) one of the token user's personal tasks. A promoted task is refused by
+ * the backend (409 `promoted`) — its live copy is the issue, so completion belongs there. */
+export async function completeTask(path: string, params: CompleteTaskParams): Promise<TaskWriteResult> {
+  const ctx = authContext(path, { api: params.api, token: params.token }, false);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.id?.trim()) return { ok: false, code: "no_id", message: "Task id is required." };
+  const res = await request(`${ctx.apiUrl}/tasks-update`, ctx.token, {
+    id: params.id.trim(),
+    done: !params.reopen,
+  });
+  if (!res.ok) return fail(res, "update") as TaskWriteResult;
+  return { ok: true, task: res.body?.task };
+}
+
 /** Create a personal task (origin='agent'). No published project required — the project is an
  * optional tag; without one the task lands in the token user's workspace Inbox. */
 export async function createTask(path: string, params: CreateTaskParams): Promise<TaskWriteResult> {
