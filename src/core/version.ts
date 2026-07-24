@@ -4,34 +4,37 @@ import { homedir } from "node:os";
 import { createRequire } from "node:module";
 
 /**
- * Single source of truth for "is a newer alkahest out?" — the repo's latest GitHub Release.
+ * Single source of truth for "is a newer alkahest out?" — the npm registry's `latest`
+ * dist-tag for this package. npm is what `alkahest update` actually installs from, so it is
+ * the honest signal (a GitHub release whose npm publish failed must not count as "newer").
  * Used by `alkahest update`, the ambient post-command notice, and the MCP check_version tool,
- * so every surface reports the same thing. All checks fail soft (offline / rate-limited /
- * no releases → behind:false), and the ambient path is cached so we hit GitHub at most once
- * per TTL per machine.
+ * so every surface reports the same thing. All checks fail soft (offline / proxy / timeout →
+ * behind:false, reachable:false), and the ambient path is cached so we hit the registry at
+ * most once per TTL per machine.
  */
 const require = createRequire(import.meta.url);
-const pkg = require("../../package.json") as { version: string; repository?: { url?: string } };
+const pkg = require("../../package.json") as { version: string; name: string };
 
-const FALLBACK_REPO = "cr8rcho/alkahest-cli";
 const CACHE_FILE = join(homedir(), ".alkahest", "update-check.json");
 const TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 export interface UpdateStatus {
   current: string;
-  /** Latest release version (no leading "v"), or null if unknown. */
+  /** Latest published version on npm, or null if unknown. */
   latest: string | null;
   behind: boolean;
+  /** false = the registry couldn't be reached (offline/proxy/timeout) — latest is unknown,
+   * not absent. Lets callers say "couldn't check" instead of "nothing published". */
+  reachable: boolean;
 }
 
 export function currentVersion(): string {
   return pkg.version;
 }
 
-/** "owner/repo" from package.json repository.url (fallback to the known repo). */
-export function repoSlug(): string {
-  const m = pkg.repository?.url?.match(/github\.com[/:]([^/]+\/[^/.]+?)(?:\.git)?(?:$|[/#?])/i);
-  return m ? m[1] : FALLBACK_REPO;
+/** The registry URL for this package's `latest` dist-tag (scoped names need the `/` encoded). */
+export function latestUrl(): string {
+  return `https://registry.npmjs.org/${pkg.name.replace("/", "%2f")}/latest`;
 }
 
 /** Compare dotted versions: -1 if a<b, 0 if equal, 1 if a>b (major.minor.patch). */
@@ -45,50 +48,61 @@ export function cmpVersion(a: string, b: string): number {
   return 0;
 }
 
-/** Latest release tag (without a leading "v"), or null if none / unreachable. */
-export async function fetchLatestRelease(timeoutMs = 2500): Promise<string | null> {
+interface LatestProbe {
+  version: string | null;
+  reachable: boolean;
+}
+
+/** The npm registry's `latest` version for this package. reachable:false = couldn't ask
+ * (offline / proxy / timeout — incl. Node <18 without global fetch); version:null with
+ * reachable:true = the registry answered but had nothing usable (never published / yanked). */
+export async function fetchLatestVersion(timeoutMs = 2500): Promise<LatestProbe> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(`https://api.github.com/repos/${repoSlug()}/releases/latest`, {
-      headers: { accept: "application/vnd.github+json", "user-agent": "alkahest-cli" },
+    const res = await fetch(latestUrl(), {
+      headers: { accept: "application/json", "user-agent": "alkahest-cli" },
       signal: ctrl.signal,
     });
-    if (!res.ok) return null; // 404 = no releases yet
-    const body = (await res.json()) as { tag_name?: string };
-    return body.tag_name ? body.tag_name.replace(/^v/i, "").trim() : null;
+    if (res.status === 404) return { version: null, reachable: true }; // never published
+    if (!res.ok) return { version: null, reachable: false }; // 5xx / blocked — treat as "couldn't check"
+    const body = (await res.json()) as { version?: string };
+    return { version: body.version?.trim() || null, reachable: true };
   } catch {
-    return null; // offline / aborted / rate-limited — fail soft
+    return { version: null, reachable: false }; // offline / aborted / no fetch — fail soft
   } finally {
     clearTimeout(timer);
   }
 }
 
-function status(latest: string | null): UpdateStatus {
-  return { current: pkg.version, latest, behind: !!latest && cmpVersion(pkg.version, latest) < 0 };
+function status(probe: LatestProbe): UpdateStatus {
+  const latest = probe.version;
+  return { current: pkg.version, latest, behind: !!latest && cmpVersion(pkg.version, latest) < 0, reachable: probe.reachable };
 }
 
 /** Fresh network check — for explicit commands (`alkahest update`, check_version). */
 export async function checkForUpdate(): Promise<UpdateStatus> {
-  return status(await fetchLatestRelease());
+  return status(await fetchLatestVersion());
 }
 
 /** Throttled, cached check — for ambient notices that run on common commands. */
 export async function cachedUpdateStatus(ttlMs = TTL_MS): Promise<UpdateStatus> {
   try {
-    const raw = JSON.parse(readFileSync(CACHE_FILE, "utf8")) as { checkedAt?: number; latest?: string | null };
-    if (raw.checkedAt && Date.now() - raw.checkedAt < ttlMs) return status(raw.latest ?? null);
+    const raw = JSON.parse(readFileSync(CACHE_FILE, "utf8")) as { checkedAt?: number; latest?: string | null; reachable?: boolean };
+    if (raw.checkedAt && Date.now() - raw.checkedAt < ttlMs) {
+      return status({ version: raw.latest ?? null, reachable: raw.reachable ?? true });
+    }
   } catch {
     /* no / stale / invalid cache — fall through to a fresh check */
   }
-  const latest = await fetchLatestRelease();
+  const probe = await fetchLatestVersion();
   try {
     mkdirSync(dirname(CACHE_FILE), { recursive: true });
-    writeFileSync(CACHE_FILE, JSON.stringify({ checkedAt: Date.now(), latest }) + "\n");
+    writeFileSync(CACHE_FILE, JSON.stringify({ checkedAt: Date.now(), latest: probe.version, reachable: probe.reachable }) + "\n");
   } catch {
     /* cache is best-effort */
   }
-  return status(latest);
+  return status(probe);
 }
 
 /**

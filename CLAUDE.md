@@ -59,10 +59,13 @@ keep comments at the existing density.
 
 ## Releases / versioning
 
-Distribution is **npm** (`@cr8rcho/alkahest`); latest-version **detection** is **GitHub
-Releases**. `alkahest update` reads the repo's `releases/latest`, compares it to the installed
-`package.json` version (`--check` reports only), then updates: `git pull` + rebuild for a git
-checkout, else `npm i -g @cr8rcho/alkahest@latest`.
+Distribution is **npm** (`@cr8rcho/alkahest`); latest-version **detection** is the **npm
+registry's `latest` dist-tag** (same place the update installs from — a GitHub release whose
+npm publish failed must not count as "newer"). `alkahest update` fetches
+`registry.npmjs.org/@cr8rcho%2falkahest/latest`, compares it to the installed `package.json`
+version (`--check` reports only), then updates: `git pull` + rebuild for a git checkout, else
+`npm i -g @cr8rcho/alkahest@latest`. A failed registry probe is reported as "couldn't check"
+(`reachable:false`), distinct from "nothing published".
 
 **SemVer is keyed to the `map.json` schema contract** — the structure the CLI emits and
 the hosted viewer renders — not to internal refactors:
@@ -75,17 +78,17 @@ the hosted viewer renders — not to internal refactors:
    `prepare` / `prepublishOnly` build it — nothing else to package.)
 2. `gh release create vX.Y.Z --target main --title vX.Y.Z --notes "…"` — tag is `v` +
    the package version. The release triggers CI to publish `@cr8rcho/alkahest` to npm
-   (Trusted Publishing / OIDC), and `alkahest update` picks the tag up.
+   (Trusted Publishing / OIDC); once npm has it, `alkahest update` sees it.
 3. **Only for a *breaking* `map.json` schema change:** bump `MIN_CLI_VERSION` in the
    `publish` edge function and redeploy it, so old clients get a clear 426
    "run `alkahest update`" instead of uploading a map the viewer can't render. That
    constant lives in the **alkahest** repo (`supabase/functions/publish/index.ts`).
    `MIN` locks out everyone below it — raise it only for genuine incompatibility; prefer
    additive schema changes so it rarely moves. (There is no `LATEST` constant — "a newer
-   version exists" is detected client-side from GitHub Releases, so cutting the release in
-   step 2 is all the nudge needs.)
+   version exists" is detected client-side from the npm registry, so cutting the release in
+   step 2 — which publishes to npm — is all the nudge needs.)
 
-How users find out they're behind (all read GitHub Releases, fail-soft):
+How users find out they're behind (all probe the npm registry, fail-soft):
 - ambient one-line stderr notice after `scan` / `publish` (cached ~24h; opt out with
   `ALKAHEST_NO_UPDATE_NOTIFIER`),
 - the MCP `check_version` tool (and the `publish` tool's result) — for agent-driven users,

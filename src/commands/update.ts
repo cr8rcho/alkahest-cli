@@ -7,7 +7,8 @@ import { checkForUpdate } from "../core/version.js";
 /**
  * Update the installed alkahest to the latest version.
  *
- * Latest-version detection uses GitHub Releases (see core/version.ts). The update mechanism
+ * Latest-version detection asks the npm registry's `latest` dist-tag (see core/version.ts) —
+ * npm is what the update actually installs, so it is the honest signal. The update mechanism
  * adapts to the install:
  *  - git checkout (`git clone` + `npm link`): `git pull` + rebuild in place.
  *  - npm global install (no .git): reinstall the latest from npm.
@@ -23,14 +24,15 @@ export async function update(options: UpdateOptions = {}): Promise<void> {
   const pkgRoot = dirname(require.resolve("../../package.json"));
   const pkgName = (require("../../package.json") as { name: string }).name;
 
-  const { current, latest, behind } = await checkForUpdate();
+  const { current, latest, behind, reachable } = await checkForUpdate();
   console.log(`[alkahest] current version ${current}`);
   if (latest && !behind) {
-    console.log(`[alkahest] already up to date (latest release ${latest}).`);
+    console.log(`[alkahest] already up to date (latest on npm is ${latest}).`);
     return;
   }
   if (latest) console.log(`[alkahest] update available: ${current} → ${latest}`);
-  else console.log(`[alkahest] (no published GitHub release to compare against — will pull latest source.)`);
+  else if (!reachable) console.log(`[alkahest] (couldn't reach the npm registry to check the latest version — offline or proxied? Proceeding anyway.)`);
+  else console.log(`[alkahest] (nothing published on npm to compare against.)`);
 
   if (options.check) return; // report-only
 
