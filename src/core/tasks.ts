@@ -102,6 +102,37 @@ export async function completeTask(path: string, params: CompleteTaskParams): Pr
   return { ok: true, task: res.body?.task };
 }
 
+export interface UpdateTaskParams {
+  api?: string;
+  token?: string;
+  /** Task id (from list_tasks / add_task). */
+  id: string;
+  title?: string;
+  /** New body; null clears it. */
+  body?: string | null;
+  /** New due date (YYYY-MM-DD); null clears it. */
+  due_on?: string | null;
+  /** REPLACES the whole tag set. */
+  tags?: string[];
+}
+
+/** Edit one of the token user's personal tasks — only the passed keys change. Promoted tasks
+ * are refused by the backend (409 `promoted` — act on the issue instead). */
+export async function updateTask(path: string, params: UpdateTaskParams): Promise<TaskWriteResult> {
+  const ctx = authContext(path, { api: params.api, token: params.token }, false);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.id?.trim()) return { ok: false, code: "no_id", message: "Task id is required." };
+  const payload: Record<string, unknown> = { id: params.id.trim() };
+  if (params.title !== undefined) payload.title = params.title;
+  if (params.body !== undefined) payload.body = params.body;
+  if (params.due_on !== undefined) payload.due_on = params.due_on;
+  if (params.tags !== undefined) payload.tags = params.tags;
+  if (Object.keys(payload).length === 1) return { ok: false, code: "no_fields", message: "Pass at least one field to change (title, body, due_on, tags)." };
+  const res = await request(`${ctx.apiUrl}/tasks-update`, ctx.token, payload);
+  if (!res.ok) return fail(res, "update") as TaskWriteResult;
+  return { ok: true, task: res.body?.task };
+}
+
 /** Create a personal task (origin='agent'). No published project required — the project is an
  * optional tag; without one the task lands in the token user's workspace Inbox. */
 export async function createTask(path: string, params: CreateTaskParams): Promise<TaskWriteResult> {

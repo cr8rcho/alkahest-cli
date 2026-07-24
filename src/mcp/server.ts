@@ -17,7 +17,7 @@ import {
   resolveIssueComment,
   mapIssue,
 } from "../core/issues.js";
-import { completeTask, createTask, pullTasks } from "../core/tasks.js";
+import { completeTask, createTask, pullTasks, updateTask } from "../core/tasks.js";
 import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
@@ -618,6 +618,38 @@ export function buildServer(): McpServer {
     async ({ id, reopen, path }) => {
       const res = await completeTask(rootOf(path), { id, reopen });
       if (!res.ok || !res.task) return issueFail(reopen ? "Reopen task" : "Complete task", res.code, res.message);
+      return json({ ok: true, task: res.task });
+    },
+  );
+
+  server.registerTool(
+    "update_task",
+    {
+      title: "Edit a task",
+      description:
+        "Edit one of your PERSONAL tasks — title, body, due date, tags. Pass only what changes; the rest stays. Use it " +
+        "to keep a task honest as work evolves (sharpen the title, add findings/links to the body, move the due date, " +
+        "retag) instead of re-adding a near-duplicate. `tags` REPLACES the whole set. An empty string clears body or " +
+        "due_on. Get the id from list_tasks (or the add_task response). For done/reopen use complete_task; a task " +
+        "promoted to an issue is refused (act on the issue). Needs a publish token — no project or publish required.",
+      inputSchema: {
+        id: z.string().describe("Task id (from list_tasks / add_task)"),
+        title: z.string().optional().describe("New title (imperative and specific)"),
+        body: z.string().optional().describe("New markdown body — renders with clickable links. Empty string clears it."),
+        due_on: z.string().optional().describe("New due date as YYYY-MM-DD. Empty string clears it."),
+        tags: z.array(z.string()).optional().describe("REPLACES the whole tag set (pass the full list you want to keep)"),
+        path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
+      },
+    },
+    async ({ id, title, body, due_on, tags, path }) => {
+      const res = await updateTask(rootOf(path), {
+        id,
+        title,
+        body: body === "" ? null : body,
+        due_on: due_on === "" ? null : due_on,
+        tags,
+      });
+      if (!res.ok || !res.task) return issueFail("Update task", res.code, res.message);
       return json({ ok: true, task: res.task });
     },
   );
