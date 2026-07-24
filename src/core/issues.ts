@@ -165,6 +165,8 @@ export interface PullIssuesParams {
   slug?: string;
   /** Restrict to one issue map within the project (a project can hold several). */
   mapSlug?: string;
+  /** Server-side text filter: title/body substring. Edges/links stay unfiltered. */
+  q?: string;
 }
 
 /** Fetch the project's issue graph (issues + edges + map links + effective config). */
@@ -173,7 +175,8 @@ export async function pullIssues(path: string, params: PullIssuesParams = {}): P
   if ("code" in ctx) return { ok: false, ...ctx };
 
   const mapQ = params.mapSlug ? `&map=${encodeURIComponent(params.mapSlug)}` : "";
-  const res = await request(`${ctx.apiUrl}/issues-pull?slug=${encodeURIComponent(ctx.slug!)}${mapQ}`, ctx.token);
+  const textQ = params.q ? `&q=${encodeURIComponent(params.q)}` : "";
+  const res = await request(`${ctx.apiUrl}/issues-pull?slug=${encodeURIComponent(ctx.slug!)}${mapQ}${textQ}`, ctx.token);
   if (!res.ok) return fail(res, "pull");
   const proj = (res.body?.projects ?? []).find((p: any) => p.slug === ctx.slug) ?? res.body?.projects?.[0];
   return {

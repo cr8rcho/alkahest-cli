@@ -37,6 +37,8 @@ export interface PullTasksParams {
   project?: string;
   /** open (default) = not done; all = include done. Promoted tasks excluded. */
   status?: "open" | "all";
+  /** Server-side text filter: title/body substring. */
+  q?: string;
 }
 
 /** List the token user's personal tasks (open by default). */
@@ -46,6 +48,7 @@ export async function pullTasks(path: string, params: PullTasksParams = {}): Pro
   const qs: string[] = [];
   if (params.status === "all") qs.push("status=all");
   if (params.project) qs.push(`slug=${encodeURIComponent(params.project)}`);
+  if (params.q) qs.push(`q=${encodeURIComponent(params.q)}`);
   const res = await request(`${ctx.apiUrl}/tasks-pull${qs.length ? `?${qs.join("&")}` : ""}`, ctx.token);
   if (!res.ok) return fail(res, "pull");
   return { ok: true, root: ctx.root, tasks: (res.body?.tasks ?? []) as Task[] };

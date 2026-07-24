@@ -460,10 +460,11 @@ export function buildServer(): McpServer {
         path: z.string().optional().describe("Project root (default: cwd)"),
         open: z.boolean().optional().describe("Only issues that are not done (default: false = all)"),
         map: z.string().optional().describe("Restrict to one issue map (a project can hold several; omit when there's one). List them with the maps tool."),
+        q: z.string().optional().describe("Filter issues by title/body substring (server-side). Edges/links stay unfiltered, so blockedBy may name issues outside the filtered list."),
       },
     },
-    async ({ path, open, map }) => {
-      const res = await pullIssues(rootOf(path), { mapSlug: map });
+    async ({ path, open, map, q }) => {
+      const res = await pullIssues(rootOf(path), { mapSlug: map, q });
       if (!res.ok || !res.graph) return issueFail("Read issues", res.code, res.message, res.maps);
       const states = deriveIssueStates(res.graph);
       const issues = res.graph.issues
@@ -536,11 +537,12 @@ export function buildServer(): McpServer {
       inputSchema: {
         status: z.enum(["open", "all"]).optional().describe("open (default) = not done; all = include done"),
         project: z.string().optional().describe("Only tasks tagged to this project (slug)"),
+        q: z.string().optional().describe("Filter by title/body substring (server-side)"),
         path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
       },
     },
-    async ({ status, project, path }) => {
-      const res = await pullTasks(rootOf(path), { status, project });
+    async ({ status, project, q, path }) => {
+      const res = await pullTasks(rootOf(path), { status, project, q });
       if (!res.ok || !res.tasks) return issueFail("List tasks", res.code, res.message);
       return json({ ok: true, count: res.tasks.length, tasks: res.tasks });
     },
@@ -615,6 +617,45 @@ export function buildServer(): McpServer {
       const res = await completeTask(rootOf(path), { id, reopen });
       if (!res.ok || !res.task) return issueFail(reopen ? "Reopen task" : "Complete task", res.code, res.message);
       return json({ ok: true, task: res.task });
+    },
+  );
+
+  // ---- search: one query across notes · issues · tasks ----
+  server.registerTool(
+    "search",
+    {
+      title: "Search notes, issues, and tasks",
+      description:
+        "One text query across this project's NOTES and ISSUES plus your personal TASKS — the find-it-first verb. " +
+        "Use it before creating anything (does a note/issue/task on this topic already exist?) and before linking " +
+        "(which note should cite this issue?). Matching is a server-side substring over title + full body (and note " +
+        "slug); results come back compact — note bodies as 240-char excerpts (read one in full with get_note), issues " +
+        "with status/type, tasks with done state. Notes and issues need a published project (they fail soft with a " +
+        "reason if there isn't one); tasks are yours and always searchable. For a deeper dive into one kind, use the " +
+        "notes / issues / list_tasks tools with their own `q`.",
+      inputSchema: {
+        q: z.string().describe("Text to find — substring match over titles and full bodies"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ q, path }) => {
+      const root = rootOf(path);
+      const [notesRes, issuesRes, tasksRes] = await Promise.all([
+        pullNotes(root, { q, bodies: "excerpt" }),
+        pullIssues(root, { q }),
+        pullTasks(root, { q, status: "all" }),
+      ]);
+      const notes = notesRes.ok && notesRes.maps
+        ? notesRes.maps.flatMap((m) => m.notes.map((n: any) => ({ slug: n.slug, title: n.title, map: m.slug, folder: n.folder ?? null, excerpt: n.body ?? null })))
+        : { unavailable: notesRes.message ?? notesRes.code ?? "unavailable" };
+      const issues = issuesRes.ok && issuesRes.graph
+        ? issuesRes.graph.issues.map((i: any) => ({ id: i.id, title: i.title, status: i.status, type: i.type, priority: i.priority ?? null, open_questions: i.open_questions ?? 0 }))
+        : { unavailable: issuesRes.message ?? issuesRes.code ?? "unavailable" };
+      const tasks = tasksRes.ok && tasksRes.tasks
+        ? tasksRes.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, due_on: t.due_on, tags: t.tags, project: t.project?.slug ?? null }))
+        : { unavailable: tasksRes.message ?? tasksRes.code ?? "unavailable" };
+      const count = (x: unknown) => (Array.isArray(x) ? x.length : 0);
+      return json({ ok: true, q, counts: { notes: count(notes), issues: count(issues), tasks: count(tasks) }, notes, issues, tasks });
     },
   );
 
