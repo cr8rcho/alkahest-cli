@@ -241,4 +241,6 @@ npm run typecheck
 
 ## License
 
-MIT
+MIT — [LICENSE](./LICENSE) 참조. 이 저장소 전체가 대상이며, `alkahest view` 가 여는
+대시보드 렌더러(`src/assets/dashboard.html`)도 포함됩니다. alkahest.app 호스팅 서비스는
+별도의 비공개 코드베이스입니다.

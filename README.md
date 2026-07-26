@@ -262,4 +262,7 @@ The single source of truth for the design is [`ALKAHEST.md`](./ALKAHEST.md).
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE). This covers everything in this repository,
+including the dashboard renderer `alkahest view` opens
+(`src/assets/dashboard.html`). The hosted service at alkahest.app is a separate,
+closed codebase.
