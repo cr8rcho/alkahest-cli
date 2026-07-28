@@ -151,6 +151,58 @@ export function importMap(sf: SourceFile): Map<string, string> {
   return map;
 }
 
+/**
+ * Local component files a file actually RENDERS, one hop out: `<Sidebar/>` where `Sidebar`
+ * is a relative import. Screens are often thin — `page.tsx` renders a section component that
+ * holds every link — so parsing the screen file alone loses most of the navigation.
+ *
+ * Deliberately restricted to identifiers used as JSX tags. Following *every* import instead
+ * drags in shared data modules, whose link tables then leak into each importing screen as
+ * edges that screen does not actually have.
+ */
+export function renderedComponentFiles(sf: SourceFile): string[] {
+  const dir = sf.getDirectoryPath();
+  const imports = importMap(sf);
+  const rendered = new Set<string>();
+  for (const el of [
+    ...sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement),
+    ...sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement),
+  ]) {
+    const tag = el.getTagNameNode().getText().split(".")[0];
+    if (/^[A-Z]/.test(tag)) rendered.add(tag);
+  }
+  const files = new Set<string>();
+  for (const name of rendered) {
+    const file = resolveComponentFile(dir, imports.get(name));
+    if (file) files.add(file);
+  }
+  return [...files];
+}
+
+/**
+ * Nav tables: `const NAV = [{ href: "/home/members", label: "Members" }]` handed to
+ * `<Link href={item.href}>`. The JSX attribute is an expression, so the literal only exists
+ * in the object — a sidebar written this way is invisible to attribute-level extraction.
+ */
+export function navTableEntries(sf: SourceFile): RawScreen["navs"] {
+  const out: RawScreen["navs"] = [];
+  for (const prop of sf.getDescendantsOfKind(SyntaxKind.PropertyAssignment)) {
+    const name = prop.getName().replace(/^["']|["']$/g, "");
+    if (name !== "href" && name !== "to") continue;
+    const init = prop.getInitializer();
+    if (!init || !Node.isStringLiteral(init)) continue;
+    const value = init.getLiteralValue();
+    if (!value.startsWith("/")) continue; // only in-app paths; relative/external stay out
+    out.push({
+      target: value,
+      raw: snippet(prop.getParent().getText()),
+      trigger: `nav table ${name}`,
+      line: prop.getStartLineNumber(),
+    });
+  }
+  return out;
+}
+
 /** Resolve a relative module specifier (from `configDir`) to an on-disk source file, or null. */
 export function resolveComponentFile(configDir: string, spec: string | undefined): string | null {
   if (!spec || !spec.startsWith(".")) return null; // only resolve local files

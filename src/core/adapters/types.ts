@@ -30,6 +30,11 @@ export interface RawNav {
   raw: string;
   trigger: string;
   line: number;
+  /**
+   * Where this nav literally lives (projectRoot-relative), when that is NOT the screen file —
+   * a layout, or a component the screen renders. Omitted = the screen file itself.
+   */
+  file?: string;
 }
 export interface RawCall {
   /** Statically resolved endpoint URL, null if unresolved */
@@ -68,4 +73,10 @@ export interface FrameworkAdapter {
   discover(projectRoot: string): ScreenFile[];
   /** Parse one screen file to extract raw signals. */
   parse(file: ScreenFile): RawScreen;
+  /**
+   * Extra source files (absolute paths) whose content feeds this screen's parse — layouts,
+   * rendered components. The incremental build hashes them together with the screen file, so
+   * editing one of them re-parses the screen instead of silently reusing a stale result.
+   */
+  deps?(file: ScreenFile): string[];
 }

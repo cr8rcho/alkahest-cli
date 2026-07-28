@@ -254,7 +254,8 @@ How a couple map source → graph:
 ```bash
 npm install
 npm run build
-node dist/cli.js scan examples/sample-next   # try it on the bundled fixture
+node dist/cli.js scan examples/sample-next        # try it on the bundled fixture
+node dist/cli.js scan examples/next-shell-mini   # app shell: layout sidebar + nav table + thin pages
 npm run typecheck
 ```
 

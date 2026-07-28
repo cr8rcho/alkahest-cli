@@ -143,10 +143,16 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 
 | 어댑터 | 화면 | 이동 | 호출 | 파서 |
 |---|---|---|---|---|
-| **next-app** | `app/**/page.tsx` (route) | `<Link>`/`router.push`/`redirect` | `fetch`/query훅 | ts-morph (AST) |
+| **next-app** | `app/**/page.tsx` (route) | `<Link>`/`router.push`/`redirect` + 소유 `layout.*` + 렌더 컴포넌트 1홉 + nav 표 | `fetch`/query훅 | ts-morph (AST) |
 | **swiftui** | `struct X: View` | `NavigationLink`/`.sheet`/`.fullScreenCover`/`navigationDestination` | `URL(string:)`/`URLRequest` | 정규식 휴리스틱(의존성 0) |
 
 - 어댑터는 `src/core/adapters/`. `selectAdapter()`가 `detect()`로 자동 선택.
+- **화면의 이동은 `page.tsx` 한 장에 다 있지 않다** (next-app). 앱 셸(사이드바·탭·헤더)은 `layout.tsx`에 있고, 페이지는 링크를 쥔 섹션 컴포넌트를 렌더할 뿐인 경우가 많다. 그래서 next-app의 `parse`는 세 곳을 더 읽는다.
+  - **소유 레이아웃** — 조상 `layout.*`는 *자기 위/자기 자리의 가장 가까운 페이지 라우트*가 소유한다(`ownedLayouts`). `app/home/(shell)/layout.tsx`의 사이드바는 `/home` 하나에 붙지, 그 셸 아래 15개 페이지 전부에 상속되지 않는다 — 상속시키면 사이드바 하나가 clique가 되어 못 읽는다.
+  - **렌더되는 컴포넌트 1홉** — `<Sidebar/>`처럼 **JSX로 실제 렌더되는** 상대경로 import만 따라간다(`renderedComponentFiles`). import를 전부 따라가면 공용 데이터 모듈(`data.ts` 등)의 링크 표가 그걸 import한 모든 화면으로 새어 존재하지 않는 엣지를 만든다.
+  - **nav 표** — `const NAV = [{ href: "/home/billing" }]`를 `<Link href={item.href}>`로 넘기는 형태(`navTableEntries`). JSX 속성이 식이라 속성 수준 추출로는 안 보인다.
+  - 목적지 기준으로 중복 제거하고, 화면이 자기 자신을 가리키는 엣지(랜딩의 `/#pricing` 앵커 등)는 `resolveTransitions`에서 버린다.
+  - 다른 어댑터는 영향 없음 — 추가 소스 파일 노출은 선택 훅 `FrameworkAdapter.deps?`이고, 미구현 어댑터는 종전과 동일하게 동작한다(픽스처 5종 무회귀 확인).
 - 파서는 언어 비종속 — Swift은 휴리스틱으로 시작, 정확도 필요 시 tree-sitter로 교체 가능(인터페이스 동일).
 - 검증: iobook(순수 SwiftUI) → 화면 41·이동 62·호출 6, Gemini API/정책 URL 등 리소스 추출. Next 픽스처 무회귀.
 
@@ -182,12 +188,17 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
   - `--watch` 모드(개발 중 파일 감시).
 - 즉 **증분 로직은 `scan` 안에**, **자동 실행은 hook이** 담당. 둘을 분리한다.
 
-**구현 완료**: `scan`은 기본 증분 — `map.json`의 `fileHashes`와 비교해 **해시가 같은 화면은 재파싱하지 않고 보존**, 변경/추가만 재처리, 삭제된 화면을 가리키던 내부 이동은 미해결로 강등. `--full`로 전체 재스캔. `alkahest hook install`이 git `post-commit`/`post-merge`에 멱등하게 자동 `scan`을 심는다(`uninstall`로 제거). 미구현: `--watch`, Claude Code 하니스 hook 연동.
+**구현 완료**: `scan`은 기본 증분 — `map.json`의 `fileHashes`와 비교해 **해시가 같은 화면은 재파싱하지 않고 보존**, 변경/추가만 재처리, 삭제된 화면을 가리키던 내부 이동은 미해결로 강등.
+
+> **화면 해시 = 그 화면의 파스가 읽은 모든 파일**(§8). 어댑터가 `deps()`로 알려준 레이아웃·렌더 컴포넌트의 내용까지 함께 해싱하므로, `page.tsx`는 그대로인데 셸만 고친 경우에도 그 화면이 재파싱된다. 화면 파일만 해싱하면 코드와 어긋난 엣지 집합을 조용히 재사용하게 된다. 같은 이유로 재사용 시 엣지는 `loc.file`이 아니라 **소유 화면 id**로 고른다 — 레이아웃에서 선언된 엣지의 `loc`은 그 레이아웃을 가리키기 때문. `--full`로 전체 재스캔. `alkahest hook install`이 git `post-commit`/`post-merge`에 멱등하게 자동 `scan`을 심는다(`uninstall`로 제거). 미구현: `--watch`, Claude Code 하니스 hook 연동.
 
 ## 12. 알려진 트레이드오프 / 열린 질문
 
 - **"눈으로 보는" 한계**: 정적 분석은 실제 렌더 스크린샷을 못 준다. 1차 시각화는 *그래프 + 구조화된 기능 뷰*. 진짜 화면 썸네일은 Phase 4 런타임 보강의 몫. (정적-우선으로 빠르게 가치 확보 → 필요 시 런타임 보강)
 - **이동 해석 정확도**: 동적 href(`router.push(variable)`)는 정적으로 못 풀 수 있음 → "미해결 이동"으로 표시.
+- **정적으로 끝내 못 잇는 화면은 남는다**: 런타임 데이터로 조립되는 링크(`/p/${slug}/${mapSlug}`)는 원리적으로 해석 불가라 그 화면들은 고아로 남는다 — 그리고 링크가 실제로 없는 화면(URL 직접 진입 전용)도 고아인 게 **사실**이다. 파일 트리의 부모-자식 관계로 엣지를 지어내 고아를 없애지 않는다: 맵은 **이동 그래프**지 디렉터리 트리가 아니고, 둘을 섞으면 "여기서 저기로 갈 수 있다"와 "경로상 밑에 있다"가 구분되지 않는다.
+- **nav 표는 같은 파일 안만 본다**: `const NAV`가 다른 모듈에서 import돼 오면 잡히지 않는다. 별도 모듈까지 따라가려면 렌더 여부로 거를 수 없어(데이터 모듈과 구분 불가) 노이즈가 커진다.
+- **식 href는 미해결 이동으로도 한 번 더 남는다**: `<Link href={item.href}>`는 nav 표에서 목적지를 얻더라도 그 JSX 자체는 여전히 미해결 이동 하나로 집계된다(엣지로는 안 그려짐).
 - **프레임워크 범위**: Phase 1은 Next app router에만 집중. 욕심내지 않는다.
 
 ---
