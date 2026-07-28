@@ -64,9 +64,13 @@ export function screenFromRaw(file: ScreenFile, hash: string, raw: RawScreen): S
   };
 }
 
-/** A screen's navs → Transition[] (resolved against the set of screen ids). */
+/**
+ * A screen's navs → Transition[] (resolved against the set of screen ids).
+ * Self-targets are dropped: an in-page anchor (`<a href="/#pricing">` on `/`) is not a
+ * transition, and drawing it as one puts a loop on the node for no information.
+ */
 export function resolveTransitions(from: string, navs: RawNav[], screenIds: Set<string>, file: string): Transition[] {
-  return navs.map((nav) => resolveTransition(from, nav, screenIds, file));
+  return navs.map((nav) => resolveTransition(from, nav, screenIds, file)).filter((t) => t.to !== from);
 }
 
 /**
@@ -134,7 +138,9 @@ export function assembleMap(a: AssembleInput): ProductMap {
 // ---------- internals ----------
 
 function resolveTransition(from: string, nav: RawNav, screenIds: Set<string>, file: string): Transition {
-  const loc = { file, line: nav.line };
+  // nav.file points at a layout/component when the link lives outside the screen file, so
+  // "jump to source" lands on the code that actually declares it.
+  const loc = { file: nav.file ?? file, line: nav.line };
   const base = { from, kind: "navigate" as const, trigger: nav.trigger, loc };
   if (nav.target == null) {
     return { ...base, to: null, rawTarget: nav.raw };
@@ -148,7 +154,8 @@ function resolveTransition(from: string, nav: RawNav, screenIds: Set<string>, fi
   return { ...base, to: null, rawTarget: nav.target };
 }
 
-function normalizeRoute(target: string): string {
+/** Strip query/hash and any trailing slash: `/home?tab=a#x` → `/home`. */
+export function normalizeRoute(target: string): string {
   const clean = target.split(/[?#]/)[0];
   let route = clean.startsWith("/") ? clean : "/" + clean;
   if (route.length > 1) route = route.replace(/\/+$/, "");

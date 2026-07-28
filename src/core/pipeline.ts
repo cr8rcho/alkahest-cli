@@ -40,8 +40,14 @@ export function runScan(projectRoot: string, options: ScanOptions = {}): ScanRes
   const files = adapter.discover(projectRoot);
   if (!files.length) return null;
 
+  // A screen's hash covers every file its parse reads (adapter.deps: layouts, rendered
+  // components), so editing the shell re-parses the screens that show it instead of the
+  // incremental build reusing an edge set that no longer matches the code.
   const hashes = new Map<string, string>();
-  for (const file of files) hashes.set(file.relPath, hashContent(readFileSync(file.absPath, "utf8")));
+  for (const file of files) {
+    const sources = [file.absPath, ...(adapter.deps?.(file) ?? [])];
+    hashes.set(file.relPath, hashContent(sources.map(safeRead).join("\0")));
+  }
 
   const prev = options.full ? null : loadMap(projectRoot);
   const result = prev
@@ -51,6 +57,15 @@ export function runScan(projectRoot: string, options: ScanOptions = {}): ScanRes
   const outFile = emitMap(projectRoot, result.map);
   emitDashboard(projectRoot, result.map);
   return { ...result, outFile };
+}
+
+/** A dep can vanish between discover and hash (deleted component); treat it as empty, not fatal. */
+function safeRead(absPath: string): string {
+  try {
+    return readFileSync(absPath, "utf8");
+  } catch {
+    return "";
+  }
 }
 
 function fullBuild(
@@ -99,8 +114,10 @@ function incrementalBuild(
     if (unchanged) {
       reused++;
       screens.push(prevScreen); // preserve as-is, including summary
-      transitions.push(...prev.transitions.filter((t) => t.loc.file === file.relPath));
-      for (const c of prev.calls.filter((c) => c.loc.file === file.relPath)) {
+      // Keyed by the owning screen, not loc.file: an edge declared in a layout or a rendered
+      // component belongs to this screen while its loc points at that other file.
+      transitions.push(...prev.transitions.filter((t) => t.from === file.id));
+      for (const c of prev.calls.filter((c) => c.from === file.id)) {
         calls.push(c);
         if (c.to) {
           const r = prevResById.get(c.to);
