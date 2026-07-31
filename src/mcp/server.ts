@@ -17,7 +17,7 @@ import {
   resolveIssueComment,
   mapIssue,
 } from "../core/issues.js";
-import { completeTask, createTask, pullTasks, updateTask } from "../core/tasks.js";
+import { completeTask, createTask, postTaskComment, pullTaskComments, pullTasks, resolveTaskComment, updateTask } from "../core/tasks.js";
 import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
@@ -532,10 +532,12 @@ export function buildServer(): McpServer {
       description:
         "Read your PERSONAL tasks (ADR-050) — a private checklist item (title + done + optional due, a project tag, " +
         "and free tags); only you see it. Use tasks for your own quick throughput and issues for shared/team work that " +
-        "needs a thread/decision/code link. Returns open tasks by default (status:'all' includes done); pass `project` " +
+        "needs a decision/code link. Returns open tasks by default (status:'all' includes done); pass `project` " +
         "(slug) to see only tasks tagged to it. **Read this before add_task when you are generating several tasks** — " +
-        "update or skip what is already on the list instead of adding a near-duplicate. Needs a publish token — no " +
-        "project or publish required.",
+        "update or skip what is already on the list instead of adding a near-duplicate. Each task carries " +
+        "`pending_notes` / `open_questions` (ADR-062): unresolved thread input waiting on you — when either is > 0, " +
+        "read it with task_comments, fold it into the body (update_task), then resolve_task_comment. Needs a publish " +
+        "token — no project or publish required.",
       inputSchema: {
         status: z.enum(["open", "all"]).optional().describe("open (default) = not done; all = include done"),
         project: z.string().optional().describe("Only tasks tagged to this project (slug)"),
@@ -651,6 +653,103 @@ export function buildServer(): McpServer {
       });
       if (!res.ok || !res.task) return issueFail("Update task", res.code, res.message);
       return json({ ok: true, task: res.task });
+    },
+  );
+
+  // ---- task thread: the issue decision channel's grammar on a personal task (ADR-062) ----
+  server.registerTool(
+    "task_comments",
+    {
+      title: "Read a task's thread",
+      description:
+        "Read the comment thread on your PERSONAL tasks (ADR-062) — the same grammar as the issue decision channel " +
+        "(kind note/question/answer/result, replies, resolved), with one twist: a NOTE with resolved=false is input " +
+        "waiting for you to fold into the task's body ('pending'), and resolving it stamps it Integrated. Pass `task` " +
+        "for one task's full thread, or open:true to sweep every unresolved note/question across all your tasks — " +
+        "call that sweep when list_tasks shows pending_notes/open_questions. THE LOOP: read the pending input → " +
+        "update_task to fold it into the body → resolve_task_comment on each → reply_task kind:'result' as the " +
+        "receipt. Needs a publish token — no project or publish required.",
+      inputSchema: {
+        task: z.string().optional().describe("One task's full thread (task id from list_tasks)"),
+        open: z.boolean().optional().describe("Only unresolved notes/questions across ALL your tasks — the pending sweep"),
+        path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
+      },
+    },
+    async ({ task, open, path }) => {
+      const res = await pullTaskComments(rootOf(path), { task, open });
+      if (!res.ok || !res.comments) return issueFail("Read task comments", res.code, res.message);
+      return json({ ok: true, count: res.comments.length, comments: res.comments });
+    },
+  );
+
+  server.registerTool(
+    "ask_task",
+    {
+      title: "Ask a question on a task",
+      description:
+        "Post a QUESTION on one of the user's tasks and stop — the task-side twin of ask_issue (ADR-062). Use it when " +
+        "integrating task input hits a fork the user should decide (A vs B, ambiguous instruction). It posts a " +
+        "kind='question' comment; the task shows an open-question badge (and a project-tagged task pings the needs " +
+        "webhook) until the user answers and you resolve_task_comment. State the options clearly in `body`. Re-read " +
+        "with task_comments to pick up the answer. Needs a publish token.",
+      inputSchema: {
+        task: z.string().describe("Task id to ask about (from list_tasks)"),
+        body: z.string().describe("The question / decision needed — lay out the options so the user can just pick one"),
+        path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
+      },
+    },
+    async ({ task, body, path }) => {
+      const res = await postTaskComment(rootOf(path), { task_id: task, body, kind: "question" });
+      if (!res.ok || !res.comment) return issueFail("Ask task", res.code, res.message);
+      return json({ ok: true, comment: res.comment, note: "Question posted — re-check with task_comments, then resolve_task_comment once answered." });
+    },
+  );
+
+  server.registerTool(
+    "reply_task",
+    {
+      title: "Comment on a task thread",
+      description:
+        "Post a comment on one of the user's tasks (ADR-062): a top-level note with `task`, or a reply under a comment " +
+        "with `parent` (defaults to kind 'answer' for a reply, 'note' otherwise; pass `kind` to override). Two uses " +
+        "matter most: kind:'note' to leave input you noticed ('needs fact-check: …') for a later session, and " +
+        "kind:'result' as the RECEIPT after you folded pending input into the body ('본문 반영 완료 — …'). The thread " +
+        "is raw material — the task's body stays the single source of truth, so anything that should live on gets " +
+        "folded in with update_task, not left in a comment. Needs a publish token.",
+      inputSchema: {
+        task: z.string().optional().describe("Task id for a top-level comment (omit when replying)"),
+        parent: z.string().optional().describe("Comment id to reply under (inherits the task)"),
+        body: z.string().describe("Comment body (markdown)"),
+        kind: z.enum(["note", "question", "answer", "result"]).optional().describe("Override the comment kind"),
+        path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
+      },
+    },
+    async ({ task, parent, body, kind, path }) => {
+      const res = await postTaskComment(rootOf(path), { task_id: task, parent, body, kind });
+      if (!res.ok || !res.comment) return issueFail("Comment on task", res.code, res.message);
+      return json({ ok: true, comment: res.comment });
+    },
+  );
+
+  server.registerTool(
+    "resolve_task_comment",
+    {
+      title: "Resolve a task comment",
+      description:
+        "Stamp a task-thread comment resolved (ADR-062): a NOTE becomes '✓ Integrated' — call it right after " +
+        "update_task folds that note's input into the task body — and a QUESTION becomes '✓ Decided' once the user " +
+        "answered and you've acted on it. resolved=false reopens. Only notes and questions are resolvable. This is " +
+        "what clears the task's pending badge, so don't leave integrated input unstamped. Needs a publish token.",
+      inputSchema: {
+        id: z.string().describe("Comment id (from task_comments)"),
+        resolved: z.boolean().optional().describe("false to reopen (default: true)"),
+        path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
+      },
+    },
+    async ({ id, resolved, path }) => {
+      const res = await resolveTaskComment(rootOf(path), { id, resolved });
+      if (!res.ok) return issueFail("Resolve task comment", res.code, res.message);
+      return json({ ok: true, id: res.id, resolved: res.resolved });
     },
   );
 
