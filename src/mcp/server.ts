@@ -3,7 +3,7 @@ import { z } from "zod";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
-import { emitMap, emitDashboard } from "../core/emit.js";
+import { emitMap } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
 import { pullComments, resolveComment, enrichComments, postComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
 import {
@@ -43,8 +43,9 @@ export function buildServer(): McpServer {
     {
       title: "Scan project",
       description:
-        "Statically analyze a React/Next project to create/update a product map (.alkahest/map.json + dashboard). " +
-        "Extracts screens, transitions between screens, and the API/data calls each screen makes. Returns a result summary (counts).",
+        "Statically analyze a React/Next project to create/update a product map (.alkahest/map.json). " +
+        "Extracts screens, transitions between screens, and the API/data calls each screen makes. Returns a result summary (counts). " +
+        "The map is viewed on the hosted viewer — run the publish tool for a shareable link.",
       inputSchema: { path: z.string().optional().describe("Project root (default: cwd)") },
     },
     async ({ path }) => {
@@ -140,15 +141,15 @@ export function buildServer(): McpServer {
     },
   );
 
-  // ---- write-back tools: the agent saves its prose into map.json so the dashboard shows it ----
+  // ---- write-back tools: the agent saves its prose into map.json; publish shows it on the hosted viewer ----
 
   server.registerTool(
     "set_summary",
     {
       title: "Set screen summary",
       description:
-        "Save a one-line, PM-friendly summary ('what the user does here') onto a screen in map.json, " +
-        "then re-emit the dashboard so it appears in the screen's panel. Write the summary yourself from get_screen data.",
+        "Save a one-line, PM-friendly summary ('what the user does here') onto a screen in map.json — it appears " +
+        "in the screen's panel on the hosted viewer after the next publish. Write the summary yourself from get_screen data.",
       inputSchema: {
         screen: z.string().describe("screen id / route / title"),
         summary: z.string().describe("a 1-2 sentence summary in the user's language"),
@@ -163,8 +164,8 @@ export function buildServer(): McpServer {
     {
       title: "Set screen PRD",
       description:
-        "Save a PRD/requirements markdown onto a screen in map.json, then re-emit the dashboard so it appears " +
-        "in the screen's panel (rendered). Write the PRD yourself from get_screen / who_calls data.",
+        "Save a PRD/requirements markdown onto a screen in map.json — it appears in the screen's panel on the " +
+        "hosted viewer (rendered) after the next publish. Write the PRD yourself from get_screen / who_calls data.",
       inputSchema: {
         screen: z.string().describe("screen id / route / title"),
         prd: z.string().describe("PRD/requirements as markdown"),
@@ -1349,7 +1350,7 @@ function json(obj: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }] };
 }
 
-/** Load map.json, mutate the matched screen, then re-emit map.json + dashboard. */
+/** Load map.json, mutate the matched screen, then re-emit map.json. */
 function writeField(root: string, screenArg: string, mutate: (s: Screen) => void) {
   const map = loadMap(root);
   if (!map) return text("No map.json found — run scan first.");
@@ -1357,8 +1358,7 @@ function writeField(root: string, screenArg: string, mutate: (s: Screen) => void
   if (!s) return text(`Screen not found: ${screenArg}`);
   mutate(s);
   emitMap(root, map);
-  emitDashboard(root, map);
-  return text(`Saved to ${s.id}. Dashboard updated.`);
+  return text(`Saved to ${s.id}. Publish to update the hosted map.`);
 }
 
 function matchScreen(map: ProductMap, arg: string): Screen | undefined {

@@ -92,9 +92,10 @@ Call {  // 호출
  │                (Next app router: app/**/page.tsx, pages router: pages/**/*.tsx)
  ├─ 2. Parse      각 화면 AST 파싱 → JSX/이벤트핸들러/네비게이션/데이터호출 추출
  ├─ 3. Resolve    href→화면 id (Transition), fetch/action 대상→리소스 (Call·dedupe), UI는 Feature 귀속
- └─ 4. Emit       .alkahest/map.json + .alkahest/index.html (자기완결 대시보드)
+ └─ 4. Emit       .alkahest/map.json
 
- view   .alkahest/ 를 로컬 서버로 띄워 그래프 탐색
+ publish   map.json을 호스팅 뷰어(alkahest.app)에 업로드 → 공유 링크에서 그래프 탐색
+           (지도를 "보는" 유일한 경로 — 로컬 대시보드/view는 제거됨. 가입 + 토큰 필요)
  (요약·PRD는 LLM이 필요 — Alkahest가 직접 안 하고, MCP로 연결된 에이전트가 작성, §7)
 ```
 
@@ -104,24 +105,20 @@ Call {  // 호출
 
 ```
 .alkahest/
-├─ map.json            # 표준 ProductMap (모든 출력의 원천)
-└─ index.html          # 인터랙티브 대시보드 (자기완결, 데이터+렌더코드 인라인)
+└─ map.json            # 표준 ProductMap (모든 출력의 원천)
 ```
 
-**대시보드 UX** (force-directed, 미니멀 스타일 F, 라이트/다크):
-- 그래프: 화면(원)·리소스(사각) 노드 + 이동(실선)·포함(짧은 점선)·호출(긴 점선) 엣지. 시작점은 라벨에 `▶`.
-- 호버: 연결 엣지·이웃 색 강조(미리보기). 클릭: 우측 패널에 요약·기능·이동·호출 고정 + 액센트 링.
-- 노드 클릭(리소스) → 그 리소스를 **함께 부르는 화면들** 표시 (데이터 의존성·변경 영향).
-- 드래그(이웃 따라옴)·휠/핀치 줌·팬, 🌗 테마, ⤢ 맞춤.
-- `index.html`은 데이터+렌더JS+CSS를 모두 인라인 → alkahest/서버 없이 브라우저로 바로 열림.
+**뷰어 UX는 호스팅 뷰어(alkahest.app)가 소유한다** (force-directed 그래프, 라이트/다크,
+화면(원)·리소스(사각) 노드 + 이동/포함/호출 엣지, 노드 패널에 요약·PRD·기능·이동·호출).
+로컬 `index.html` 대시보드와 `view` 명령은 제거됐다 — 지도는 `publish` 로 업로드해
+`alkahest.app/p/<project>/<map>` 에서 본다. 렌더러 구현은 비공개 웹 리포 소관.
 
 ## 6. CLI 표면
 
 ```
-alkahest scan [path]      # 분석 → .alkahest/map.json + index.html  (기본: cwd, 증분)
+alkahest scan [path]      # 분석 → .alkahest/map.json  (기본: cwd, 증분)
 alkahest scan --full      # 기준선 무시하고 전체 재스캔
-alkahest scan --open      # scan 후 바로 view
-alkahest view             # .alkahest/ 대시보드를 로컬 서버로 오픈
+alkahest publish          # 지도를 호스팅 뷰어에 업로드 → 공유 링크 (지도를 보는 유일한 경로)
 alkahest mcp              # MCP 서버(stdio) — 에이전트가 제품 지도 질의 (키 불필요, §7)
 alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (diff 자동 갱신, §10)
 ```
@@ -171,7 +168,7 @@ alkahest hook install     # git post-commit/post-merge에 자동 scan 설치 (di
 
 - **Phase 0 — Scaffold**: package.json / tsconfig / CLI 엔트리 / `.alkahest/` 규약.
 - **Phase 1 — Screen Graph (정적, LLM 없음)**: Next app-router 화면 발견 + 이동 엣지 + `map.json`. CLI `scan`. 콘솔로 그래프 검증.
-- **Phase 2 — Dashboard**: 자기완결 `index.html` (그래프 + 화면 상세 패널 + 기능 목록). `view`.
+- **Phase 2 — Dashboard**: 자기완결 `index.html` (그래프 + 화면 상세 패널 + 기능 목록). `view`. *(이후 제거 — 뷰어는 호스팅 서비스로 일원화, §5)*
 - **Phase 3 — 에이전트 통합(MCP)**: `alkahest mcp` 서버. 요약·PRD는 에이전트가 작성(키 불필요). ~~초기 스탠드얼론 키 모드(scan --summarize/prd)~~ 는 제거됨(§7).
 - **Phase 4 — 확장**: pages router / React Router / Vite, 그리고 **런타임 스크린샷 보강(Playwright)** — 진짜 렌더 썸네일을 노드에 입힘 (선택).
 

@@ -5,7 +5,7 @@
 > Reverse-engineer the product from the code, so people can make product decisions.
 
 Alkahest is a CLI that **statically analyzes** a UI codebase and builds a **Product Map**.
-It extracts screens as nodes, and the navigation between screens plus the API/data calls each screen makes as edges — then shows it in an interactive dashboard and helps you write PRDs and requirements.
+It extracts screens as nodes, and the navigation between screens plus the API/data calls each screen makes as edges — then draws it as an interactive graph on the **hosted viewer ([alkahest.app](https://alkahest.app))** and helps you write PRDs and requirements. Scanning is local and free; **viewing a map happens on the hosted viewer** — sign up, create a token, and `publish` for a shareable link.
 
 Platforms are **pluggable via adapters** — **21 today** across React (Next.js, React Router, Remix), Vue (Nuxt, Vue Router), Angular, Svelte, Astro, React Native, SwiftUI/UIKit, Jetpack Compose, Flutter, and server-rendered Django/Flask/Rails (+ plain HTML). The data model is platform-agnostic, so a new framework is just a new adapter.
 
@@ -50,16 +50,21 @@ cd alkahest-cli && npm install && npm run build && npm link
 
 ## Quickstart (Claude Code)
 
-The full flow for a Claude Code user, from zero to a graph + PRDs in the dashboard:
+The full flow for a Claude Code user, from zero to a shared graph + PRDs on the hosted viewer:
 
 ```bash
 # 1. Install alkahest:  npm i -g @cr8rcho/alkahest   (or build from source above + `npm link`)
 
 # 2. In your project root, build the product map
 cd ~/my-next-app
-alkahest scan                 # → .alkahest/map.json + index.html
+alkahest scan                 # → .alkahest/map.json
 
-# 3. Register the MCP server with Claude Code (project scope = shared via .mcp.json)
+# 3. Publish it — this is where the map becomes viewable
+#    (sign up at alkahest.app → Account → Create token)
+alkahest login --token alk_xxxxx
+alkahest publish              # → https://alkahest.app/p/<project>  (shareable, no login to view)
+
+# 4. Register the MCP server with Claude Code (project scope = shared via .mcp.json)
 claude mcp add alkahest -s project -- alkahest mcp
 #   verify it's connected:  run `claude` then `/mcp`  → "alkahest" should be listed
 ```
@@ -74,21 +79,20 @@ You:  "Write a PRD for the checkout screen and the cart screen."
         → Claude calls get_screen / who_calls to read the structure,
           writes each PRD, and calls set_prd to save it into map.json.
 
-You:  "alkahest view"   (or run it in a terminal)
-        → opens the dashboard. Click a screen node → the right panel
-          shows its Summary + PRD that Claude just wrote.
+You:  "publish it"
+        → Claude calls publish and returns the link. Open it — click a
+          screen node and the panel shows the Summary + PRD it just wrote.
 ```
 
-That's it: **scan → register MCP → ask Claude → `view`.** No API key — Claude does the writing, alkahest stores it in `map.json` and renders it in the self-contained dashboard.
+That's it: **scan → publish → register MCP → ask Claude.** No API key — Claude does the writing, alkahest stores it in `map.json`, and the hosted viewer renders it after each publish.
 
 ## Usage
 
 Run it from the root of the project you want to analyze; outputs land in that project's `.alkahest/` folder.
 
 ```bash
-alkahest scan          # analyze → .alkahest/map.json + index.html (incremental by default)
+alkahest scan          # analyze → .alkahest/map.json (incremental by default)
 alkahest scan --full   # ignore the baseline and rescan everything
-alkahest view          # open the dashboard via a local server (two-layer graph)
 alkahest hook install  # run scan automatically on commit/merge (diff-driven refresh)
 alkahest mcp           # run the MCP server (agents query the product map; no key)
 alkahest login         # save your publish token (Account → Create token on alkahest.app)
@@ -128,7 +132,9 @@ alkahest update        # update to the latest GitHub release (--check to only ch
 > matches this one and asks before overwriting. CI / non-interactive runs stop with the candidates and
 > point you at `--slug` rather than guessing.
 
-### Dashboard interactions
+### Map interactions (hosted viewer)
+
+Your published map at `alkahest.app/p/<project>/<map>`:
 
 - **Force-directed layout** — nodes settle naturally by their connections. A fixed seed keeps the layout the same every time.
 - **Start point** is marked with a `▶` prefix on its label (app entry point / root route).
@@ -165,8 +171,8 @@ Or add it to any MCP-capable agent's config directly:
 | `overview` | list all screens & resources at a glance |
 | `get_screen` | one screen's full structure (features, navigation, calls, source) |
 | `who_calls` | which screens call a given API/resource (impact analysis) |
-| `set_summary` | save a one-line summary onto a screen → shown in the dashboard panel |
-| `set_prd` | save a PRD/requirements markdown onto a screen → rendered in the panel |
+| `set_summary` | save a one-line summary onto a screen → shown in the hosted viewer's panel after publish |
+| `set_prd` | save a PRD/requirements markdown onto a screen → rendered in the panel after publish |
 | `publish` | upload the map to the hosted viewer → shareable link (needs a token, see below) |
 | `comments` | list comments left on the published map, each joined to where to act: a screen comment → its source file/route + on-screen elements with line numbers; a resource comment → the screens that call that endpoint (file + line). Lets the agent address feedback in-editor (needs a token) |
 | `resolve_comment` | mark a map comment resolved (or reopen) after addressing it (needs a token) |
@@ -187,7 +193,7 @@ Or add it to any MCP-capable agent's config directly:
 | `map_note` | place a pool note on a note map, or take it off with `remove` — note maps are lenses over the project's note pool, so a note can sit on several maps; removing it from one never deletes the note (needs a token) |
 | `check_version` | report installed vs latest GitHub release (so the agent can suggest `alkahest update`) |
 
-The agent reads with `get_screen` / `who_calls` and writes back with `set_summary` / `set_prd`; both write into `map.json` and re-render `index.html`, so the dashboard always reflects the latest.
+The agent reads with `get_screen` / `who_calls` and writes back with `set_summary` / `set_prd`; both write into `map.json` — publish and the hosted map reflects the latest.
 
 **Publishing from the agent (optional).** `scan` / read / write-back need no key. `publish` does — it uploads the map to your account on the hosted viewer. Get a token at **alkahest.app → Account → Create token**, then put it in the MCP config so the server can authenticate:
 
@@ -219,11 +225,10 @@ The token is all you need — the CLI defaults to the hosted service (alkahest.a
 
 ```
 .alkahest/
-├─ map.json       # the canonical ProductMap (source of every output)
-└─ index.html     # self-contained interactive dashboard (no external deps / network)
+└─ map.json       # the canonical ProductMap (source of every output)
 ```
 
-`index.html` inlines both the data and the render code, so it's a **self-contained file** you can open in a browser without Alkahest or a server. Add `.alkahest/` to your `.gitignore`.
+`map.json` is the only artifact the scan produces — it's what `publish` uploads (source code never leaves the machine) and what the MCP tools read and write. Add `.alkahest/` to your `.gitignore`.
 
 ## Incremental & auto-refresh
 
@@ -263,7 +268,6 @@ The single source of truth for the design is [`ALKAHEST.md`](./ALKAHEST.md).
 
 ## License
 
-MIT — see [LICENSE](./LICENSE). This covers everything in this repository,
-including the dashboard renderer `alkahest view` opens
-(`src/assets/dashboard.html`). The hosted service at alkahest.app is a separate,
-closed codebase.
+MIT — see [LICENSE](./LICENSE). This covers everything in this repository
+(the scanner, the adapters, and the MCP server). The hosted service at
+alkahest.app — including the map viewer — is a separate, closed codebase.

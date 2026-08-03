@@ -2,7 +2,6 @@
 import { createRequire } from "node:module";
 import { Command } from "commander";
 import { scan } from "./commands/scan.js";
-import { view } from "./commands/view.js";
 import { mcp } from "./commands/mcp.js";
 import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
@@ -28,20 +27,13 @@ program
 
 program
   .command("scan")
-  .description("Analyze a project → .alkahest/map.json + index.html (incremental by default)")
+  .description("Analyze a project → .alkahest/map.json (incremental by default; view via 'publish')")
   .argument("[path]", "project path to analyze", ".")
   .option("--full", "ignore the baseline and rescan everything", false)
-  .option("--open", "open the dashboard right after scanning", false)
-  .action(async (path: string, opts: { full: boolean; open: boolean }) => {
+  .action(async (path: string, opts: { full: boolean }) => {
     await scan(path, opts);
     await maybeNotifyUpdate();
   });
-
-program
-  .command("view")
-  .description("open the .alkahest/ dashboard via a local server")
-  .argument("[path]", "project path", ".")
-  .action((path: string) => view(path));
 
 program
   .command("login")

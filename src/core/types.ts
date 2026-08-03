@@ -1,9 +1,9 @@
 /**
  * Alkahest core data model — the implementation of ALKAHEST.md §3.
  *
- * `map.json` is the canonical serialization of ProductMap; the dashboard (view)
- * and PRD generation (prd) all read this structure. If the model changes, update
- * ALKAHEST.md first.
+ * `map.json` is the canonical serialization of ProductMap; the hosted viewer
+ * (via publish) and the MCP tools all read this structure. If the model changes,
+ * update ALKAHEST.md first.
  */
 
 /** A source code location — clickable to jump in an editor. */
@@ -41,7 +41,7 @@ export interface Screen {
   title: string;
   /** Agent-written one-liner "what the user does on this screen" — empty until set via MCP */
   summary: string;
-  /** Agent-written PRD/requirements markdown for this screen — empty until set via MCP. Shown in the dashboard panel. */
+  /** Agent-written PRD/requirements markdown for this screen — empty until set via MCP. Shown in the hosted viewer's panel. */
   prd?: string;
   features: Feature[];
   /** Names of the main components used on this screen */

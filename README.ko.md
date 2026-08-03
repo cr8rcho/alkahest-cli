@@ -5,7 +5,7 @@
 > 코드에서 제품을 역으로 복원해, 사람이 제품 결정을 내리게 한다.
 
 UI 코드베이스를 **정적 분석**해 **제품 지도(Product Map)** 를 만드는 CLI입니다.
-화면을 노드로, 화면 간 이동과 화면이 부르는 API/데이터 호출을 엣지로 뽑아내, 인터랙티브 대시보드로 보여주고 PRD·요구사항 작성을 돕습니다.
+화면을 노드로, 화면 간 이동과 화면이 부르는 API/데이터 호출을 엣지로 뽑아내, **호스팅 뷰어([alkahest.app](https://alkahest.app))** 의 인터랙티브 그래프로 보여주고 PRD·요구사항 작성을 돕습니다. 스캔은 로컬에서 무료로 돌지만, **지도를 보는 곳은 호스팅 뷰어**입니다 — 가입해 토큰을 만들고 `publish` 하면 공유 링크가 나옵니다.
 
 플랫폼은 **어댑터로 확장**합니다 — **현재 21개**: React(Next.js·React Router·Remix), Vue(Nuxt·Vue Router), Angular, Svelte, Astro, React Native, SwiftUI/UIKit, Jetpack Compose, Flutter, 서버사이드 Django/Flask/Rails(+ 순수 HTML). 데이터 모델이 플랫폼 무관이라 새 프레임워크는 어댑터 하나만 추가하면 됩니다.
 
@@ -50,16 +50,21 @@ cd alkahest-cli && npm install && npm run build && npm link
 
 ## 빠른 시작 (Claude Code)
 
-Claude Code 사용자가 0부터 대시보드에서 그래프 + PRD를 보기까지:
+Claude Code 사용자가 0부터 호스팅 뷰어에서 그래프 + PRD를 공유하기까지:
 
 ```bash
 # 1. alkahest 설치:  npm i -g @cr8rcho/alkahest   (또는 위처럼 소스 빌드 후 `npm link`)
 
 # 2. 내 프로젝트 루트에서 제품 지도 생성
 cd ~/my-next-app
-alkahest scan                 # → .alkahest/map.json + index.html
+alkahest scan                 # → .alkahest/map.json
 
-# 3. Claude Code에 MCP 서버 등록 (project 스코프 = .mcp.json으로 공유)
+# 3. publish — 지도가 "보이는 것"이 되는 순간
+#    (alkahest.app 가입 → Account → Create token)
+alkahest login --token alk_xxxxx
+alkahest publish              # → https://alkahest.app/p/<project>  (공유 링크, 보는 데 로그인 불필요)
+
+# 4. Claude Code에 MCP 서버 등록 (project 스코프 = .mcp.json으로 공유)
 claude mcp add alkahest -s project -- alkahest mcp
 #   연결 확인:  `claude` 실행 후 `/mcp`  → 목록에 "alkahest" 표시
 ```
@@ -74,21 +79,20 @@ claude mcp add alkahest -s project -- alkahest mcp
         → Claude가 get_screen / who_calls 로 구조를 읽고,
           각 PRD를 작성해 set_prd 로 map.json에 저장.
 
-나:  "alkahest view"   (또는 터미널에서 직접 실행)
-        → 대시보드가 열림. 화면 노드를 클릭하면 우측 패널에
-          방금 Claude가 쓴 Summary + PRD가 보임.
+나:  "publish 해줘"
+        → Claude가 publish를 호출하고 링크를 돌려줌. 열어서 화면 노드를
+          클릭하면 패널에 방금 쓴 Summary + PRD가 보임.
 ```
 
-요약: **scan → MCP 등록 → Claude에게 요청 → `view`.** 키 없음 — 글은 Claude가 쓰고, alkahest가 `map.json`에 저장해 자기완결 대시보드로 렌더합니다.
+요약: **scan → publish → MCP 등록 → Claude에게 요청.** 키 없음 — 글은 Claude가 쓰고, alkahest가 `map.json`에 저장하고, publish 할 때마다 호스팅 뷰어가 최신을 렌더합니다.
 
 ## 사용법
 
 분석할 프로젝트 루트에서 실행하면, 그 프로젝트 안 `.alkahest/` 에 산출물이 생깁니다.
 
 ```bash
-alkahest scan          # 분석 → .alkahest/map.json + index.html (기본: 증분)
+alkahest scan          # 분석 → .alkahest/map.json (기본: 증분)
 alkahest scan --full   # 기준선 무시하고 전체 재스캔
-alkahest view          # 대시보드를 로컬 서버로 열기 (2-레이어 그래프)
 alkahest hook install  # 커밋·머지 시 scan 자동 실행 (diff 자동 갱신)
 alkahest mcp           # MCP 서버 실행 (에이전트가 제품 지도를 질의, 키 불필요)
 alkahest login         # publish 토큰 저장 (alkahest.app → Account → Create token)
@@ -107,7 +111,9 @@ alkahest notes delete <slug>    # 노트를 휴지통으로 (소프트 삭제; -
 alkahest update        # 최신 GitHub 릴리스로 업데이트 (--check: 확인만)
 ```
 
-### 대시보드 조작
+### 지도 조작 (호스팅 뷰어)
+
+발행한 지도는 `alkahest.app/p/<project>/<map>` 에서:
 
 - **force-directed 레이아웃** — 노드가 연결 관계에 따라 자연스럽게 자리잡습니다. 시드 고정이라 매번 같은 배치.
 - **시작점**은 라벨 앞 `▶` 로 표시 (앱 진입점 / 루트 라우트)
@@ -144,8 +150,8 @@ claude mcp add alkahest -s project -- alkahest mcp
 | `overview` | 전체 화면·리소스 목록 한눈에 |
 | `get_screen` | 한 화면의 전체 구조(기능·이동·호출·소스) |
 | `who_calls` | 특정 API/리소스를 부르는 화면들 (변경 영향) |
-| `set_summary` | 화면에 한 줄 요약 저장 → 대시보드 패널에 표시 |
-| `set_prd` | 화면에 PRD/요구사항 마크다운 저장 → 패널에 렌더 |
+| `set_summary` | 화면에 한 줄 요약 저장 → publish 후 호스팅 뷰어 패널에 표시 |
+| `set_prd` | 화면에 PRD/요구사항 마크다운 저장 → publish 후 패널에 렌더 |
 | `publish` | 지도를 hosted 뷰어에 올려 공유 링크 생성 (토큰 필요, 아래 참고) |
 | `comments` | 발행된 지도에 달린 댓글 목록 — 각 댓글에 코드 위치를 조인: 화면 댓글 → 소스 파일/라우트 + 화면 요소(라인 번호), 리소스 댓글 → 그 엔드포인트를 부르는 화면들(파일+라인). 피드백을 에디터 안에서 처리 가능 (토큰 필요) |
 | `resolve_comment` | 처리한 댓글을 resolve(또는 reopen) (토큰 필요) |
@@ -166,7 +172,7 @@ claude mcp add alkahest -s project -- alkahest mcp
 | `map_note` | 풀의 노트를 노트 맵에 올리거나 `remove` 로 내리기 — 노트 맵은 프로젝트 노트 풀을 보는 렌즈라 한 노트가 여러 맵에 동시에 올라갈 수 있고, 맵에서 내려도 노트 자체는 삭제되지 않음 (토큰 필요) |
 | `check_version` | 설치 버전 vs 최신 GitHub 릴리스 보고 (에이전트가 `alkahest update` 안내 가능) |
 
-에이전트는 `get_screen` / `who_calls` 로 읽고 `set_summary` / `set_prd` 로 써넣습니다. 둘 다 `map.json`에 기록하고 `index.html`을 재생성하므로 대시보드가 항상 최신입니다.
+에이전트는 `get_screen` / `who_calls` 로 읽고 `set_summary` / `set_prd` 로 써넣습니다. 둘 다 `map.json`에 기록되며, publish 하면 호스팅 지도가 최신을 반영합니다.
 
 **에이전트에서 publish (선택).** `scan`·읽기·쓰기는 키가 필요 없지만, `publish`는 지도를 계정에 업로드하므로 토큰이 필요합니다. **alkahest.app → Account → Create token** 에서 토큰을 받아 MCP 설정에 넣어주세요:
 
@@ -198,11 +204,10 @@ claude mcp add alkahest -s project \
 
 ```
 .alkahest/
-├─ map.json       # 표준 ProductMap (모든 출력의 원천)
-└─ index.html     # 자기완결 인터랙티브 대시보드 (외부 의존성/네트워크 없음)
+└─ map.json       # 표준 ProductMap (모든 출력의 원천)
 ```
 
-`index.html`은 데이터 + 렌더 코드를 모두 인라인한 **자기완결 파일**이라, alkahest나 서버 없이 브라우저로 바로 열립니다. `.alkahest/` 는 `.gitignore` 에 추가하길 권장합니다.
+`map.json`이 스캔의 유일한 산출물입니다 — `publish`가 업로드하는 것도(소스 코드는 절대 기기를 떠나지 않음), MCP 도구가 읽고 쓰는 것도 이 파일입니다. `.alkahest/` 는 `.gitignore` 에 추가하길 권장합니다.
 
 ## 증분 + 자동 갱신
 
@@ -241,6 +246,5 @@ npm run typecheck
 
 ## License
 
-MIT — [LICENSE](./LICENSE) 참조. 이 저장소 전체가 대상이며, `alkahest view` 가 여는
-대시보드 렌더러(`src/assets/dashboard.html`)도 포함됩니다. alkahest.app 호스팅 서비스는
-별도의 비공개 코드베이스입니다.
+MIT — [LICENSE](./LICENSE) 참조. 이 저장소 전체(스캐너·어댑터·MCP 서버)가 대상입니다.
+alkahest.app 호스팅 서비스는 — 지도 뷰어를 포함해 — 별도의 비공개 코드베이스입니다.

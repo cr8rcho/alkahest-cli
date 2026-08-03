@@ -18,9 +18,9 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
 
 ## Architecture (open-core)
 
-- **CLI** (`src/`) — public, MIT. Commands: `scan`, `view`, `publish`, `login`,
+- **CLI** (`src/`) — public, MIT. Commands: `scan`, `publish`, `login`,
   `mcp`, `hook`, `comments`, `issues`, `notes`, `update`. Output goes to `<project>/.alkahest/`
-  (`map.json` + `index.html`).
+  (`map.json` only).
 - **Hosted service** — the web app (landing + `/account` + the `/p/{slug}` viewer),
   Supabase backend, and paid-plan logic live in the **separate private
   [`alkahest`](../alkahest) repo** (open-core split). This MIT CLI talks to it
@@ -34,10 +34,10 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
 > `ambiguous_map` (surfaced as "pass --map"). Back-compatible — single-map projects are unaffected,
 > so this did **not** bump `MIN_CLI_VERSION`. Resolution lives in `src/core/{publish,issues,project}.ts`.
 
-The local renderer `src/assets/dashboard.html` powers **`alkahest view`** — it renders an
-inlined map (local `index.html`) or a `?src=` override. The **hosted** viewer at
-`/p/{slug}` is a **separate React renderer owned by `alkahest`** (ADR-008) — the two
-forked and may diverge. Both read the same `map.json`.
+**There is no local viewer.** The old `alkahest view` command + `src/assets/dashboard.html`
+renderer + local `index.html` emission were removed (2026-08, web repo ADR) — viewing a map
+requires signing up and `publish`ing to the hosted viewer at `/p/{slug}` (a React renderer
+owned by `alkahest`, ADR-008). The CLI's job is to build `map.json` and sync it.
 
 ## Auth model
 
@@ -49,9 +49,8 @@ server-side in the `publish` edge function.
 ## Build & checks
 
 ```bash
-npm run build         # tsc + copy assets to dist/
+npm run build         # tsc
 npm run typecheck     # tsc --noEmit
-npm run build:viewer  # generate viewer/ for Vercel
 ```
 
 Run `npm run typecheck` before committing. Match the surrounding code style;

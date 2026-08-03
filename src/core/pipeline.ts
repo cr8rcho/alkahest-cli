@@ -11,7 +11,7 @@ import {
   assembleMap,
   isExternalUrl,
 } from "./resolve.js";
-import { emitMap, emitDashboard, OUTPUT_DIR } from "./emit.js";
+import { emitMap, OUTPUT_DIR } from "./emit.js";
 import { hashContent } from "./hash.js";
 import type { ProductMap, Screen, Resource, Transition, Call } from "./types.js";
 
@@ -55,7 +55,6 @@ export function runScan(projectRoot: string, options: ScanOptions = {}): ScanRes
     : fullBuild(adapter, files, hashes, projectRoot);
 
   const outFile = emitMap(projectRoot, result.map);
-  emitDashboard(projectRoot, result.map);
   return { ...result, outFile };
 }
 
