@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 export interface Credentials {
   /** API base URL, e.g. https://<ref>.supabase.co/functions/v1 */
   apiUrl?: string;
-  /** Personal publish token (alk_...) from `alkahest login`. */
+  /** Personal API token (alk_...) from `alkahest login`. */
   token?: string;
   /** Per-project state, keyed by absolute project path. `mapSlug` = the code map this checkout
    *  publishes to (maps are equal in the cloud; a project can hold several code maps). */

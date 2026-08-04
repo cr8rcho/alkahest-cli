@@ -184,7 +184,7 @@ export function buildServer(): McpServer {
       description:
         "Upload this project's product map (.alkahest/map.json) to the hosted viewer (alkahest.app) and return a " +
         "shareable link anyone can open — no install, no login to view. Only map.json is uploaded; source code never " +
-        "leaves the machine. Run 'scan' first if the map is missing. Auth uses a publish token from the ALKAHEST_TOKEN " +
+        "leaves the machine. Run 'scan' first if the map is missing. Auth uses an API token from the ALKAHEST_TOKEN " +
         "env var (set it in this server's MCP config) or a prior 'alkahest login'.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
@@ -201,7 +201,7 @@ export function buildServer(): McpServer {
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config (get a token at alkahest.app → Account).",
           no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
           plan_limit: "Free plan project limit reached — upgrade to Pro for more.",
-          invalid_token: "The publish token is invalid or revoked — create a new one at alkahest.app → Account.",
+          invalid_token: "The API token is invalid or revoked — create a new one at alkahest.app → Account.",
           client_too_old: "This alkahest is too old to publish — run 'alkahest update'.",
           ambiguous_map: "List the project's code maps with the maps tool, then call publish again with `map` set to one of them (or a new slug to create one).",
           ambiguous_project: "This checkout has no linked project and an existing one looks like it — do NOT create a duplicate. Pick a candidate's slug below (or use list_projects) and call publish again with `slug` set, or pass a deliberately new `name` to create a fresh project.",
@@ -280,7 +280,7 @@ export function buildServer(): McpServer {
         "List the comments people left on this project's PUBLISHED map (hosted viewer). Each comment is joined to its " +
         "node's source location (screen → sourceFile/route/title, resource → path/label) so you can open the right file " +
         "and address it. Use this to drive development from feedback: read open comments, edit the code, then call " +
-        "resolve_comment. Needs a publish token (ALKAHEST_TOKEN in this server's config, or a prior 'alkahest login') " +
+        "resolve_comment. Needs an API token (ALKAHEST_TOKEN in this server's config, or a prior 'alkahest login') " +
         "and the project must have been published.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
@@ -295,7 +295,7 @@ export function buildServer(): McpServer {
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config (token from alkahest.app → Account).",
           no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
           no_slug: "This project hasn't been published yet — run the publish tool first.",
-          invalid_token: "The publish token is invalid or revoked — create a new one at alkahest.app → Account.",
+          invalid_token: "The API token is invalid or revoked — create a new one at alkahest.app → Account.",
           not_found: "No accessible project for this slug.",
         };
         const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
@@ -313,7 +313,7 @@ export function buildServer(): McpServer {
       title: "Resolve a map comment",
       description:
         "Mark a map comment resolved after you've addressed it (or reopen it with resolved:false). Pass the comment id " +
-        "from the comments tool. Only the comment author or the project owner can change it. Needs a publish token.",
+        "from the comments tool. Only the comment author or the project owner can change it. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Comment id (from the comments tool)"),
         resolved: z.boolean().optional().describe("true (default) to resolve, false to reopen"),
@@ -342,7 +342,7 @@ export function buildServer(): McpServer {
       description:
         "Leave a NEW comment on a node of this project's published map. Specify the node by id/route/title (a screen) " +
         "or id/path/label (a resource/endpoint), or 'map' for the whole map. Use this to record feedback or a finding " +
-        "while working. Needs a publish token; you must be the project owner or a collaborator.",
+        "while working. Needs an API token; you must be the project owner or a collaborator.",
       inputSchema: {
         node: z.string().describe("screen id/route/title, resource id/path/label, or 'map'"),
         body: z.string().describe("the comment text"),
@@ -374,7 +374,7 @@ export function buildServer(): McpServer {
       title: "Reply to a map comment",
       description:
         "Post a reply under an existing comment (use the comment id from the comments tool) — e.g. to note that you've " +
-        "addressed it. The reply inherits the parent's node/anchor. Needs a publish token; owner or collaborator only.",
+        "addressed it. The reply inherits the parent's node/anchor. Needs an API token; owner or collaborator only.",
       inputSchema: {
         id: z.string().describe("parent comment id (from the comments tool)"),
         body: z.string().describe("the reply text"),
@@ -403,7 +403,7 @@ export function buildServer(): McpServer {
         "Group one or more map comments (ids from the comments tool) into a SINGLE GitHub issue and link it back onto each. " +
         "Creates the issue with the local `gh` CLI (must be installed and authenticated; it runs in the project's git repo), " +
         "then records the issue URL on the comments so the hosted viewer shows a 'tracked' badge. Use this to turn feedback " +
-        "into tracked work. Needs a publish token; owner or collaborator only. Pass force:true to re-file comments that are " +
+        "into tracked work. Needs an API token; owner or collaborator only. Pass force:true to re-file comments that are " +
         "already linked to an issue (creates a new one).",
       inputSchema: {
         ids: z.array(z.string()).min(1).describe("Comment ids to group into one issue (from the comments tool)"),
@@ -436,7 +436,7 @@ export function buildServer(): McpServer {
     no_token: "Set ALKAHEST_TOKEN in this MCP server's config (token from alkahest.app → Account).",
     no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
     no_slug: "This project hasn't been published yet — run the publish tool first.",
-    invalid_token: "The publish token is invalid or revoked — create a new one at alkahest.app → Account.",
+    invalid_token: "The API token is invalid or revoked — create a new one at alkahest.app → Account.",
     forbidden: "Only the project owner or a collaborator can write issues.",
     not_found: "Not found — list ids with the issues tool, or the project's issue maps with the maps tool.",
     ambiguous_map: "List the project's issue maps with the maps tool, then retry with `map` set to one (or create one with create_map).",
@@ -458,7 +458,7 @@ export function buildServer(): McpServer {
         "question awaits an answer), and awaitingDecision (open_questions > 0) — use actionable issues to decide what " +
         "to work on next. When you hit a decision you need the user to make mid-task, post it with ask_issue (the issue " +
         "stops being actionable until they answer and you resolve_issue_question). Read the thread with issue_comments. " +
-        "Needs a publish token and a published project.",
+        "Needs an API token and a published project.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
         open: z.boolean().optional().describe("Only issues that are not done (default: false = all)"),
@@ -496,7 +496,7 @@ export function buildServer(): McpServer {
         "issue, parent_id groups it under an epic (contains edge), and target ties it to the code map — pass an " +
         "existing node key ('s:…'/'r:…'), or a planned route ('/orders/refund') for a screen that doesn't exist yet " +
         "(it shows as a ghost node and auto-converges when a scan finds the real screen). type/status must come from " +
-        "the project's issue_config (see the issues tool). Needs a publish token; owner or collaborator only.",
+        "the project's issue_config (see the issues tool). Needs an API token; owner or collaborator only.",
       inputSchema: {
         title: z.string().describe("Issue title"),
         type: z.string().optional().describe("Node type from issue_config (default: task)"),
@@ -555,7 +555,7 @@ export function buildServer(): McpServer {
         "6. Close the loop: reply_task (kind 'result') summarizing what went where — ALWAYS, it is the processed " +
         "marker — then complete_task (skip completing a task that was already done). Blocked (two candidate targets, " +
         "or your material contradicts the note)? ask_task and leave it — never guess over a conflict.\n" +
-        "Needs a publish token — no project or publish required.",
+        "Needs an API token — no project or publish required.",
       inputSchema: {
         status: z.enum(["open", "all"]).optional().describe("open (default) = not done; all = include done"),
         project: z.string().optional().describe("Only tasks tagged to this project (slug)"),
@@ -580,7 +580,7 @@ export function buildServer(): McpServer {
         'agent). Reach for it when you spot small personal work ("remind me to X", "add a task to Y") or when asked to ' +
         "surface work that might be getting missed. **No project or publish is required** — omit `project` for a personal " +
         "Inbox task. For shared/team work that needs a thread, decision, status, or code-map link, use add_issue instead " +
-        "(a task can be promoted to an issue later). Needs a publish token.\n\n" +
+        "(a task can be promoted to an issue later). Needs an API token.\n\n" +
         "WRITE A USEFUL TASK, not just a title:\n" +
         "- `title` — the action, imperative and specific ('Bump MIN_CLI_VERSION for the 0.2 map schema'), not a topic ('버전').\n" +
         "- `body` — markdown, and it RENDERS with clickable links, so put the context there: why it matters, what 'done' " +
@@ -658,7 +658,7 @@ export function buildServer(): McpServer {
         "to keep a task honest as work evolves (sharpen the title, add findings/links to the body, move the due date, " +
         "retag) instead of re-adding a near-duplicate. `tags` REPLACES the whole set. An empty string clears body, " +
         "due_on, note_mode, or note. Get the id from list_tasks (or the add_task response). For done/reopen use " +
-        "complete_task; a task promoted to an issue is refused (act on the issue). Needs a publish token — no project " +
+        "complete_task; a task promoted to an issue is refused (act on the issue). Needs an API token — no project " +
         "or publish required.",
       inputSchema: {
         id: z.string().describe("Task id (from list_tasks / add_task)"),
@@ -698,7 +698,7 @@ export function buildServer(): McpServer {
         "written\" (tone, structure, must-includes). They are managed on the web (/home/skills); through MCP you READ " +
         "and APPLY them (write with add_skill). Current use: the task note-ification loop (ADR-067) — when merging a " +
         "note_mode task, follow the body of the task's `skill`, else the one whose `default_for` includes " +
-        "'task_note', else use your judgment. Call once per processing run, not per task. Needs a publish token — no " +
+        "'task_note', else use your judgment. Call once per processing run, not per task. Needs an API token — no " +
         "project or publish required.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
@@ -726,7 +726,7 @@ export function buildServer(): McpServer {
         "default is web-only, so you can promote but never silently strip). RENAME with `rename_from`: the skill " +
         "currently named that becomes `name` — defaults and task selections follow automatically; a `name` already " +
         "taken by another skill is refused (409 — skills don't merge). List with `skills` first to update the right " +
-        "name. Needs a publish token — no project or publish required.",
+        "name. Needs an API token — no project or publish required.",
       inputSchema: {
         name: z.string().describe("Skill name (unique per owner) — an existing name is UPDATED"),
         body: z.string().optional().describe("The full markdown instructions (replaces the body). Omit to keep the existing body."),
@@ -754,7 +754,7 @@ export function buildServer(): McpServer {
         "for one task's full thread, or open:true to sweep every unresolved note/question across all your tasks — " +
         "call that sweep when list_tasks shows pending_notes/open_questions. THE LOOP: read the pending input → " +
         "update_task to fold it into the body → resolve_task_comment on each → reply_task kind:'result' as the " +
-        "receipt. Needs a publish token — no project or publish required.",
+        "receipt. Needs an API token — no project or publish required.",
       inputSchema: {
         task: z.string().optional().describe("One task's full thread (task id from list_tasks)"),
         open: z.boolean().optional().describe("Only unresolved notes/questions across ALL your tasks — the pending sweep"),
@@ -777,7 +777,7 @@ export function buildServer(): McpServer {
         "integrating task input hits a fork the user should decide (A vs B, ambiguous instruction). It posts a " +
         "kind='question' comment; the task shows an open-question badge (and a project-tagged task pings the needs " +
         "webhook) until the user answers and you resolve_task_comment. State the options clearly in `body`. Re-read " +
-        "with task_comments to pick up the answer. Needs a publish token.",
+        "with task_comments to pick up the answer. Needs an API token.",
       inputSchema: {
         task: z.string().describe("Task id to ask about (from list_tasks)"),
         body: z.string().describe("The question / decision needed — lay out the options so the user can just pick one"),
@@ -801,7 +801,7 @@ export function buildServer(): McpServer {
         "matter most: kind:'note' to leave input you noticed ('needs fact-check: …') for a later session, and " +
         "kind:'result' as the RECEIPT after you folded pending input into the body ('본문 반영 완료 — …'). The thread " +
         "is raw material — the task's body stays the single source of truth, so anything that should live on gets " +
-        "folded in with update_task, not left in a comment. Needs a publish token.",
+        "folded in with update_task, not left in a comment. Needs an API token.",
       inputSchema: {
         task: z.string().optional().describe("Task id for a top-level comment (omit when replying)"),
         parent: z.string().optional().describe("Comment id to reply under (inherits the task)"),
@@ -825,7 +825,7 @@ export function buildServer(): McpServer {
         "Stamp a task-thread comment resolved (ADR-062): a NOTE becomes '✓ Integrated' — call it right after " +
         "update_task folds that note's input into the task body — and a QUESTION becomes '✓ Decided' once the user " +
         "answered and you've acted on it. resolved=false reopens. Only notes and questions are resolvable. This is " +
-        "what clears the task's pending badge, so don't leave integrated input unstamped. Needs a publish token.",
+        "what clears the task's pending badge, so don't leave integrated input unstamped. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Comment id (from task_comments)"),
         resolved: z.boolean().optional().describe("false to reopen (default: true)"),
@@ -893,7 +893,7 @@ export function buildServer(): McpServer {
         "the notebook's property schema (key/type/options); notes carry their props values (reserved key `tags`). " +
         "ALWAYS check this before add_note when " +
         "recording knowledge: if a note on the topic exists, update_note it instead of adding a near-duplicate. " +
-        "`q` searches title/slug/FULL body server-side. Needs a publish token and a published project.",
+        "`q` searches title/slug/FULL body server-side. Needs an API token and a published project.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
         q: z.string().optional().describe("Filter notes by title/slug/body substring (matches the full body)"),
@@ -914,7 +914,7 @@ export function buildServer(): McpServer {
       title: "Read one note",
       description:
         "One note in full: markdown body, outgoing connections and backlinks — explicit edges plus [[wikilink]] references derived from bodies at read time (kind 'wikilink'). Address by note slug " +
-        "(see the notes tool), or uuid. Needs a publish token.",
+        "(see the notes tool), or uuid. Needs an API token.",
       inputSchema: {
         note: z.string().describe("Note slug (or id)"),
         map: z.string().optional().describe("Which note map (omit when the slug is unique across maps)"),
@@ -938,7 +938,7 @@ export function buildServer(): McpServer {
         "while closing an issue, a convention, a constraint — one topic per note, body as a markdown document. Check " +
         "the notes tool first: if a note on the topic exists, update_note it instead of adding a near-duplicate. " +
         "Connect it to other notes by writing [[Title]] refs in the body — the graph derives them at read time. If the " +
-        "project has several note maps, pass `map`. Needs a publish token; owner or collaborator only.",
+        "project has several note maps, pass `map`. Needs an API token; owner or collaborator only.",
       inputSchema: {
         title: z.string().describe("Note title (the node label)"),
         body: z.string().optional().describe("Note body as a markdown document (details, context)"),
@@ -966,7 +966,7 @@ export function buildServer(): McpServer {
         "completed issue's outcome is distilled into a note); to='code:s:<screen id>' / 'code:r:<resource id>' " +
         "ties the note to a code-map node (node ids come from the overview/scan tools). NOTE↔NOTE links are " +
         "NOT made here: write a [[Title]] ref into the note's body (update_note) — the graph derives it at " +
-        "read time. remove=true disconnects instead. Needs a publish token; owner or collaborator only.",
+        "read time. remove=true disconnects instead. Needs an API token; owner or collaborator only.",
       inputSchema: {
         from: z.string().describe("Source note slug (or id)"),
         to: z.string().describe("Target: 'issue:<uuid>', or 'code:s:…' / 'code:r:…'"),
@@ -989,7 +989,7 @@ export function buildServer(): McpServer {
         "MOVE an existing note to another note map. A note lives on exactly ONE map — the maps are separate " +
         "notebooks (e.g. an llm-wiki and a company-wiki), so this re-homes the note rather than adding a second " +
         "placement. Its folder path and layout carry along. Address the note by its project-unique slug (see the " +
-        "notes tool). Needs a publish token; owner or collaborator only.",
+        "notes tool). Needs an API token; owner or collaborator only.",
       inputSchema: {
         note: z.string().describe("Note slug (or id)"),
         map: z.string().optional().describe("Target note map (a project can hold several; omit when there's one). List them with the maps tool."),
@@ -1015,7 +1015,7 @@ export function buildServer(): McpServer {
         "Trash — restorable for 30 days, then purged — and requires `reason`, a one-line why shown to the user in " +
         "the Trash and the activity journal (write something meaningful like 'stale mirror, superseded by [[X]]', " +
         "not 'cleanup'). restore:true brings a trashed note back; edits to a trashed note fail with note_deleted " +
-        "until restored. Note author or workspace owner/admin only for delete. Needs a publish token.",
+        "until restored. Note author or workspace owner/admin only for delete. Needs an API token.",
       inputSchema: {
         note: z.string().describe("Note slug (or id) to edit"),
         title: z.string().optional().describe("New title"),
@@ -1057,7 +1057,7 @@ export function buildServer(): McpServer {
         "badges — same merge as `notes import` (unknown key inserts, same-type select/multi options union, type " +
         "mismatch skips). `remove` is the cleanup verb — drops the def row only, non-destructively (note VALUES " +
         "survive as 'unregistered'). Pass either or both. The reserved `tags` key is refused in both; unknown " +
-        "remove keys are silent no-ops. See prop_defs in the notes tool for the current schema. Needs a publish token.",
+        "remove keys are silent no-ops. See prop_defs in the notes tool for the current schema. Needs an API token.",
       inputSchema: {
         define: z.array(z.object({
           key: z.string().describe("Property key (≤64 chars; `tags` is reserved)"),
@@ -1087,7 +1087,7 @@ export function buildServer(): McpServer {
         "List the maps in this published project. A project is a container of many maps (ADR-011): code maps " +
         "(published from a scan) and issue maps — each with a per-project slug, addressed at /p/:project/:map. Maps " +
         "are equal (no default), so when a project has several of a type the publish / add_issue / issues tools return " +
-        "'ambiguous_map' — call this to see the slugs, then pass `map`. Needs a publish token and a published project.",
+        "'ambiguous_map' — call this to see the slugs, then pass `map`. Needs an API token and a published project.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
         type: z.enum(["code", "issue", "note"]).optional().describe("Restrict to one type (default: all)"),
@@ -1109,7 +1109,7 @@ export function buildServer(): McpServer {
         "e.g. to recover the right publish target after the local link was lost (a workspace move, a fresh clone, CI), " +
         "or before publishing to confirm which existing project to update instead of creating a duplicate. Each project " +
         "includes isOwner (only owned projects can be re-published/overwritten) and per-code-map fingerprints " +
-        "(screens/resources counts) so you can match a local scan by structure. Needs a publish token; no project context.",
+        "(screens/resources counts) so you can match a local scan by structure. Needs an API token; no project context.",
       inputSchema: {},
     },
     async () => {
@@ -1142,7 +1142,7 @@ export function buildServer(): McpServer {
       description:
         "Show a code map's publish timeline (ADR-023) — when each publish happened, the screen/resource/" +
         "transition counts, and which nodes were added/removed since the previous publish. Use it to answer " +
-        "'when did this last publish' and 'what changed' without diffing manually. Needs a publish token and a " +
+        "'when did this last publish' and 'what changed' without diffing manually. Needs an API token and a " +
         "published project; `map` picks the code map when the project has several (else the oldest).",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
@@ -1179,7 +1179,7 @@ export function buildServer(): McpServer {
       description:
         "Create a new map in this project — a code map (a slot you later publish a scan into) or an issue map. Use it " +
         "when the user wants a separate map (e.g. a second issue map for a workstream), or after an 'ambiguous_map' " +
-        "error when none of the existing maps fit. The slug is addressed at /p/:project/:slug. Needs a publish token; " +
+        "error when none of the existing maps fit. The slug is addressed at /p/:project/:slug. Needs an API token; " +
         "owner or collaborator only.",
       inputSchema: {
         slug: z.string().describe("The new map's slug (lowercase letters, numbers, dashes; the server slugifies)"),
@@ -1202,7 +1202,7 @@ export function buildServer(): McpServer {
       description:
         "Mutate an Issue Map node: move its status (e.g. to 'done' when you finish the work — this is how progress " +
         "gets painted onto the map), edit title/body/type, set its priority or due date, set or clear its code-map target, or delete it " +
-        "(delete: author/owner only). Statuses/types must come from the project's issue_config. Needs a publish token.",
+        "(delete: author/owner only). Statuses/types must come from the project's issue_config. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Issue id (from the issues tool)"),
         status: z.string().optional().describe("New status from issue_config"),
@@ -1246,7 +1246,7 @@ export function buildServer(): McpServer {
       description:
         "Add or remove an edge between two issues on the Issue Map: from —kind→ to. kind 'blocks' means `from` must " +
         "finish before `to` can start (the dependency arrows that make the map readable), 'contains' groups (epic → " +
-        "task), 'relates' is a loose association. Needs a publish token; owner or collaborator only.",
+        "task), 'relates' is a loose association. Needs an API token; owner or collaborator only.",
       inputSchema: {
         from: z.string().describe("Issue id the edge starts at"),
         to: z.string().describe("Issue id the edge points to"),
@@ -1271,7 +1271,7 @@ export function buildServer(): McpServer {
         "Place an existing issue onto an issue map (issue maps are lenses over the project's issue pool — an issue " +
         "can appear on several maps at once), or take it off with remove:true. The issue itself is never deleted — " +
         "membership only changes which maps show it. Adding is idempotent. Use it to compose per-workstream issue " +
-        "maps. Needs a publish token; owner or collaborator only.",
+        "maps. Needs an API token; owner or collaborator only.",
       inputSchema: {
         issue: z.string().describe("Issue id (from the issues tool)"),
         map: z.string().optional().describe("Which issue map (a project can hold several; omit when there's one). List them with the maps tool."),
@@ -1296,7 +1296,7 @@ export function buildServer(): McpServer {
         "mid-task and they answer (ADR-020). Each comment has a kind (question = a decision you need, answer = the " +
         "user's reply, result = a completion summary, note), a resolved flag (a question with resolved=false is still " +
         "awaiting an answer), and parent_id for replies. Pass `issue` to read one issue's thread, or `open` to see only " +
-        "unresolved comments across the project (the decisions waiting on the user). Needs a publish token.",
+        "unresolved comments across the project (the decisions waiting on the user). Needs an API token.",
       inputSchema: {
         issue: z.string().optional().describe("Restrict to one issue's thread (issue id from the issues tool)"),
         open: z.boolean().optional().describe("Only unresolved comments — the decisions still awaiting an answer (default: false)"),
@@ -1321,7 +1321,7 @@ export function buildServer(): McpServer {
         "decide (A vs B, an ambiguous requirement, a risky change). State the options clearly in `body`. With multiple " +
         "people, `mention` the member(s) who should decide (their name from the issues tool's `members`, or just their " +
         "handle) — it then surfaces as 'waiting on you' for exactly them, not the whole team. Re-read with issue_comments " +
-        "to pick up the answer, then resolve_issue_question to close it and continue. Needs a publish token.",
+        "to pick up the answer, then resolve_issue_question to close it and continue. Needs an API token.",
       inputSchema: {
         issue: z.string().describe("Issue id to ask about (from the issues tool)"),
         body: z.string().describe("The question / decision needed — lay out the options so the user can just pick one"),
@@ -1344,7 +1344,7 @@ export function buildServer(): McpServer {
         "Post a reply or a note on an issue's discussion thread (ADR-020). Reply under a comment with `parent` (e.g. to " +
         "acknowledge the user's decision or add follow-up), or start a top-level note with `issue`. Defaults to kind " +
         "'answer' for a reply and 'note' otherwise; pass `kind` to override. For a completion summary, prefer " +
-        "complete_issue. Needs a publish token.",
+        "complete_issue. Needs an API token.",
       inputSchema: {
         issue: z.string().optional().describe("Issue id for a top-level note (omit when replying)"),
         parent: z.string().optional().describe("Comment id to reply under (inherits the issue)"),
@@ -1368,7 +1368,7 @@ export function buildServer(): McpServer {
       description:
         "Mark a decision question on an issue's thread resolved (or reopen it with resolved=false) — the 'decision " +
         "closed' signal (ADR-020). Resolve a question once the user has answered and you've captured the decision; the " +
-        "issue becomes actionable again. Only the comment author or the project owner can toggle it. Needs a publish token.",
+        "issue becomes actionable again. Only the comment author or the project owner can toggle it. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Comment id of the question (from issue_comments)"),
         resolved: z.boolean().optional().describe("false to reopen (default: true)"),
@@ -1391,7 +1391,7 @@ export function buildServer(): McpServer {
         "layer 3). This is the right way to close work — the status flip paints progress onto the map, and the result " +
         "comment records WHAT you did and why for the human history (don't just silently flip status). After this, run " +
         "scan + publish so the code map reflects your changes; the publish stamps this issue with the map version that " +
-        "shipped it. Needs a publish token.",
+        "shipped it. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Issue id to complete (from the issues tool)"),
         result: z.string().describe("What you did / the outcome — recorded as a 'result' comment on the issue"),

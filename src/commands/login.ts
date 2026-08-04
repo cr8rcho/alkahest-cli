@@ -1,7 +1,7 @@
 import { loadCredentials, saveCredentials } from "../core/credentials.js";
 
 /**
- * Save a personal publish token so `alkahest publish` can authenticate as you.
+ * Save a personal API token so the CLI/MCP can authenticate as you (publish, tasks, notes, issues, skills).
  * Get the token from the web app (Account → Create token) after signing in with GitHub.
  */
 export interface LoginOptions {

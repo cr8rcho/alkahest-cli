@@ -95,7 +95,7 @@ alkahest scan          # analyze → .alkahest/map.json (incremental by default)
 alkahest scan --full   # ignore the baseline and rescan everything
 alkahest hook install  # run scan automatically on commit/merge (diff-driven refresh)
 alkahest mcp           # run the MCP server (agents query the product map; no key)
-alkahest login         # save your publish token (Account → Create token on alkahest.app)
+alkahest login         # save your API token (Account → API tokens on alkahest.app)
 alkahest publish       # upload the map to the hosted viewer → shareable link
 alkahest projects      # list your account's workspaces & projects (recover a slug after a move, etc.)
 alkahest history       # a code map's publish timeline — when each publish happened & what changed

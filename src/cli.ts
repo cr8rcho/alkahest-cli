@@ -37,7 +37,7 @@ program
 
 program
   .command("login")
-  .description("save your personal publish token (from the web app) so 'publish' can authenticate")
+  .description("save your personal API token (from the web app) so 'publish' can authenticate")
   .option("--token <token>", "alk_… token from the web app (Account → Create token)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((opts: { token?: string; api?: string }) => login(opts));
