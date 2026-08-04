@@ -227,6 +227,8 @@ export interface SaveSkillParams {
   body?: string;
   /** Contexts this skill becomes the default of (e.g. ['task_note']). Unlisted contexts untouched. */
   default_for?: string[];
+  /** Rename: the skill currently named this becomes `name` (defaults/task selections follow). */
+  rename_from?: string;
 }
 
 export interface SaveSkillResult {
@@ -245,6 +247,7 @@ export async function saveSkill(path: string, params: SaveSkillParams): Promise<
     name: params.name.trim(),
     body: params.body,
     default_for: params.default_for,
+    rename_from: params.rename_from,
   });
   if (!res.ok) return fail(res, "save") as SaveSkillResult;
   return { ok: true, skill: res.body?.skill as SkillDoc };

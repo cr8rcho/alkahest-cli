@@ -723,17 +723,20 @@ export function buildServer(): McpServer {
         "they describe how notes should be written and want it remembered. `body` is the whole document (omitting it " +
         "keeps the current body); keep it a compact brief — tone, structure, must-includes — not a transcript. " +
         "`default_for: ['task_note']` also makes it the note-mode default (unlisted contexts untouched; UNSETTING a " +
-        "default is web-only, so you can promote but never silently strip). List with `skills` first to update the " +
-        "right name. Needs a publish token — no project or publish required.",
+        "default is web-only, so you can promote but never silently strip). RENAME with `rename_from`: the skill " +
+        "currently named that becomes `name` — defaults and task selections follow automatically; a `name` already " +
+        "taken by another skill is refused (409 — skills don't merge). List with `skills` first to update the right " +
+        "name. Needs a publish token — no project or publish required.",
       inputSchema: {
         name: z.string().describe("Skill name (unique per owner) — an existing name is UPDATED"),
         body: z.string().optional().describe("The full markdown instructions (replaces the body). Omit to keep the existing body."),
         default_for: z.array(z.string()).optional().describe("Contexts to make this skill the default of — currently ['task_note']"),
+        rename_from: z.string().optional().describe("Rename: the skill currently named this becomes `name` (its defaults and task selections follow)"),
         path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
       },
     },
-    async ({ name, body, default_for, path }) => {
-      const res = await saveSkill(rootOf(path), { name, body, default_for });
+    async ({ name, body, default_for, rename_from, path }) => {
+      const res = await saveSkill(rootOf(path), { name, body, default_for, rename_from });
       if (!res.ok || !res.skill) return issueFail("Add skill", res.code, res.message);
       return json({ ok: true, skill: res.skill });
     },
