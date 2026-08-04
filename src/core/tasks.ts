@@ -17,6 +17,11 @@ export interface Task {
   due_on: string | null;
   tags: string[];
   origin: string;
+  /** Note-ification intent (ADR-067): keep = merge content as-is into a note, enrich = research
+   * first, null = plain task. The processing loop scans open tasks that carry a mode. */
+  note_mode: "keep" | "enrich" | null;
+  /** Target note slug (project-unique), null = the agent picks the destination. */
+  note: string | null;
   /** Unresolved thread notes waiting to be folded into the body (ADR-062). */
   pending_notes: number;
   /** Open questions on the thread awaiting an answer (ADR-062). */
@@ -73,6 +78,10 @@ export interface CreateTaskParams {
   tags?: string[];
   /** Per-user idempotency: re-posting the same dedup_key updates the live task instead of duplicating. */
   dedup_key?: string;
+  /** Note-ification intent (ADR-067): keep = merge as-is, enrich = research first. */
+  note_mode?: "keep" | "enrich";
+  /** Target note slug. Setting a target without note_mode implies 'keep'. */
+  note?: string;
 }
 
 export interface TaskWriteResult {
@@ -118,6 +127,10 @@ export interface UpdateTaskParams {
   due_on?: string | null;
   /** REPLACES the whole tag set. */
   tags?: string[];
+  /** Note-ification intent (ADR-067); null switches it off (and clears the target). */
+  note_mode?: "keep" | "enrich" | null;
+  /** Target note slug; null clears the target (keeps the mode). Implies note_mode 'keep' when unset. */
+  note?: string | null;
 }
 
 /** Edit one of the token user's personal tasks — only the passed keys change. Promoted tasks
@@ -131,7 +144,9 @@ export async function updateTask(path: string, params: UpdateTaskParams): Promis
   if (params.body !== undefined) payload.body = params.body;
   if (params.due_on !== undefined) payload.due_on = params.due_on;
   if (params.tags !== undefined) payload.tags = params.tags;
-  if (Object.keys(payload).length === 1) return { ok: false, code: "no_fields", message: "Pass at least one field to change (title, body, due_on, tags)." };
+  if (params.note_mode !== undefined) payload.note_mode = params.note_mode;
+  if (params.note !== undefined) payload.note = params.note;
+  if (Object.keys(payload).length === 1) return { ok: false, code: "no_fields", message: "Pass at least one field to change (title, body, due_on, tags, note_mode, note)." };
   const res = await request(`${ctx.apiUrl}/tasks-update`, ctx.token, payload);
   if (!res.ok) return fail(res, "update") as TaskWriteResult;
   return { ok: true, task: res.body?.task };
@@ -156,6 +171,8 @@ export async function createTask(path: string, params: CreateTaskParams): Promis
     // someone else only hides it from them. The shared unit of work is an issue.
     tags: params.tags,
     dedup_key: params.dedup_key,
+    note_mode: params.note_mode,
+    note: params.note,
   });
   if (!res.ok) {
     const r = fail(res, "create") as TaskWriteResult;

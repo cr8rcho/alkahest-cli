@@ -574,6 +574,10 @@ export function buildServer(): McpServer {
         "Re-posting the same key updates that task instead of piling up duplicates. Use a stable key derived from the " +
         "SUBJECT, not the wording — e.g. 'stale-doc:docs/deploy.md', not a hash of the sentence.\n" +
         "- `tags` — free labels; also how you carry priority or batch, e.g. ['p1'] or ['audit-2026-07'].\n" +
+        "- `note_mode` (ADR-067) — set it when the task's CONTENT should end up in a project note once processed: " +
+        "'keep' = merge the body/thread as-is, 'enrich' = research/verify before merging. `note` names the target note " +
+        "(slug); omit it and the processing agent picks the destination by search. A capture like \"fold this finding " +
+        "into the wiki\" is note_mode:'keep' + the raw material in the body.\n" +
         "Generating several at once: one task = one action someone can finish in a sitting. Split anything bigger, and " +
         "call list_tasks first so you update what is already there instead of re-adding it. When the work a task " +
         "describes is finished, close the loop with complete_task.",
@@ -588,11 +592,13 @@ export function buildServer(): McpServer {
         tags: z.array(z.string()).optional().describe("Free personal labels — also priority/batch, e.g. ['p1','audit-2026-07']"),
         due_on: z.string().optional().describe("Due date as YYYY-MM-DD"),
         dedup_key: z.string().optional().describe("Stable per-subject key, required for re-scans/batches (e.g. 'stale-doc:docs/deploy.md') — re-posting updates instead of duplicating"),
+        note_mode: z.enum(["keep", "enrich"]).optional().describe("Note-ification intent (ADR-067): this task's content should become a note — keep = merge as-is, enrich = research first"),
+        note: z.string().optional().describe("Target note slug for the merge. Omit for auto (the processing agent searches). Implies note_mode 'keep' when unset."),
         path: z.string().optional().describe("Project root (default: cwd — a linked checkout auto-tags its project)"),
       },
     },
-    async ({ title, body, project, workspace, tags, due_on, dedup_key, path }) => {
-      const res = await createTask(rootOf(path), { title, body, slug: project, workspace, tags, due_on, dedup_key });
+    async ({ title, body, project, workspace, tags, due_on, dedup_key, note_mode, note, path }) => {
+      const res = await createTask(rootOf(path), { title, body, slug: project, workspace, tags, due_on, dedup_key, note_mode, note });
       if (!res.ok || !res.task) {
         const wsHint = res.workspaces?.length ? ` Workspaces: ${JSON.stringify(res.workspaces)}` : "";
         return issueFail("Add task", res.code, `${res.message ?? ""}${wsHint}`);
@@ -632,25 +638,30 @@ export function buildServer(): McpServer {
       description:
         "Edit one of your PERSONAL tasks — title, body, due date, tags. Pass only what changes; the rest stays. Use it " +
         "to keep a task honest as work evolves (sharpen the title, add findings/links to the body, move the due date, " +
-        "retag) instead of re-adding a near-duplicate. `tags` REPLACES the whole set. An empty string clears body or " +
-        "due_on. Get the id from list_tasks (or the add_task response). For done/reopen use complete_task; a task " +
-        "promoted to an issue is refused (act on the issue). Needs a publish token — no project or publish required.",
+        "retag) instead of re-adding a near-duplicate. `tags` REPLACES the whole set. An empty string clears body, " +
+        "due_on, note_mode, or note. Get the id from list_tasks (or the add_task response). For done/reopen use " +
+        "complete_task; a task promoted to an issue is refused (act on the issue). Needs a publish token — no project " +
+        "or publish required.",
       inputSchema: {
         id: z.string().describe("Task id (from list_tasks / add_task)"),
         title: z.string().optional().describe("New title (imperative and specific)"),
         body: z.string().optional().describe("New markdown body — renders with clickable links. Empty string clears it."),
         due_on: z.string().optional().describe("New due date as YYYY-MM-DD. Empty string clears it."),
         tags: z.array(z.string()).optional().describe("REPLACES the whole tag set (pass the full list you want to keep)"),
+        note_mode: z.enum(["keep", "enrich", ""]).optional().describe("Note-ification intent (ADR-067): keep = merge as-is, enrich = research first. Empty string switches it off (and clears the target)."),
+        note: z.string().optional().describe("Target note slug for the merge. Empty string clears the target (agent picks). Implies note_mode 'keep' when unset."),
         path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
       },
     },
-    async ({ id, title, body, due_on, tags, path }) => {
+    async ({ id, title, body, due_on, tags, note_mode, note, path }) => {
       const res = await updateTask(rootOf(path), {
         id,
         title,
         body: body === "" ? null : body,
         due_on: due_on === "" ? null : due_on,
         tags,
+        note_mode: note_mode === "" ? null : note_mode,
+        note: note === "" ? null : note,
       });
       if (!res.ok || !res.task) return issueFail("Update task", res.code, res.message);
       return json({ ok: true, task: res.task });
