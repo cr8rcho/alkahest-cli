@@ -537,8 +537,19 @@ export function buildServer(): McpServer {
         "(slug) to see only tasks tagged to it. **Read this before add_task when you are generating several tasks** — " +
         "update or skip what is already on the list instead of adding a near-duplicate. Each task carries " +
         "`pending_notes` / `open_questions` (ADR-062): unresolved thread input waiting on you — when either is > 0, " +
-        "read it with task_comments, fold it into the body (update_task), then resolve_task_comment. Needs a publish " +
-        "token — no project or publish required.",
+        "read it with task_comments, fold it into the body (update_task), then resolve_task_comment.\n\n" +
+        "A task may carry `note_mode` ('keep'|'enrich', ADR-067): the user wants its CONTENT merged into a project " +
+        "note. When asked to process these (\"인박스 처리\", \"merge my notes\", or the task itself is your assignment):\n" +
+        "1. Gather the material — the task body plus its thread (task_comments).\n" +
+        "2. Target: `note` (slug) if set → get_note it; else search the project's notes for the best home; no fit → " +
+        "a NEW note via add_note, placed on the notebook (map) where its linked neighbors live.\n" +
+        "3. 'keep' = fold the material in as-is (update_note replaces the WHOLE body: read first, integrate — fill " +
+        "gaps, don't rewrite what's already said). 'enrich' = research/verify first (web/code search), cite sources, " +
+        "and drop claims you can't confirm.\n" +
+        "4. Close the loop: reply_task summarizing what went where, then complete_task. Blocked (two candidate " +
+        "targets, or your material contradicts the note)? ask_task and leave the task open — never guess over a " +
+        "conflict.\n" +
+        "Needs a publish token — no project or publish required.",
       inputSchema: {
         status: z.enum(["open", "all"]).optional().describe("open (default) = not done; all = include done"),
         project: z.string().optional().describe("Only tasks tagged to this project (slug)"),
