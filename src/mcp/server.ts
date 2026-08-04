@@ -17,7 +17,7 @@ import {
   resolveIssueComment,
   mapIssue,
 } from "../core/issues.js";
-import { completeTask, createTask, postTaskComment, pullSkills, pullTaskComments, pullTasks, resolveTaskComment, updateTask } from "../core/tasks.js";
+import { completeTask, createTask, postTaskComment, pullSkills, pullTaskComments, pullTasks, resolveTaskComment, saveSkill, updateTask } from "../core/tasks.js";
 import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
@@ -696,9 +696,10 @@ export function buildServer(): McpServer {
       description:
         "Read the user's SKILLS (ADR-068): named markdown instruction documents — \"how I want this kind of output " +
         "written\" (tone, structure, must-includes). They are managed on the web (/home/skills); through MCP you READ " +
-        "and APPLY them. Current use: the task note-ification loop (ADR-067) — when merging a note_mode task, follow " +
-        "the body of the task's `skill`, else the one whose `default_for` includes 'task_note', else use your " +
-        "judgment. Call once per processing run, not per task. Needs a publish token — no project or publish required.",
+        "and APPLY them (write with add_skill). Current use: the task note-ification loop (ADR-067) — when merging a " +
+        "note_mode task, follow the body of the task's `skill`, else the one whose `default_for` includes " +
+        "'task_note', else use your judgment. Call once per processing run, not per task. Needs a publish token — no " +
+        "project or publish required.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
       },
@@ -707,6 +708,34 @@ export function buildServer(): McpServer {
       const res = await pullSkills(rootOf(path));
       if (!res.ok || !res.skills) return issueFail("List skills", res.code, res.message);
       return json({ ok: true, count: res.skills.length, skills: res.skills });
+    },
+  );
+
+  server.registerTool(
+    "add_skill",
+    {
+      title: "Add or update a skill",
+      description:
+        "Create or update one of the user's SKILLS by name (ADR-068) — UPSERT: an existing name is updated, so " +
+        "migrating instruction documents is idempotent (re-running refreshes instead of duplicating). Use it when the " +
+        "user wants an existing writing guide moved into their account (\"내 wiki 스킬 옮겨줘\" — read the local " +
+        "skill/instructions, distill the WRITING rules into markdown, save under a short recognizable name) or when " +
+        "they describe how notes should be written and want it remembered. `body` is the whole document (omitting it " +
+        "keeps the current body); keep it a compact brief — tone, structure, must-includes — not a transcript. " +
+        "`default_for: ['task_note']` also makes it the note-mode default (unlisted contexts untouched; UNSETTING a " +
+        "default is web-only, so you can promote but never silently strip). List with `skills` first to update the " +
+        "right name. Needs a publish token — no project or publish required.",
+      inputSchema: {
+        name: z.string().describe("Skill name (unique per owner) — an existing name is UPDATED"),
+        body: z.string().optional().describe("The full markdown instructions (replaces the body). Omit to keep the existing body."),
+        default_for: z.array(z.string()).optional().describe("Contexts to make this skill the default of — currently ['task_note']"),
+        path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
+      },
+    },
+    async ({ name, body, default_for, path }) => {
+      const res = await saveSkill(rootOf(path), { name, body, default_for });
+      if (!res.ok || !res.skill) return issueFail("Add skill", res.code, res.message);
+      return json({ ok: true, skill: res.skill });
     },
   );
 

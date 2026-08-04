@@ -218,6 +218,38 @@ export async function pullSkills(path: string, params: { api?: string; token?: s
   return { ok: true, skills: (res.body?.skills ?? []) as SkillDoc[] };
 }
 
+export interface SaveSkillParams {
+  api?: string;
+  token?: string;
+  /** Skill name (unique per owner) — an existing name is UPDATED (idempotent migration). */
+  name: string;
+  /** Markdown instructions. Omit to keep an existing skill's body on update. */
+  body?: string;
+  /** Contexts this skill becomes the default of (e.g. ['task_note']). Unlisted contexts untouched. */
+  default_for?: string[];
+}
+
+export interface SaveSkillResult {
+  ok: boolean;
+  skill?: SkillDoc;
+  code?: string;
+  message?: string;
+}
+
+/** Create or update a skill by name (skills-post upsert — safe to re-run). */
+export async function saveSkill(path: string, params: SaveSkillParams): Promise<SaveSkillResult> {
+  const ctx = authContext(path, { api: params.api, token: params.token }, false);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.name?.trim()) return { ok: false, code: "no_name", message: "Skill name is required." };
+  const res = await request(`${ctx.apiUrl}/skills-post`, ctx.token, {
+    name: params.name.trim(),
+    body: params.body,
+    default_for: params.default_for,
+  });
+  if (!res.ok) return fail(res, "save") as SaveSkillResult;
+  return { ok: true, skill: res.body?.skill as SkillDoc };
+}
+
 // ---- task thread (ADR-062) — the issue decision channel's grammar on a personal task ----
 // kind note|question|answer|result + parent replies + resolved, with one delta: notes resolve
 // too (resolved note = "integrated into the task body"). Backed by the task-comments-{pull,post,
