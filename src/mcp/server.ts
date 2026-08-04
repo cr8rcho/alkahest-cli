@@ -17,7 +17,7 @@ import {
   resolveIssueComment,
   mapIssue,
 } from "../core/issues.js";
-import { completeTask, createTask, postTaskComment, pullTaskComments, pullTasks, resolveTaskComment, updateTask } from "../core/tasks.js";
+import { completeTask, createTask, postTaskComment, pullSkills, pullTaskComments, pullTasks, resolveTaskComment, updateTask } from "../core/tasks.js";
 import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listProjects } from "../core/listProjects.js";
@@ -549,7 +549,10 @@ export function buildServer(): McpServer {
         "4. 'keep' = fold the material in as-is (update_note replaces the WHOLE body: read first, integrate — fill " +
         "gaps, don't rewrite what's already said). 'enrich' = research/verify first (web/code search), cite sources, " +
         "and drop claims you can't confirm.\n" +
-        "5. Close the loop: reply_task (kind 'result') summarizing what went where — ALWAYS, it is the processed " +
+        "5. Write it the user's way (ADR-068): call `skills` once — the task's `skill` (name) picks its instruction " +
+        "document, else use the one whose default_for includes 'task_note'; follow that body (tone, structure, " +
+        "must-includes) while composing. No skills / no default → your judgment.\n" +
+        "6. Close the loop: reply_task (kind 'result') summarizing what went where — ALWAYS, it is the processed " +
         "marker — then complete_task (skip completing a task that was already done). Blocked (two candidate targets, " +
         "or your material contradicts the note)? ask_task and leave it — never guess over a conflict.\n" +
         "Needs a publish token — no project or publish required.",
@@ -608,11 +611,12 @@ export function buildServer(): McpServer {
         dedup_key: z.string().optional().describe("Stable per-subject key, required for re-scans/batches (e.g. 'stale-doc:docs/deploy.md') — re-posting updates instead of duplicating"),
         note_mode: z.enum(["keep", "enrich"]).optional().describe("Note-ification intent (ADR-067): this task's content should become a note — keep = merge as-is, enrich = research first"),
         note: z.string().optional().describe("Target note slug for the merge. Omit for auto (the processing agent searches). Implies note_mode 'keep' when unset."),
+        skill: z.string().optional().describe("Skill name (ADR-068) — which writing instructions the merge follows. Omit for the user's 'task_note' default. See `skills`."),
         path: z.string().optional().describe("Project root (default: cwd — a linked checkout auto-tags its project)"),
       },
     },
-    async ({ title, body, project, workspace, tags, due_on, dedup_key, note_mode, note, path }) => {
-      const res = await createTask(rootOf(path), { title, body, slug: project, workspace, tags, due_on, dedup_key, note_mode, note });
+    async ({ title, body, project, workspace, tags, due_on, dedup_key, note_mode, note, skill, path }) => {
+      const res = await createTask(rootOf(path), { title, body, slug: project, workspace, tags, due_on, dedup_key, note_mode, note, skill });
       if (!res.ok || !res.task) {
         const wsHint = res.workspaces?.length ? ` Workspaces: ${JSON.stringify(res.workspaces)}` : "";
         return issueFail("Add task", res.code, `${res.message ?? ""}${wsHint}`);
@@ -664,10 +668,11 @@ export function buildServer(): McpServer {
         tags: z.array(z.string()).optional().describe("REPLACES the whole tag set (pass the full list you want to keep)"),
         note_mode: z.enum(["keep", "enrich", ""]).optional().describe("Note-ification intent (ADR-067): keep = merge as-is, enrich = research first. Empty string switches it off (and clears the target)."),
         note: z.string().optional().describe("Target note slug for the merge. Empty string clears the target (agent picks). Implies note_mode 'keep' when unset."),
+        skill: z.string().optional().describe("Skill name (ADR-068) for the merge. Empty string clears (falls back to the 'task_note' default). See `skills`."),
         path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
       },
     },
-    async ({ id, title, body, due_on, tags, note_mode, note, path }) => {
+    async ({ id, title, body, due_on, tags, note_mode, note, skill, path }) => {
       const res = await updateTask(rootOf(path), {
         id,
         title,
@@ -676,9 +681,32 @@ export function buildServer(): McpServer {
         tags,
         note_mode: note_mode === "" ? null : note_mode,
         note: note === "" ? null : note,
+        skill: skill === "" ? null : skill,
       });
       if (!res.ok || !res.task) return issueFail("Update task", res.code, res.message);
       return json({ ok: true, task: res.task });
+    },
+  );
+
+  // ---- skills: personal writing/processing instruction documents (ADR-068) ----
+  server.registerTool(
+    "skills",
+    {
+      title: "List skills",
+      description:
+        "Read the user's SKILLS (ADR-068): named markdown instruction documents — \"how I want this kind of output " +
+        "written\" (tone, structure, must-includes). They are managed on the web (/home/skills); through MCP you READ " +
+        "and APPLY them. Current use: the task note-ification loop (ADR-067) — when merging a note_mode task, follow " +
+        "the body of the task's `skill`, else the one whose `default_for` includes 'task_note', else use your " +
+        "judgment. Call once per processing run, not per task. Needs a publish token — no project or publish required.",
+      inputSchema: {
+        path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
+      },
+    },
+    async ({ path }) => {
+      const res = await pullSkills(rootOf(path));
+      if (!res.ok || !res.skills) return issueFail("List skills", res.code, res.message);
+      return json({ ok: true, count: res.skills.length, skills: res.skills });
     },
   );
 

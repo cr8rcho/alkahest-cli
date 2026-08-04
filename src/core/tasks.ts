@@ -22,6 +22,8 @@ export interface Task {
   note_mode: "keep" | "enrich" | null;
   /** Target note slug (project-unique), null = the agent picks the destination. */
   note: string | null;
+  /** Selected skill NAME (ADR-068), null = the owner's 'task_note' default applies. */
+  skill: string | null;
   /** Unresolved thread notes waiting to be folded into the body (ADR-062). */
   pending_notes: number;
   /** Open questions on the thread awaiting an answer (ADR-062). */
@@ -82,6 +84,8 @@ export interface CreateTaskParams {
   note_mode?: "keep" | "enrich";
   /** Target note slug. Setting a target without note_mode implies 'keep'. */
   note?: string;
+  /** Skill name (ADR-068) — how the note should be written. Omit for the 'task_note' default. */
+  skill?: string;
 }
 
 export interface TaskWriteResult {
@@ -131,6 +135,8 @@ export interface UpdateTaskParams {
   note_mode?: "keep" | "enrich" | null;
   /** Target note slug; null clears the target (keeps the mode). Implies note_mode 'keep' when unset. */
   note?: string | null;
+  /** Skill name (ADR-068); null clears (falls back to the 'task_note' default). */
+  skill?: string | null;
 }
 
 /** Edit one of the token user's personal tasks — only the passed keys change. Promoted tasks
@@ -146,7 +152,8 @@ export async function updateTask(path: string, params: UpdateTaskParams): Promis
   if (params.tags !== undefined) payload.tags = params.tags;
   if (params.note_mode !== undefined) payload.note_mode = params.note_mode;
   if (params.note !== undefined) payload.note = params.note;
-  if (Object.keys(payload).length === 1) return { ok: false, code: "no_fields", message: "Pass at least one field to change (title, body, due_on, tags, note_mode, note)." };
+  if (params.skill !== undefined) payload.skill = params.skill;
+  if (Object.keys(payload).length === 1) return { ok: false, code: "no_fields", message: "Pass at least one field to change (title, body, due_on, tags, note_mode, note, skill)." };
   const res = await request(`${ctx.apiUrl}/tasks-update`, ctx.token, payload);
   if (!res.ok) return fail(res, "update") as TaskWriteResult;
   return { ok: true, task: res.body?.task };
@@ -173,6 +180,7 @@ export async function createTask(path: string, params: CreateTaskParams): Promis
     dedup_key: params.dedup_key,
     note_mode: params.note_mode,
     note: params.note,
+    skill: params.skill,
   });
   if (!res.ok) {
     const r = fail(res, "create") as TaskWriteResult;
@@ -180,6 +188,34 @@ export async function createTask(path: string, params: CreateTaskParams): Promis
     return r;
   }
   return { ok: true, task: res.body?.task };
+}
+
+// ---- skills (ADR-068) — personal writing/processing instruction documents ----
+// A skill's body is markdown the processing agent FOLLOWS when producing output for the
+// user; first consumer is the note-ification loop (ADR-067). `default_for` lists the
+// contexts a skill is the default of (currently just 'task_note').
+
+export interface SkillDoc {
+  id: string;
+  name: string;
+  body: string | null;
+  default_for: string[];
+}
+
+export interface SkillsResult {
+  ok: boolean;
+  skills?: SkillDoc[];
+  code?: string;
+  message?: string;
+}
+
+/** List the token user's skills (names + instruction bodies + per-context defaults). */
+export async function pullSkills(path: string, params: { api?: string; token?: string } = {}): Promise<SkillsResult> {
+  const ctx = authContext(path, { api: params.api, token: params.token }, false);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  const res = await request(`${ctx.apiUrl}/skills-pull`, ctx.token);
+  if (!res.ok) return fail(res, "pull") as SkillsResult;
+  return { ok: true, skills: (res.body?.skills ?? []) as SkillDoc[] };
 }
 
 // ---- task thread (ADR-062) — the issue decision channel's grammar on a personal task ----
