@@ -190,15 +190,20 @@ export async function createTask(path: string, params: CreateTaskParams): Promis
   return { ok: true, task: res.body?.task };
 }
 
-// ---- skills (ADR-068) — personal writing/processing instruction documents ----
+// ---- skills (ADR-068/070) — writing/processing instruction documents ----
 // A skill's body is markdown the processing agent FOLLOWS when producing output for the
 // user; first consumer is the note-ification loop (ADR-067). `default_for` lists the
-// contexts a skill is the default of (currently just 'task_note').
+// contexts a skill is the default of (currently just 'task_note'). Since ADR-070 the
+// list is the UNION of the user's personal skills and the team skills shared in their
+// workspaces — `scope` ('personal' | 'workspace') + `workspace` (slug) tell them apart
+// (absent on servers predating ADR-070).
 
 export interface SkillDoc {
   id: string;
   name: string;
   body: string | null;
+  scope?: "personal" | "workspace";
+  workspace?: string | null;
   default_for: string[];
 }
 

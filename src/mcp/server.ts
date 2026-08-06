@@ -549,9 +549,10 @@ export function buildServer(): McpServer {
         "4. 'keep' = fold the material in as-is (update_note replaces the WHOLE body: read first, integrate — fill " +
         "gaps, don't rewrite what's already said). 'enrich' = research/verify first (web/code search), cite sources, " +
         "and drop claims you can't confirm.\n" +
-        "5. Write it the user's way (ADR-068): call `skills` once — the task's `skill` (name) picks its instruction " +
-        "document, else use the one whose default_for includes 'task_note'; follow that body (tone, structure, " +
-        "must-includes) while composing. No skills / no default → your judgment.\n" +
+        "5. Write it the user's way (ADR-068/070): call `skills` once — the task's `skill` (name; its `skill_scope` " +
+        "picks between a same-named personal and team entry) selects its instruction document, else use the one " +
+        "whose default_for includes 'task_note'; follow that body (tone, structure, must-includes) while composing. " +
+        "No skills / no default → your judgment.\n" +
         "6. Close the loop: reply_task (kind 'result') summarizing what went where — ALWAYS, it is the processed " +
         "marker — then complete_task (skip completing a task that was already done). Blocked (two candidate targets, " +
         "or your material contradicts the note)? ask_task and leave it — never guess over a conflict.\n" +
@@ -611,7 +612,7 @@ export function buildServer(): McpServer {
         dedup_key: z.string().optional().describe("Stable per-subject key, required for re-scans/batches (e.g. 'stale-doc:docs/deploy.md') — re-posting updates instead of duplicating"),
         note_mode: z.enum(["keep", "enrich"]).optional().describe("Note-ification intent (ADR-067): this task's content should become a note — keep = merge as-is, enrich = research first"),
         note: z.string().optional().describe("Target note slug for the merge. Omit for auto (the processing agent searches). Implies note_mode 'keep' when unset."),
-        skill: z.string().optional().describe("Skill name (ADR-068) — which writing instructions the merge follows. Omit for the user's 'task_note' default. See `skills`."),
+        skill: z.string().optional().describe("Skill name (ADR-068/070) — which writing instructions the merge follows; personal names win over same-named team skills. Omit for the user's 'task_note' default. See `skills`."),
         path: z.string().optional().describe("Project root (default: cwd — a linked checkout auto-tags its project)"),
       },
     },
@@ -668,7 +669,7 @@ export function buildServer(): McpServer {
         tags: z.array(z.string()).optional().describe("REPLACES the whole tag set (pass the full list you want to keep)"),
         note_mode: z.enum(["keep", "enrich", ""]).optional().describe("Note-ification intent (ADR-067): keep = merge as-is, enrich = research first. Empty string switches it off (and clears the target)."),
         note: z.string().optional().describe("Target note slug for the merge. Empty string clears the target (agent picks). Implies note_mode 'keep' when unset."),
-        skill: z.string().optional().describe("Skill name (ADR-068) for the merge. Empty string clears (falls back to the 'task_note' default). See `skills`."),
+        skill: z.string().optional().describe("Skill name (ADR-068/070) for the merge — personal names win over same-named team skills. Empty string clears (falls back to the 'task_note' default). See `skills`."),
         path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
       },
     },
@@ -694,12 +695,15 @@ export function buildServer(): McpServer {
     {
       title: "List skills",
       description:
-        "Read the user's SKILLS (ADR-068): named markdown instruction documents — \"how I want this kind of output " +
-        "written\" (tone, structure, must-includes). They are managed on the web (/home/skills); through MCP you READ " +
-        "and APPLY them (write with add_skill). Current use: the task note-ification loop (ADR-067) — when merging a " +
-        "note_mode task, follow the body of the task's `skill`, else the one whose `default_for` includes " +
-        "'task_note', else use your judgment. Call once per processing run, not per task. Needs an API token — no " +
-        "project or publish required.",
+        "Read the user's SKILLS (ADR-068/070): named markdown instruction documents — \"how I want this kind of " +
+        "output written\" (tone, structure, must-includes). The list is the UNION of personal skills and the team " +
+        "skills shared in the user's workspaces — each entry carries `scope` ('personal' | 'workspace') and, for " +
+        "team ones, `workspace` (slug); skills the user hid are already excluded. They are managed on the web " +
+        "(personal: /home/skills, team: /home/team-skills); through MCP you READ and APPLY them (write with " +
+        "add_skill — personal only). Current use: the task note-ification loop (ADR-067) — when merging a note_mode " +
+        "task, follow the body of the task's `skill` (its `skill_scope` says which entry the name means if a " +
+        "personal and a team skill collide), else the one whose `default_for` includes 'task_note', else use your " +
+        "judgment. Call once per processing run, not per task. Needs an API token — no project or publish required.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
       },
@@ -716,7 +720,7 @@ export function buildServer(): McpServer {
     {
       title: "Add or update a skill",
       description:
-        "Create or update one of the user's SKILLS by name (ADR-068) — UPSERT: an existing name is updated, so " +
+        "Create or update one of the user's PERSONAL skills by name (ADR-068) — UPSERT: an existing name is updated, so " +
         "migrating instruction documents is idempotent (re-running refreshes instead of duplicating). Use it when the " +
         "user wants an existing writing guide moved into their account (\"내 wiki 스킬 옮겨줘\" — read the local " +
         "skill/instructions, distill the WRITING rules into markdown, save under a short recognizable name) or when " +
@@ -726,7 +730,8 @@ export function buildServer(): McpServer {
         "default is web-only, so you can promote but never silently strip). RENAME with `rename_from`: the skill " +
         "currently named that becomes `name` — defaults and task selections follow automatically; a `name` already " +
         "taken by another skill is refused (409 — skills don't merge). List with `skills` first to update the right " +
-        "name. Needs an API token — no project or publish required.",
+        "name. Team skills (ADR-070, scope 'workspace') are read-only copies — sharing/deploying/unsharing them is " +
+        "web-only, so this tool never touches them. Needs an API token — no project or publish required.",
       inputSchema: {
         name: z.string().describe("Skill name (unique per owner) — an existing name is UPDATED"),
         body: z.string().optional().describe("The full markdown instructions (replaces the body). Omit to keep the existing body."),
