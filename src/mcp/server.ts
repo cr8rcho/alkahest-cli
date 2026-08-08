@@ -203,6 +203,7 @@ export function buildServer(): McpServer {
           plan_limit: "Free plan project limit reached — upgrade to Pro for more.",
           invalid_token: "The API token is invalid or revoked — create a new one at alkahest.app → Account.",
           client_too_old: "This alkahest is too old to publish — run 'alkahest update'.",
+          no_workspace: "This account has no workspace yet, and a first publish needs one to hold the new project. Ask the user to create one at alkahest.app/home, then call publish again — there is nothing to retry until they do.",
           ambiguous_map: "List the project's code maps with the maps tool, then call publish again with `map` set to one of them (or a new slug to create one).",
           ambiguous_project: "This checkout has no linked project and an existing one looks like it — do NOT create a duplicate. Pick a candidate's slug below (or use list_projects) and call publish again with `slug` set, or pass a deliberately new `name` to create a fresh project.",
         };

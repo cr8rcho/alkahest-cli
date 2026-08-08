@@ -69,6 +69,10 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
       console.error("[alkahest] ✗ Token invalid or revoked. Run 'alkahest login' again.");
     } else if (res.code === "client_too_old") {
       console.error(`[alkahest] ✗ ${res.message}`);
+    } else if (res.code === "no_workspace") {
+      // A brand-new account: signing up no longer creates a workspace, and the first publish
+      // needs one to put the new project in. The server's message names the page to go to.
+      console.error(`[alkahest] ✗ ${res.message}`);
     } else if (res.code === "ambiguous_map") {
       console.error(`[alkahest] ✗ ${res.message}`);
       console.error("  See them with 'alkahest maps list', or publish to a new one with 'alkahest publish --map <slug>'.");
