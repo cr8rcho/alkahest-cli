@@ -53,7 +53,7 @@ export async function listHistory(path: string, params: HistoryParams = {}): Pro
   if (!apiUrl) return { ok: false, code: "no_api", message: "Missing API URL. Set ALKAHEST_API_URL (or run 'alkahest login --api <url>')." };
   const token = resolveToken(params.token, creds);
   if (!token) return { ok: false, code: "no_token", message: "Not authenticated. Set ALKAHEST_TOKEN (or run 'alkahest login --token alk_…')." };
-  if (!slug) return { ok: false, code: "no_slug", message: "No published map for this project yet — run 'alkahest publish', or pass --slug <slug>." };
+  if (!slug) return { ok: false, code: "no_slug", message: "Which project? Name it explicitly, or bind this folder by publishing" };
 
   const q = new URLSearchParams({ slug });
   if (params.map) q.set("map", params.map);

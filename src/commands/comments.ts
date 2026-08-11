@@ -78,7 +78,7 @@ export async function commentsIssue(ids: string[], options: CommentsIssueOptions
       already_tracked: `[alkahest] ✗ ${res.message} Use --force to file a new issue anyway.`,
       gh_failed: `[alkahest] ✗ ${res.message}`,
       forbidden: "[alkahest] ✗ Only the project owner or a collaborator can file issues.",
-      no_slug: "[alkahest] ✗ No published map for this project — run 'alkahest publish' first.",
+      no_slug: `[alkahest] ✗ ${res.message}\n  Pass --slug <slug> — 'alkahest projects' lists them, or set ALKAHEST_PROJECT.`,
       not_found: `[alkahest] ✗ ${res.message}`,
     };
     console.error(msg[res.code ?? ""] ?? `[alkahest] file issue failed: ${res.message}`);

@@ -46,6 +46,15 @@ GitHub login (web `/account`) issues per-user `alk_` tokens (sha256-hashed in
 user and auto-creates the project under their account. Plan limits are enforced
 server-side in the `publish` edge function.
 
+**Which project — addressing vs. binding.** A project is addressed by its **slug**, not by
+the folder you happen to be in. `resolveProject` (`core/project.ts`) takes the first of:
+explicit slug → `.alkahest/project.json` → creds (path-keyed) → `ALKAHEST_PROJECT`. Only
+`publish` ever *writes* the middle two, so a folder that was never published has no binding —
+which is why every project-scoped MCP tool takes a **`project`** param (CLI: `--slug`) and why
+the env var exists as a last resort. Notes/issues/maps never required a publish: their edge
+functions resolve the slug and never look at code maps. When adding a tool, pass the slug
+through `params.slug` and don't reintroduce "run publish first" as the answer to `no_slug`.
+
 ## Build & checks
 
 ```bash

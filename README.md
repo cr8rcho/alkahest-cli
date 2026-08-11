@@ -221,6 +221,21 @@ The token is all you need — the CLI defaults to the hosted service (alkahest.a
 
 > Self-hosting your own backend? Point the CLI at it with `-e ALKAHEST_API_URL=https://<ref>.supabase.co/functions/v1` (or `alkahest login --api <url>`).
 
+**Working without a checkout — notes, issues, maps.** Only the code map comes from a folder. Notes, issues and maps are addressed by **project slug**, so the agent can write to a project the current folder knows nothing about — and the project never has to have been published:
+
+```
+notes / add_note / issues / add_issue / maps / create_map / search / …
+  → project: "my-wiki-2772c2"      # a slug from the list_projects tool
+```
+
+`alkahest publish` binds a checkout to a project (`.alkahest/project.json`), and inside such a folder the parameter is redundant. Everywhere else, name the project. To make one MCP server permanently point at a single project — a personal wiki, say — set it once in the config:
+
+```json
+{ "env": { "ALKAHEST_TOKEN": "alk_xxxxx", "ALKAHEST_PROJECT": "my-wiki-2772c2" } }
+```
+
+The env var is the last fallback: a linked checkout still wins over it, so a wiki-configured server won't hijack a real code project. On the CLI the same address is `--slug <slug>` (`alkahest projects` lists them).
+
 ## Output — `.alkahest/`
 
 ```

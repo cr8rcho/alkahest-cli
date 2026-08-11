@@ -122,7 +122,7 @@ export function authContext(
     return { root, code: "no_token", message: "Not authenticated. Set ALKAHEST_TOKEN (or run 'alkahest login --token alk_…')." };
   }
   if (needSlug && !slug) {
-    return { root, code: "no_slug", message: "No published map for this project yet — run 'alkahest publish', or pass --slug <slug>." };
+    return { root, code: "no_slug", message: "Which project? Name it explicitly, or bind this folder by publishing" };
   }
   return { apiUrl, token, root, slug };
 }

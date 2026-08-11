@@ -14,7 +14,7 @@ const die = (msg: string): void => {
 
 const failMessage = (code: string | undefined, message: string | undefined): string => {
   const known: Record<string, string> = {
-    no_slug: message ?? "No published map for this project yet — run 'alkahest publish', or pass --slug <slug>.",
+    no_slug: `${message ?? "Which project?"}\n  Pass --slug <slug> — 'alkahest projects' lists them, or set ALKAHEST_PROJECT.`,
     invalid_token: "✗ Token invalid or revoked. Run 'alkahest login' again.",
     forbidden: "✗ Only a project member or collaborator can view history.",
     not_found: `✗ ${message ?? "Not found."}`,

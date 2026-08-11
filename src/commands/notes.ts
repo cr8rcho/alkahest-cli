@@ -18,7 +18,7 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
     invalid_token: "✗ Token invalid or revoked. Run 'alkahest login' again.",
     forbidden: "✗ Only the project owner or a collaborator can do this.",
     not_found: `✗ ${message ?? "Not found."}`,
-    no_slug: message ?? "No published map for this project yet.",
+    no_slug: `${message ?? "Which project?"}\n  Pass --slug <slug> — 'alkahest projects' lists them, or set ALKAHEST_PROJECT.`,
     slug_taken: `✗ ${message ?? "That note slug is already taken in this map."}`,
     ambiguous_map: `✗ ${message ?? "This project has several note maps."}\n  See them with 'alkahest maps list', or make a new one with 'alkahest maps create <slug> --type note'.`,
     reason_required: `✗ ${message ?? "Deleting requires a one-line reason."}\n  Pass --reason \"<why>\" — it shows in the Trash and the activity journal.`,

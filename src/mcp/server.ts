@@ -282,20 +282,21 @@ export function buildServer(): McpServer {
         "node's source location (screen → sourceFile/route/title, resource → path/label) so you can open the right file " +
         "and address it. Use this to drive development from feedback: read open comments, edit the code, then call " +
         "resolve_comment. Needs an API token (ALKAHEST_TOKEN in this server's config, or a prior 'alkahest login') " +
-        "and the project must have been published.",
+        "and the project named (see `project`).",
       inputSchema: {
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
         open: z.boolean().optional().describe("Only unresolved comments (default: false = all)"),
       },
     },
-    async ({ path, open }) => {
+    async ({ path, open, project }) => {
       const root = rootOf(path);
-      const res = await pullComments(root, { open });
+      const res = await pullComments(root, { open, slug: project });
       if (!res.ok) {
         const hints: Record<string, string> = {
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config (token from alkahest.app → Account).",
           no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
-          no_slug: "This project hasn't been published yet — run the publish tool first.",
+          no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
           invalid_token: "The API token is invalid or revoked — create a new one at alkahest.app → Account.",
           not_found: "No accessible project for this slug.",
         };
@@ -347,20 +348,21 @@ export function buildServer(): McpServer {
       inputSchema: {
         node: z.string().describe("screen id/route/title, resource id/path/label, or 'map'"),
         body: z.string().describe("the comment text"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ node, body, path }) => {
+    async ({ node, body, path, project }) => {
       const root = findProjectRoot(rootOf(path));
       const map = loadOrScan(root);
       if (!map) return text("No map for this project — run the scan/publish tools first.");
       const n = resolveNode(map, node);
       if (!n) return text(`No node matches '${node}'. Use the overview tool to list screens/resources.`);
-      const res = await postComment(root, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body });
+      const res = await postComment(root, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: project });
       if (!res.ok) {
         const hints: Record<string, string> = {
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
-          no_slug: "Publish this project first (publish tool).",
+          no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
           forbidden: "Only the project owner or a collaborator can comment.",
         };
         return text(`Add comment failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
@@ -408,18 +410,19 @@ export function buildServer(): McpServer {
         "already linked to an issue (creates a new one).",
       inputSchema: {
         ids: z.array(z.string()).min(1).describe("Comment ids to group into one issue (from the comments tool)"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
         title: z.string().optional().describe("Issue title (else derived from the comments)"),
         repo: z.string().optional().describe("Target GitHub repo owner/repo (else gh's default for the repo)"),
         force: z.boolean().optional().describe("File even if some selected comments are already tracked"),
       },
     },
-    async ({ ids, path, title, repo, force }) => {
-      const res = await fileCommentsIssue(rootOf(path), ids, { title, repo, force });
+    async ({ ids, path, title, repo, force, project }) => {
+      const res = await fileCommentsIssue(rootOf(path), ids, { title, repo, force, slug: project });
       if (!res.ok) {
         const hints: Record<string, string> = {
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
-          no_slug: "Publish this project first (publish tool).",
+          no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
           already_tracked: "Some comments already have an issue — pass force:true to file a new one.",
           gh_failed: "Install and authenticate the GitHub CLI (`gh auth login`) for this repo.",
           forbidden: "Only the project owner or a collaborator can file issues.",
@@ -436,7 +439,7 @@ export function buildServer(): McpServer {
   const issueHints: Record<string, string> = {
     no_token: "Set ALKAHEST_TOKEN in this MCP server's config (token from alkahest.app → Account).",
     no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
-    no_slug: "This project hasn't been published yet — run the publish tool first.",
+    no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
     invalid_token: "The API token is invalid or revoked — create a new one at alkahest.app → Account.",
     forbidden: "Only the project owner or a collaborator can write issues.",
     not_found: "Not found — list ids with the issues tool, or the project's issue maps with the maps tool.",
@@ -459,16 +462,17 @@ export function buildServer(): McpServer {
         "question awaits an answer), and awaitingDecision (open_questions > 0) — use actionable issues to decide what " +
         "to work on next. When you hit a decision you need the user to make mid-task, post it with ask_issue (the issue " +
         "stops being actionable until they answer and you resolve_issue_question). Read the thread with issue_comments. " +
-        "Needs an API token and a published project.",
+        "Needs an API token and a named project — pass `project` (a slug from list_projects) unless the folder is a linked checkout or ALKAHEST_PROJECT is set. No publish required.",
       inputSchema: {
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
         open: z.boolean().optional().describe("Only issues that are not done (default: false = all)"),
         map: z.string().optional().describe("Restrict to one issue map (a project can hold several; omit when there's one). List them with the maps tool."),
         q: z.string().optional().describe("Filter issues by title/body substring (server-side). Edges/links stay unfiltered, so blockedBy may name issues outside the filtered list."),
       },
     },
-    async ({ path, open, map, q }) => {
-      const res = await pullIssues(rootOf(path), { mapSlug: map, q });
+    async ({ path, open, map, q, project }) => {
+      const res = await pullIssues(rootOf(path), { mapSlug: map, q, slug: project });
       if (!res.ok || !res.graph) return issueFail("Read issues", res.code, res.message, res.maps);
       const states = deriveIssueStates(res.graph);
       const issues = res.graph.issues
@@ -509,10 +513,11 @@ export function buildServer(): McpServer {
         parent_id: z.string().optional().describe("Parent issue id — creates a contains edge (epic → task)"),
         target: z.string().optional().describe("Code-map target: 's:…'/'r:…' node key, '/route' (planned screen), or a resource label"),
         map: z.string().optional().describe("Which issue map to add to (a project can hold several; omit when there's one). List them with the maps tool, or create one with create_map."),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, type, status, body, priority, due_on, assignee_id, parent_id, target, map, path }) => {
+    async ({ title, type, status, body, priority, due_on, assignee_id, parent_id, target, map, path, project }) => {
       const targetFields = target
         ? {
             target_kind: (target.startsWith("s:") || target.startsWith("r:") ? "node" : target.startsWith("/") ? "route" : "resource") as
@@ -520,7 +525,7 @@ export function buildServer(): McpServer {
             target_key: target,
           }
         : {};
-      const res = await createIssue(rootOf(path), { title, type, status, body, priority, due_on, assignee_id, parent_id, mapSlug: map, ...targetFields });
+      const res = await createIssue(rootOf(path), { title, type, status, body, priority, due_on, assignee_id, parent_id, mapSlug: map, slug: project, ...targetFields });
       if (!res.ok || !res.issue) return issueFail("Add issue", res.code, res.message, res.maps);
       return json({ ok: true, issue: res.issue });
     },
@@ -855,20 +860,21 @@ export function buildServer(): McpServer {
         "Use it before creating anything (does a note/issue/task on this topic already exist?) and before linking " +
         "(which note should cite this issue?). Matching is a server-side substring over title + full body (and note " +
         "slug); results come back compact — note bodies as 240-char excerpts (read one in full with get_note), issues " +
-        "with status/type, tasks with done state. Notes and issues need a published project (they fail soft with a " +
-        "reason if there isn't one); tasks are yours and always searchable. For a deeper dive into one kind, use the " +
+        "with status/type, tasks with done state. Notes and issues need a named project (they fail soft with a " +
+        "reason if there isn't one — pass `project`); tasks are yours and always searchable. For a deeper dive into one kind, use the " +
         "notes / issues / list_tasks tools with their own `q`.",
       inputSchema: {
         q: z.string().describe("Text to find — substring match over titles and full bodies"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ q, path }) => {
+    async ({ q, path, project }) => {
       const root = rootOf(path);
       const [notesRes, issuesRes, tasksRes] = await Promise.all([
-        pullNotes(root, { q, bodies: "excerpt" }),
-        pullIssues(root, { q }),
-        pullTasks(root, { q, status: "all" }),
+        pullNotes(root, { q, bodies: "excerpt", slug: project }),
+        pullIssues(root, { q, slug: project }),
+        pullTasks(root, { q, status: "all", project }),
       ]);
       const notes = notesRes.ok && notesRes.maps
         ? notesRes.maps.flatMap((m) => m.notes.map((n: any) => ({ slug: n.slug, title: n.title, map: m.slug, folder: n.folder ?? null, excerpt: n.body ?? null })))
@@ -899,16 +905,17 @@ export function buildServer(): McpServer {
         "the notebook's property schema (key/type/options); notes carry their props values (reserved key `tags`). " +
         "ALWAYS check this before add_note when " +
         "recording knowledge: if a note on the topic exists, update_note it instead of adding a near-duplicate. " +
-        "`q` searches title/slug/FULL body server-side. Needs an API token and a published project.",
+        "`q` searches title/slug/FULL body server-side. Needs an API token and a named project — pass `project` (a slug from list_projects) unless the folder is a linked checkout or ALKAHEST_PROJECT is set. No publish required.",
       inputSchema: {
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
         q: z.string().optional().describe("Filter notes by title/slug/body substring (matches the full body)"),
         map: z.string().optional().describe("Restrict to one note map (default: all readable). List them with the maps tool."),
         full_bodies: z.boolean().optional().describe("Return complete bodies instead of 240-char excerpts (heavy on a big wiki)"),
       },
     },
-    async ({ path, q, map, full_bodies }) => {
-      const res = await pullNotes(rootOf(path), { mapSlug: map, q, bodies: full_bodies ? undefined : "excerpt" });
+    async ({ path, q, map, full_bodies, project }) => {
+      const res = await pullNotes(rootOf(path), { mapSlug: map, q, bodies: full_bodies ? undefined : "excerpt", slug: project });
       if (!res.ok || !res.maps) return issueFail("Read notes", res.code, res.message, res.mapList);
       return json({ ok: true, project: res.project, count: res.maps.reduce((n, m) => n + m.notes.length, 0), maps: res.maps });
     },
@@ -924,11 +931,12 @@ export function buildServer(): McpServer {
       inputSchema: {
         note: z.string().describe("Note slug (or id)"),
         map: z.string().optional().describe("Which note map (omit when the slug is unique across maps)"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ note, map, path }) => {
-      const res = await getNote(rootOf(path), { note, mapSlug: map });
+    async ({ note, map, path, project }) => {
+      const res = await getNote(rootOf(path), { note, mapSlug: map, slug: project });
       if (!res.ok || !res.note) return issueFail("Get note", res.code, res.message, res.mapList);
       const { ok: _ok, code: _code, message: _message, mapList: _ml, ...rest } = res;
       return json({ ok: true, ...rest });
@@ -952,11 +960,12 @@ export function buildServer(): McpServer {
         folder: z.string().optional().describe("Tree-sidebar path like 'raw/articles' (omit = unfiled) — the web viewer's Obsidian-style tree groups by it"),
         props: z.record(z.any()).optional().describe("Notebook properties (flat key→value): reserved key `tags` = string array; other keys should match the map's schema (see prop_defs in the notes tool) — unknown keys are kept but show as unregistered"),
         map: z.string().optional().describe("Which note map to add to (a project can hold several; omit when there's one). List them with the maps tool, or create one with create_map."),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, body, note_slug, folder, props, map, path }) => {
-      const res = await createNote(rootOf(path), { title, body, note_slug, folder, props, mapSlug: map });
+    async ({ title, body, note_slug, folder, props, map, path, project }) => {
+      const res = await createNote(rootOf(path), { title, body, note_slug, folder, props, mapSlug: map, slug: project });
       if (!res.ok || !res.note) return issueFail("Add note", res.code, res.message, res.maps);
       return json({ ok: true, note: res.note });
     },
@@ -977,11 +986,12 @@ export function buildServer(): McpServer {
         from: z.string().describe("Source note slug (or id)"),
         to: z.string().describe("Target: 'issue:<uuid>', or 'code:s:…' / 'code:r:…'"),
         remove: z.boolean().optional().describe("true → disconnect from→to instead"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ from, to, remove, path }) => {
-      const res = await linkNotes(rootOf(path), { from, to, remove });
+    async ({ from, to, remove, path, project }) => {
+      const res = await linkNotes(rootOf(path), { from, to, remove, slug: project });
       if (!res.ok) return issueFail(remove ? "Unlink notes" : "Link notes", res.code, res.message, res.maps);
       return json({ ok: true, ...(remove ? { removed: `${from} → ${to}` } : { linked: `${from} → ${to}` }) });
     },
@@ -999,11 +1009,12 @@ export function buildServer(): McpServer {
       inputSchema: {
         note: z.string().describe("Note slug (or id)"),
         map: z.string().optional().describe("Target note map (a project can hold several; omit when there's one). List them with the maps tool."),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ note, map, path }) => {
-      const res = await mapNote(rootOf(path), { noteRef: note, mapSlug: map });
+    async ({ note, map, path, project }) => {
+      const res = await mapNote(rootOf(path), { noteRef: note, mapSlug: map, slug: project });
       if (!res.ok) return issueFail("Move note", res.code, res.message, res.maps);
       return json({ ok: true, note: res.note, map: res.map });
     },
@@ -1033,11 +1044,12 @@ export function buildServer(): McpServer {
         reason: z.string().optional().describe("REQUIRED with delete (≤200 chars): a one-line reason the user sees in the Trash and the activity journal — say WHY the note should go, not just 'cleanup'"),
         restore: z.boolean().optional().describe("true → restore the note from the Trash (undoes a soft delete)"),
         map: z.string().optional().describe("Which note map (a project can hold several; omit when there's one)"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ note, title, body, new_slug, folder, props, delete: del, reason, restore, map, path }) => {
-      const res = await updateNote(rootOf(path), { note, title, body, new_slug, folder, props, delete: del, reason, restore, mapSlug: map });
+    async ({ note, title, body, new_slug, folder, props, delete: del, reason, restore, map, path, project }) => {
+      const res = await updateNote(rootOf(path), { note, title, body, new_slug, folder, props, delete: del, reason, restore, mapSlug: map, slug: project });
       const what = del ? "Delete note" : restore ? "Restore note" : "Update note";
       if (!res.ok) return issueFail(what, res.code, res.message, res.maps);
       if (res.deleted) {
@@ -1072,14 +1084,15 @@ export function buildServer(): McpServer {
         })).optional().describe("Definitions to register/merge onto the note map's schema"),
         remove: z.array(z.string()).optional().describe("Property definition key(s) to unregister; note values are kept. Reserved key `tags` is refused."),
         map: z.string().optional().describe("Which note map (a project can hold several; omit when there's one)"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ define, remove, map, path }) => {
+    async ({ define, remove, map, path, project }) => {
       if (!define?.length && !remove?.length) {
         return json({ ok: false, error: "bad_request", message: "Pass `define` (definitions to register) and/or `remove` (keys to unregister)." });
       }
-      const res = await editPropDefs(rootOf(path), { defs: define, remove, mapSlug: map });
+      const res = await editPropDefs(rootOf(path), { defs: define, remove, mapSlug: map, slug: project });
       if (!res.ok) return issueFail("Edit note props", res.code, res.message, res.maps);
       return json({ ok: true, added: res.added ?? 0, merged: res.merged ?? 0, removed: res.removed ?? 0, skipped: res.skipped ?? 0 });
     },
@@ -1093,14 +1106,15 @@ export function buildServer(): McpServer {
         "List the maps in this published project. A project is a container of many maps (ADR-011): code maps " +
         "(published from a scan) and issue maps — each with a per-project slug, addressed at /p/:project/:map. Maps " +
         "are equal (no default), so when a project has several of a type the publish / add_issue / issues tools return " +
-        "'ambiguous_map' — call this to see the slugs, then pass `map`. Needs an API token and a published project.",
+        "'ambiguous_map' — call this to see the slugs, then pass `map`. Needs an API token and a named project — pass `project` (a slug from list_projects) unless the folder is a linked checkout or ALKAHEST_PROJECT is set. No publish required.",
       inputSchema: {
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
         type: z.enum(["code", "issue", "note"]).optional().describe("Restrict to one type (default: all)"),
       },
     },
-    async ({ path, type }) => {
-      const res = await listMaps(rootOf(path), { type });
+    async ({ path, type, project }) => {
+      const res = await listMaps(rootOf(path), { type, slug: project });
       if (!res.ok || !res.maps) return issueFail("List maps", res.code, res.message);
       return json({ ok: true, slug: res.slug, count: res.maps.length, maps: res.maps });
     },
@@ -1111,8 +1125,10 @@ export function buildServer(): McpServer {
     {
       title: "List account projects & workspaces",
       description:
-        "List every workspace and project this account's token can reach (ADR-022). Use it to find a project's slug — " +
-        "e.g. to recover the right publish target after the local link was lost (a workspace move, a fresh clone, CI), " +
+        "List every workspace and project this account's token can reach (ADR-022). **This is how you get the `project` " +
+        "slug** the notes / issues / maps tools take — call it whenever the user names a project in words ('my wiki') " +
+        "and you don't have its slug, or when a tool answers no_slug. Also useful " +
+        "to recover the right publish target after the local link was lost (a workspace move, a fresh clone, CI), " +
         "or before publishing to confirm which existing project to update instead of creating a duplicate. Each project " +
         "includes isOwner (only owned projects can be re-published/overwritten) and per-code-map fingerprints " +
         "(screens/resources counts) so you can match a local scan by structure. Needs an API token; no project context.",
@@ -1149,15 +1165,17 @@ export function buildServer(): McpServer {
         "Show a code map's publish timeline (ADR-023) — when each publish happened, the screen/resource/" +
         "transition counts, and which nodes were added/removed since the previous publish. Use it to answer " +
         "'when did this last publish' and 'what changed' without diffing manually. Needs an API token and a " +
-        "published project; `map` picks the code map when the project has several (else the oldest).",
+        "named project (see `project`); `map` picks the code map when the project has several (else the oldest). " +
+        "This one DOES read published versions — an unpublished project simply has no history yet.",
       inputSchema: {
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
         map: z.string().optional().describe("Which code map (default: this checkout's / the oldest)"),
         limit: z.number().optional().describe("Max versions (default 50)"),
       },
     },
-    async ({ path, map, limit }) => {
-      const res = await listHistory(rootOf(path), { map, limit });
+    async ({ path, map, limit, project }) => {
+      const res = await listHistory(rootOf(path), { map, limit, slug: project });
       if (!res.ok || !res.versions) return issueFail("History", res.code, res.message);
       // Newest first; include count deltas vs the previous version so the agent needn't recompute.
       const vs = res.versions;
@@ -1191,11 +1209,12 @@ export function buildServer(): McpServer {
         slug: z.string().describe("The new map's slug (lowercase letters, numbers, dashes; the server slugifies)"),
         type: z.enum(["code", "issue", "note"]).optional().describe("Map type (default: issue)"),
         name: z.string().optional().describe("Display name (defaults to the slug)"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ slug, type, name, path }) => {
-      const res = await createMap(rootOf(path), { mapSlug: slug, type, mapName: name });
+    async ({ slug, type, name, path, project }) => {
+      const res = await createMap(rootOf(path), { mapSlug: slug, type, mapName: name, slug: project });
       if (!res.ok || !res.map) return issueFail("Create map", res.code, res.message);
       return json({ ok: true, map: res.map });
     },
@@ -1282,11 +1301,12 @@ export function buildServer(): McpServer {
         issue: z.string().describe("Issue id (from the issues tool)"),
         map: z.string().optional().describe("Which issue map (a project can hold several; omit when there's one). List them with the maps tool."),
         remove: z.boolean().optional().describe("true → take the issue off the map (the issue itself is never deleted)"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ issue, map, remove, path }) => {
-      const res = await mapIssue(rootOf(path), { issueId: issue, mapSlug: map, remove });
+    async ({ issue, map, remove, path, project }) => {
+      const res = await mapIssue(rootOf(path), { issueId: issue, mapSlug: map, remove, slug: project });
       if (!res.ok) return issueFail(remove ? "Unmap issue" : "Map issue", res.code, res.message, res.maps);
       return json({ ok: true, issue: res.issue, map: res.map, member: res.member });
     },
@@ -1306,11 +1326,12 @@ export function buildServer(): McpServer {
       inputSchema: {
         issue: z.string().optional().describe("Restrict to one issue's thread (issue id from the issues tool)"),
         open: z.boolean().optional().describe("Only unresolved comments — the decisions still awaiting an answer (default: false)"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ issue, open, path }) => {
-      const res = await pullIssueComments(rootOf(path), { issue, open });
+    async ({ issue, open, path, project }) => {
+      const res = await pullIssueComments(rootOf(path), { issue, open, slug: project });
       if (!res.ok || !res.comments) return issueFail("Read issue comments", res.code, res.message);
       return json({ ok: true, count: res.comments.length, comments: res.comments });
     },
@@ -1402,15 +1423,16 @@ export function buildServer(): McpServer {
         id: z.string().describe("Issue id to complete (from the issues tool)"),
         result: z.string().describe("What you did / the outcome — recorded as a 'result' comment on the issue"),
         status: z.string().optional().describe("Terminal status id from issue_config (default: the first terminal status, usually 'done')"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ id, result, status, path }) => {
+    async ({ id, result, status, path, project }) => {
       const root = rootOf(path);
       // Resolve the terminal status to move to (explicit, else the project's first terminal status).
       let target = status;
       if (!target) {
-        const g = await pullIssues(root, {});
+        const g = await pullIssues(root, { slug: project });
         if (!g.ok || !g.graph) return issueFail("Complete issue", g.code, g.message, g.maps);
         const terminal = [...terminalStatuses(g.graph.issue_config)];
         if (!terminal.length) return text("Complete issue failed: this project's issue_config has no terminal status. Set one, or use update_issue with an explicit status.");

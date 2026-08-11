@@ -55,7 +55,14 @@ export function localMapSlug(root: string): string | undefined {
   return undefined;
 }
 
-/** Resolve { root, slug, mapSlug } from any path: explicit → local file → saved creds (by root/path). */
+/**
+ * Resolve { root, slug, mapSlug } from any path:
+ * explicit → local file → saved creds (by root/path) → ALKAHEST_PROJECT.
+ *
+ * The env var is the LAST fallback on purpose (same shape as ALKAHEST_TOKEN in
+ * credentials.ts): it lets an MCP server be configured for one project — a personal wiki,
+ * say — without a checkout to bind, while a real linked checkout still wins over it.
+ */
 export function resolveProject(
   path: string,
   explicitSlug?: string,
@@ -66,7 +73,9 @@ export function resolveProject(
     explicitSlug ||
     localSlug(root) ||
     creds.projects?.[root]?.slug ||
-    creds.projects?.[resolve(path || ".")]?.slug;
+    creds.projects?.[resolve(path || ".")]?.slug ||
+    process.env.ALKAHEST_PROJECT?.trim() ||
+    undefined;
   const mapSlug =
     localMapSlug(root) ||
     creds.projects?.[root]?.mapSlug ||

@@ -19,7 +19,7 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
     invalid_token: "✗ Token invalid or revoked. Run 'alkahest login' again.",
     forbidden: "✗ Only a project member or collaborator can do this.",
     not_found: `✗ ${message ?? "Not found."}`,
-    no_slug: message ?? "No published map for this project yet — run 'alkahest publish', or pass --slug <slug>.",
+    no_slug: `${message ?? "Which project?"}\n  Pass --slug <slug> — 'alkahest projects' lists them, or set ALKAHEST_PROJECT.`,
     slug_taken: `✗ ${message ?? "A map with that slug already exists."}`,
   };
   return known[code ?? ""] ?? `${action} failed: ${message}`;

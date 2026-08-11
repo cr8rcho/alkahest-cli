@@ -125,7 +125,7 @@ export async function pullComments(path: string, params: PullParams = {}): Promi
       ok: false,
       root,
       code: "no_slug",
-      message: "No published map for this project yet — run 'alkahest publish', or pass --slug <slug>.",
+      message: "Which project? Name it explicitly, or bind this folder by publishing",
     };
   }
 
@@ -302,7 +302,7 @@ export async function postComment(path: string, params: PostParams): Promise<Pos
     reqBody = { parent_id: params.parent_id, body: params.body };
   } else {
     const { slug, mapSlug: knownMap } = resolveProject(path, params.slug);
-    if (!slug) return { ok: false, code: "no_slug", message: "No published map for this project — run 'alkahest publish', or pass --slug." };
+    if (!slug) return { ok: false, code: "no_slug", message: "Which project? Name it explicitly, or bind this folder by publishing" };
     if (!params.node_key) return { ok: false, code: "no_node", message: "node_key is required for a new comment." };
     reqBody = { slug, mapSlug: params.mapSlug ?? knownMap, node_key: params.node_key, anchor_kind: params.anchor_kind, anchor_label: params.anchor_label, body: params.body };
   }

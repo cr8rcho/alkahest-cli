@@ -200,6 +200,21 @@ claude mcp add alkahest -s project \
 
 > 백엔드를 직접 셀프호스팅한다면 `-e ALKAHEST_API_URL=https://<ref>.supabase.co/functions/v1` (또는 `alkahest login --api <url>`)로 CLI를 그쪽으로 가리키세요.
 
+**체크아웃 없이 쓰기 — 노트·이슈·맵.** 폴더에서 나오는 건 코드맵뿐입니다. 노트·이슈·맵은 **프로젝트 slug**로 주소를 잡으므로, 지금 폴더가 전혀 모르는 프로젝트에도 쓸 수 있고 **그 프로젝트가 발행된 적이 없어도 됩니다**:
+
+```
+notes / add_note / issues / add_issue / maps / create_map / search / …
+  → project: "my-wiki-2772c2"      # list_projects 도구가 알려주는 slug
+```
+
+`alkahest publish` 는 체크아웃을 프로젝트에 묶고(`.alkahest/project.json`), 그런 폴더 안에서는 이 파라미터가 불필요합니다. 그 밖에서는 프로젝트를 지목하세요. MCP 서버 하나를 한 프로젝트 전용(예: 개인 위키)으로 고정하려면 설정에 한 번만 넣으면 됩니다:
+
+```json
+{ "env": { "ALKAHEST_TOKEN": "alk_xxxxx", "ALKAHEST_PROJECT": "my-wiki-2772c2" } }
+```
+
+환경변수는 **최후 폴백**입니다 — 연결된 체크아웃이 항상 이기므로, 위키용으로 설정한 서버가 실제 코드 프로젝트를 가로채지 않습니다. CLI에서는 같은 주소가 `--slug <slug>` 입니다(`alkahest projects` 로 목록 확인).
+
 ## 산출물 — `.alkahest/`
 
 ```
