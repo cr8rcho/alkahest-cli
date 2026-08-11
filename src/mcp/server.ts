@@ -482,6 +482,8 @@ export function buildServer(): McpServer {
         ok: true,
         slug: res.graph.slug,
         issue_config: res.graph.issue_config,
+        // The issue map's property schema (ADR-079) — issues carry their `props` values.
+        prop_defs: res.graph.prop_defs ?? [],
         // Members = @mention targets for ask_issue (route a decision to a specific person, ADR-020 §9).
         members: res.graph.members,
         count: issues.length,
@@ -510,6 +512,7 @@ export function buildServer(): McpServer {
         priority: z.enum(["none", "low", "medium", "high", "urgent"]).optional().describe("Priority (default: none)"),
         due_on: z.string().optional().describe("Due date as YYYY-MM-DD"),
         assignee_id: z.string().optional().describe("Assign to a project member (user id)"),
+        props: z.record(z.any()).optional().describe("Issue properties (ADR-079, flat key→value): reserved key `tags` = string array; other keys should match the issue map's schema (see prop_defs in the issues tool) — unknown keys are kept but show as unregistered"),
         parent_id: z.string().optional().describe("Parent issue id — creates a contains edge (epic → task)"),
         target: z.string().optional().describe("Code-map target: 's:…'/'r:…' node key, '/route' (planned screen), or a resource label"),
         map: z.string().optional().describe("Which issue map to add to (a project can hold several; omit when there's one). List them with the maps tool, or create one with create_map."),
@@ -517,7 +520,7 @@ export function buildServer(): McpServer {
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, type, status, body, priority, due_on, assignee_id, parent_id, target, map, path, project }) => {
+    async ({ title, type, status, body, priority, due_on, assignee_id, props, parent_id, target, map, path, project }) => {
       const targetFields = target
         ? {
             target_kind: (target.startsWith("s:") || target.startsWith("r:") ? "node" : target.startsWith("/") ? "route" : "resource") as
@@ -525,7 +528,7 @@ export function buildServer(): McpServer {
             target_key: target,
           }
         : {};
-      const res = await createIssue(rootOf(path), { title, type, status, body, priority, due_on, assignee_id, parent_id, mapSlug: map, slug: project, ...targetFields });
+      const res = await createIssue(rootOf(path), { title, type, status, body, priority, due_on, assignee_id, props, parent_id, mapSlug: map, slug: project, ...targetFields });
       if (!res.ok || !res.issue) return issueFail("Add issue", res.code, res.message, res.maps);
       return json({ ok: true, issue: res.issue });
     },
@@ -1238,11 +1241,12 @@ export function buildServer(): McpServer {
         due_on: z.string().optional().describe("New due date YYYY-MM-DD; pass '' to clear"),
         assignee_id: z.string().optional().describe("Assign to a project member (user id); pass '' to unassign"),
         target: z.string().optional().describe("New code-map target ('s:…'/'r:…'/'/route'/resource label); pass '' to clear"),
+        props: z.record(z.any()).optional().describe("Properties patch (ADR-079), SHALLOW-merged: a null value deletes that key; other keys are untouched. See prop_defs in the issues tool."),
         delete: z.boolean().optional().describe("Delete the issue instead of updating it"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ id, status, title, body, type, priority, due_on, assignee_id, target, delete: del, path }) => {
+    async ({ id, status, title, body, type, priority, due_on, assignee_id, target, props, delete: del, path }) => {
       const set: Record<string, unknown> = {};
       if (status !== undefined) set.status = status;
       if (title !== undefined) set.title = title;
@@ -1251,6 +1255,7 @@ export function buildServer(): McpServer {
       if (priority !== undefined) set.priority = priority;
       if (due_on !== undefined) set.due_on = due_on === "" ? null : due_on;
       if (assignee_id !== undefined) set.assignee_id = assignee_id === "" ? null : assignee_id;
+      if (props !== undefined) set.props = props;
       if (target !== undefined) {
         if (target === "") Object.assign(set, { target_kind: null, target_key: null });
         else {

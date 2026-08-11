@@ -33,6 +33,8 @@ export interface Issue {
   target_kind: "node" | "route" | "resource" | null;
   target_key: string | null;
   shipped_map_version_id: string | null;
+  /** Issue properties (ADR-079): flat object; reserved key `tags` = string array. */
+  props?: Record<string, unknown> | null;
   /** Unresolved decision questions on this issue (ADR-020). >0 ⇒ awaiting a human answer. */
   open_questions?: number;
   created_by: string | null;
@@ -81,6 +83,8 @@ export interface IssueGraph {
   issue_config: IssueConfig;
   /** Project members — @mention targets for routing a decision (ADR-020 §9). */
   members: IssueMember[];
+  /** The issue map's property schema (ADR-079 — the scoped/sole map's; [] when ambiguous). */
+  prop_defs?: { key: string; type: string; options: string[] | null; sort: number }[];
   issues: Issue[];
   edges: IssueEdge[];
   links: IssueMapLink[];
@@ -186,6 +190,7 @@ export async function pullIssues(path: string, params: PullIssuesParams = {}): P
       slug: ctx.slug!,
       name: proj?.name ?? null,
       issue_config: proj?.issue_config ?? { nodeTypes: [], statuses: [] },
+      prop_defs: proj?.prop_defs ?? [],
       members: proj?.members ?? [],
       issues: proj?.issues ?? [],
       edges: proj?.edges ?? [],
@@ -212,6 +217,8 @@ export interface CreateIssueParams {
   assignee_id?: string | null;
   target_kind?: "node" | "route" | "resource";
   target_key?: string;
+  /** Issue properties (ADR-079): flat object; reserved key `tags` = string array. */
+  props?: Record<string, unknown>;
   /** Existing issue id — creates a contains edge parent→new (epic→task). */
   parent_id?: string;
   links?: { node_key: string; kind: "navigate" | "call" }[];
@@ -244,6 +251,7 @@ export async function createIssue(path: string, params: CreateIssueParams): Prom
     assignee_id: params.assignee_id ?? null,
     target_kind: params.target_kind ?? null,
     target_key: params.target_key ?? null,
+    props: params.props,
     parent_id: params.parent_id,
     links: params.links,
   });
@@ -265,6 +273,8 @@ export interface UpdateIssueParams {
     assignee_id?: string | null;
     target_kind?: "node" | "route" | "resource" | null;
     target_key?: string | null;
+    /** ADR-079: SHALLOW-merged — a null value deletes that key; null clears all. */
+    props?: Record<string, unknown> | null;
   };
   /** Edge specs name the OTHER endpoint; the issue `id` fills the omitted side. */
   add_edges?: { from?: string; to?: string; kind: IssueEdge["kind"] }[];

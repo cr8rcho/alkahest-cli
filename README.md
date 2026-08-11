@@ -179,7 +179,7 @@ Or add it to any MCP-capable agent's config directly:
 | `add_comment` / `reply_comment` | leave a new comment on a map node / reply under an existing one (needs a token) |
 | `comment_to_issue` | group one or more map comments into a single GitHub issue (via local `gh`) and link it back onto each, so the hosted viewer shows a "tracked" badge (needs a token) |
 | `issues` | read the project's **Issue Map** — a dependency-first issue tracker drawn as a graph. Each issue comes with derived state: `done` and `actionable` (nothing unfinished blocks it), so the agent can pick what to work on next (needs a token) |
-| `add_issue` | create an issue while planning with the user — `parent_id` groups under an epic, `target` ties it to the code map (existing node key, or a planned `/route` that converges when the screen ships) (needs a token) |
+| `add_issue` | create an issue while planning with the user — `parent_id` groups under an epic, `target` ties it to the code map (existing node key, or a planned `/route` that converges when the screen ships); `props` sets issue properties (reserved key `tags`) (needs a token) |
 | `update_issue` | move status (e.g. to done when the work ships — progress gets painted onto the map), edit fields, or delete (needs a token) |
 | `link_issues` | add/remove an edge between issues: `blocks` (dependency), `contains` (epic→task), `relates` (needs a token) |
 | `map_issue` | place an issue on an issue map, or take it off with `remove` — issue maps are lenses over the project's issue pool, so an issue can appear on several maps; removing it from one never deletes the issue (needs a token) |
