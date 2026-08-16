@@ -18,9 +18,15 @@ import { createNote, mapNote, pullNotes, registerPropDefs, updateNote, type Prop
  *    on the target note map so the web shows typed rows. `title`/`created`/`updated`/cssclass
  *    keys are skipped (title feeds the note title; timestamps collide with real columns).
  *
- * Idempotent by title: a file whose title matches an existing note (case-insensitive)
- * updates that note's body instead of creating a duplicate, so re-running an import
- * refreshes the map.
+ * Idempotent by SOURCE, then by title: every imported note is stamped with a `source_path`
+ * prop (frontmatter `source_path:` override > the file's path relative to the import root),
+ * and a file whose source matches an existing note updates that note IN PLACE — including a
+ * title change, so retitling a document no longer mints a duplicate and orphans the old note.
+ * Files without a source match fall back to the original case-insensitive title match (which
+ * is also the upgrade path: the first re-import after this change matches by title and stamps
+ * the source). Staged/transformed trees whose on-disk layout is derived (e.g. a docs mirror
+ * whose filenames follow titles) should write the ORIGINAL repo path into `source_path:`
+ * frontmatter so the identity survives the transform.
  *
  * Like notes.ts, everything returns a structured result and never writes to stdout.
  */
@@ -38,10 +44,16 @@ export interface ImportFilePlan {
   props: Record<string, unknown>;
   /** Tree path = the file's subdirectory relative to the import root ('' at the root). */
   folder: string;
+  /** Rename-safe identity stamped into props.source_path (frontmatter override > relpath). */
+  source: string;
   /** Normalized [[wikilink]] targets found in the body (deduped, self-links dropped). */
   links: string[];
   /** What the import will do with it: create | update. */
   action: "create" | "update";
+  /** For updates: which key found the existing note. */
+  matched_by?: "source" | "title";
+  /** For source-matched updates whose title changed: the note is retitled in place. */
+  retitle?: boolean;
 }
 
 export interface NotesImportParams {
@@ -64,6 +76,8 @@ export interface NotesImportResult {
   files?: ImportFilePlan[];
   created?: number;
   updated?: number;
+  /** Of the updates: notes retitled in place via a source_path match (no duplicate minted). */
+  renamed?: number;
   linked?: number;
   /** Files whose frontmatter yielded properties. */
   withProps?: number;
@@ -98,6 +112,12 @@ function walkMarkdown(root: string): string[] {
 /** Frontmatter keys that never become props: title feeds the note title, timestamps collide
  *  with the hosted real columns, css/position are Obsidian display internals. */
 const SKIPPED_KEYS = new Set(["title", "created", "updated", "cssclass", "cssclasses", "position"]);
+
+/** Reserved provenance prop: the import's rename-safe identity key. Harvested from frontmatter
+ *  as an override, else derived from the file's path relative to the import root; stamped into
+ *  props on every write; matched BEFORE title so retitled documents update in place. Never
+ *  registered as a notebook prop def (like `tags`). */
+const SOURCE_KEY = "source_path";
 
 /** One scalar: strip quotes, coerce booleans/numbers, keep everything else a string. */
 function scalar(v: string): unknown {
@@ -221,22 +241,44 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
   // pages that already live on the hosted wiki.
   const pull = await pullNotes(path, { api: params.api, token: params.token, slug: params.slug, bodies: "none" });
   if (!pull.ok) return { ok: false, code: pull.code, message: pull.message, maps: pull.mapList };
-  const existingByTitle = new Map<string, { id: string; slug: string }>();
+  const existingByTitle = new Map<string, { id: string; slug: string; title: string }>();
+  const existingBySource = new Map<string, { id: string; slug: string; title: string }>();
   for (const m of pull.maps ?? []) {
-    for (const n of m.notes) existingByTitle.set(n.title.trim().toLowerCase(), { id: n.id, slug: n.slug });
+    for (const n of m.notes) {
+      existingByTitle.set(n.title.trim().toLowerCase(), { id: n.id, slug: n.slug, title: n.title });
+      const src = n.props?.[SOURCE_KEY];
+      if (typeof src === "string" && src.trim()) existingBySource.set(src.trim(), { id: n.id, slug: n.slug, title: n.title });
+    }
   }
+  /** Source first (rename-safe identity), title as the fallback/upgrade path. */
+  const findExisting = (source: string, titleKey: string) =>
+    existingBySource.has(source)
+      ? { note: existingBySource.get(source)!, matched_by: "source" as const }
+      : existingByTitle.has(titleKey)
+        ? { note: existingByTitle.get(titleKey)!, matched_by: "title" as const }
+        : null;
 
   const plans: ImportFilePlan[] = files.map((file) => {
     const { title: fmTitle, props, rest } = parseFrontmatter(readFileSync(file, "utf8"));
+    // The provenance override rides in as a prop — pull it out so it never double-registers.
+    const fmSource = typeof props[SOURCE_KEY] === "string" ? String(props[SOURCE_KEY]).trim() : "";
+    delete props[SOURCE_KEY];
     const name = basename(file, ".md").trim();
     const title = fmTitle || name;
     const body = rest.trim();
     const links = extractLinks(body).filter((t) => t.toLowerCase() !== name.toLowerCase());
-    const action = existingByTitle.has(title.trim().toLowerCase()) ? "update" as const : "create" as const;
+    const source = fmSource || relative(params.dir, file).split(sep).join("/");
+    const hit = findExisting(source, title.trim().toLowerCase());
     // The vault's directory structure becomes the note's tree path (cloud ADR-035).
     const rel = relative(params.dir, dirname(file));
     const folder = rel && rel !== "." ? rel.split(sep).join("/") : "";
-    return { file, title, name, body, props, links, action, folder };
+    return {
+      file, title, name, body, props, links, folder, source,
+      action: hit ? "update" as const : "create" as const,
+      ...(hit ? { matched_by: hit.matched_by } : {}),
+      ...(hit && hit.matched_by === "source" && hit.note.title.trim().toLowerCase() !== title.trim().toLowerCase()
+        ? { retitle: true } : {}),
+    };
   });
 
   if (params.dryRun) {
@@ -248,35 +290,42 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
       ok: true, files: plans,
       created: plans.filter((p) => p.action === "create").length,
       updated: plans.filter((p) => p.action === "update").length,
+      renamed: plans.filter((p) => p.retitle).length,
       linked: plans.reduce((n, p) => n + p.links.filter((t) => resolvable.has(t.toLowerCase())).length, 0),
       withProps: plans.filter((p) => Object.keys(p.props).length > 0).length,
       unresolved,
     };
   }
 
-  // Write pass 1 — the notes.
+  // Write pass 1 — the notes. Every write stamps the source_path prop (shallow-merged), so a
+  // pre-source pool upgrades itself: the first re-import matches by title and stamps identity.
   const failures: { file: string; message: string }[] = [];
-  let created = 0, updated = 0;
+  let created = 0, updated = 0, renamed = 0;
   for (const p of plans) {
     const shared = { api: params.api, token: params.token, slug: params.slug };
-    const existing = existingByTitle.get(p.title.trim().toLowerCase());
-    if (existing) {
+    const hit = findExisting(p.source, p.title.trim().toLowerCase());
+    if (hit) {
+      const retitle = hit.matched_by === "source" && hit.note.title.trim().toLowerCase() !== p.title.trim().toLowerCase();
       const res = await updateNote(path, {
-        ...shared, note: existing.id, body: p.body, folder: p.folder || null,
-        ...(Object.keys(p.props).length ? { props: p.props } : {}), // shallow-merge server-side
+        ...shared, note: hit.note.id, body: p.body, folder: p.folder || null,
+        ...(retitle ? { title: p.title } : {}), // source identity survives a retitle — update in place
+        props: { ...p.props, [SOURCE_KEY]: p.source }, // shallow-merge server-side
       });
       if (!res.ok || !res.note) { failures.push({ file: p.file, message: res.message ?? res.code ?? "update failed" }); continue; }
       // The note may live on other maps only — make sure it sits on the target map too.
-      const mem = await mapNote(path, { ...shared, noteRef: existing.id, mapSlug: params.mapSlug });
+      const mem = await mapNote(path, { ...shared, noteRef: hit.note.id, mapSlug: params.mapSlug });
       if (!mem.ok) { failures.push({ file: p.file, message: mem.message ?? mem.code ?? "map failed" }); continue; }
+      existingBySource.set(p.source, { id: hit.note.id, slug: hit.note.slug, title: p.title });
       updated++;
+      if (retitle) renamed++;
     } else {
       const res = await createNote(path, {
         ...shared, mapSlug: params.mapSlug, title: p.title, body: p.body, folder: p.folder || undefined,
-        ...(Object.keys(p.props).length ? { props: p.props } : {}),
+        props: { ...p.props, [SOURCE_KEY]: p.source },
       });
       if (!res.ok || !res.note) { failures.push({ file: p.file, message: res.message ?? res.code ?? "create failed" }); continue; }
-      existingByTitle.set(p.title.trim().toLowerCase(), { id: res.note.id, slug: res.note.slug });
+      existingByTitle.set(p.title.trim().toLowerCase(), { id: res.note.id, slug: res.note.slug, title: res.note.title });
+      existingBySource.set(p.source, { id: res.note.id, slug: res.note.slug, title: res.note.title });
       created++;
     }
   }
@@ -306,7 +355,7 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
   }
 
   return {
-    ok: true, files: plans, created, updated, linked,
+    ok: true, files: plans, created, updated, renamed, linked,
     withProps: plans.filter((p) => Object.keys(p.props).length > 0).length,
     defsAdded, defsMerged,
     unresolved: [...unresolvedSet], failures,

@@ -111,7 +111,7 @@ alkahest notes list             # list a note map's notes (--q to search); show 
 alkahest notes update <slug>    # edit a note in place (--title/--body/--rename; --props '{"k":v}' sets property values, null deletes a key) — update, don't re-add
 alkahest notes delete <slug>    # move a note to the Trash (soft delete; --reason "<why>" required, restorable for 30 days); restore <slug> undoes
 alkahest notes map <slug>       # place a pool note on a note map (--map), or take it off with --remove (never deletes the note)
-alkahest notes import <dir>     # import an Obsidian-style folder of .md files: one note per file, [[wikilinks]] → explicit edges (--map, --exclude, --dry-run; re-run to refresh)
+alkahest notes import <dir>     # import an Obsidian-style folder of .md files: one note per file (--map, --exclude, --dry-run; re-run to refresh — idempotent by source_path prop, then title, so retitled docs update in place)
 alkahest notes props            # edit a note map's property schema — --define <key:type[:opt,opt]…> registers, --remove <key…> unregisters (values kept, shown "unregistered"; --map)
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```

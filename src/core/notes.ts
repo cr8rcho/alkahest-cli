@@ -24,6 +24,9 @@ export interface Note {
   body_more?: boolean;
   /** Tree-sidebar path like 'raw/articles' (cloud ADR-035); null = unfiled. */
   folder?: string | null;
+  /** Notebook properties (cloud ADR-044) — flat values; reserved keys: `tags`, `source_path`
+   *  (import provenance, the rename-safe identity key — see notesImport.ts). */
+  props?: Record<string, unknown> | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

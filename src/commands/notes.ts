@@ -197,7 +197,8 @@ export async function notesImport(dir: string, options: NotesImportOptions): Pro
     return die(failMessage(res.code, res.message, "notes import"));
   }
   const label = options.dryRun ? "would import" : "imported";
-  console.log(`[alkahest] ${label} ${res.files?.length ?? 0} file(s): ${res.created} new, ${res.updated} updated — ${res.linked} [[ref]](s) resolve (drawn from the text at read time)`);
+  const renames = res.renamed ? `, ${res.renamed} retitled in place (source_path match)` : "";
+  console.log(`[alkahest] ${label} ${res.files?.length ?? 0} file(s): ${res.created} new, ${res.updated} updated${renames} — ${res.linked} [[ref]](s) resolve (drawn from the text at read time)`);
   if (res.withProps) {
     const schema = options.dryRun
       ? "schema will be registered on the map"
