@@ -4,7 +4,7 @@
       "id": "as-built",
       "name": "as-built docs",
       "description": "Living as-built documentation + an ADR log, written by your agent and mirrored to note maps.",
-      "skills": ["as-built-docs", "adr"],
+      "skills": ["alkahest/as-built-docs", "alkahest/adr"],
       "maps": ["as-built", "adr"],
       "contents": ["skills", "scaffold", "claude-snippet", "sync-script"]
     }

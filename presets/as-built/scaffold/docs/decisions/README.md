@@ -2,7 +2,7 @@
 
 This folder collects **Architecture Decision Records** — the why / alternatives /
 trade-offs of decisions, frozen at decision time. Writing instructions and the template
-live in the `adr` account skill (read it via the alkahest MCP `skills` tool).
+live in the `alkahest/adr` account skill (read it via the alkahest MCP `skills` tool).
 
 Quick rules:
 

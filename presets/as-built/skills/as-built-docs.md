@@ -1,4 +1,4 @@
-# as-built-docs — writing instructions
+# alkahest/as-built-docs — writing instructions
 
 You are maintaining this repository's **as-built documentation**: documents that record how
 the system **is actually built**. Never plans, PRDs, or aspirations — present tense, code as
@@ -25,7 +25,7 @@ summary + link in the other.
 Title each document with a **classed H1**: `# System — <name>`, `# Component — <name>`,
 `# Feature — <name>`, `# Module — <name>`. The note-map mirror strips the class prefix,
 so the hosted note is titled just `<name>` while the file stays unambiguous in the repo.
-(ADRs have their own H1 shape — see the `adr` skill.)
+(ADRs have their own H1 shape — see the `alkahest/adr` skill.)
 
 ## Bootstrap — when the repo has no docs yet
 
@@ -35,7 +35,7 @@ the user sees a map fast:
 1. `docs/system/<app>.md` — one system map: layers, data flow, key dependencies, honest
    Known Limitations.
 2. Two or three `docs/modules/*.md` for the load-bearing modules only.
-3. One decision record (see the `adr` skill): **ADR-001, an architecture snapshot** — the
+3. One decision record (see the `alkahest/adr` skill): **ADR-001, an architecture snapshot** — the
    decisions already embedded in the current code.
 4. Add each document to the index in `docs/README.md`, then **mirror to the note maps and
    hand the user the map link** (the mirroring rule lives in this repo's CLAUDE.md).
@@ -52,7 +52,7 @@ code changes touch.
 - **As-built, present tense** — "this is how it is built." Cite real file paths, function
   names, and constants so readers can jump straight to code.
 - **Decision history is a separate axis** — why / alternatives / trade-offs belong in ADRs
-  (`docs/decisions/`, see the `adr` skill), not in these documents.
+  (`docs/decisions/`, see the `alkahest/adr` skill), not in these documents.
 - **Known Limitations, honestly** — the most valuable section of a post-hoc document.
   Remove limitations you fixed; add the ones you introduced.
 - **Overwrite freely** — these documents always describe the present. (ADRs are the

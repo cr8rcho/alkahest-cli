@@ -2,7 +2,7 @@
 
 This directory holds this repository's **as-built documentation** — documents that record
 how the system is actually built (never plans or PRDs). Writing instructions live in the
-`as-built-docs` account skill (read it via the alkahest MCP `skills` tool).
+`alkahest/as-built-docs` account skill (read it via the alkahest MCP `skills` tool).
 
 ## Layers
 

@@ -1,4 +1,4 @@
-# adr — decision records
+# alkahest/adr — decision records
 
 ADRs (`docs/decisions/NNN-kebab-title.md`) record the **why** of decisions: context,
 alternatives, trade-offs. They are a separate axis from as-built docs — as-built documents

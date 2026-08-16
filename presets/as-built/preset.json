@@ -3,8 +3,8 @@
   "name": "as-built docs",
   "description": "Living as-built documentation + an ADR log, written by your agent and mirrored to note maps.",
   "skills": [
-    { "name": "as-built-docs", "file": "skills/as-built-docs.md" },
-    { "name": "adr", "file": "skills/adr.md" }
+    { "name": "alkahest/as-built-docs", "file": "skills/as-built-docs.md" },
+    { "name": "alkahest/adr", "file": "skills/adr.md" }
   ],
   "scaffold": "scaffold",
   "snippet": "CLAUDE-snippet.md",
