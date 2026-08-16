@@ -9,6 +9,7 @@ import { login } from "./commands/login.js";
 import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
 import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
+import { docsInitCmd, presetsList } from "./commands/docs.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
 import { history } from "./commands/history.js";
@@ -352,6 +353,25 @@ notes
   .option("--map <slug>", "which note map (a project can hold several)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((note: string, opts: Parameters<typeof notesRestore>[1]) => notesRestore(note, opts));
+
+const docs = program
+  .command("docs")
+  .description("repo documentation workflow — install a docs preset (living as-built docs + ADR log, mirrored to note maps)");
+docs
+  .command("init")
+  .description("install a docs preset: account skills (upsert by name, existing kept) + docs/ scaffold + reference sync script + note maps + CLAUDE.md snippet (opt-in append)")
+  .option("--preset <id>", "preset id (see `alkahest presets`)", "as-built")
+  .option("--force", "overwrite existing same-name skills with the preset bodies (default: keep yours)", false)
+  .option("--claude-md", "append the CLAUDE.md snippet without prompting (non-interactive runs print it instead)", false)
+  .option("--path <dir>", "repo root to scaffold into", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path; note maps are skipped without one)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((opts: Parameters<typeof docsInitCmd>[0]) => docsInitCmd(opts));
+
+program
+  .command("presets")
+  .description("list the installable docs presets (the same registry the web gallery reads)")
+  .action(() => presetsList());
 
 const maps = program
   .command("maps")

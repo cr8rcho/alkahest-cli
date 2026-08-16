@@ -113,6 +113,8 @@ alkahest notes delete <slug>    # move a note to the Trash (soft delete; --reaso
 alkahest notes map <slug>       # place a pool note on a note map (--map), or take it off with --remove (never deletes the note)
 alkahest notes import <dir>     # import an Obsidian-style folder of .md files: one note per file (--map, --exclude, --dry-run; re-run to refresh — idempotent by source_path prop, then title, so retitled docs update in place)
 alkahest notes props            # edit a note map's property schema — --define <key:type[:opt,opt]…> registers, --remove <key…> unregisters (values kept, shown "unregistered"; --map)
+alkahest presets                # list the installable docs presets (opinionated documentation workflows)
+alkahest docs init              # install a docs preset: account skills + docs/ scaffold + reference sync script + note maps + CLAUDE.md snippet (--preset, --force, --claude-md) — everything rides public primitives, so your own setup loses nothing by skipping it
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 

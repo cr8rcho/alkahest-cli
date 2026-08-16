@@ -10,7 +10,8 @@
     "alkahest": "dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "presets"
   ],
   "engines": {
     "node": ">=20"
