@@ -38,6 +38,13 @@ one **surface** tag (the area of the product it touches) plus at most two **arc*
 node — keep every tag attached to roughly 3–12 ADRs so the map stays legible, and prefer
 reusing an existing tag over inventing a new one.
 
+**The vocabulary lives in `docs/decisions/README.md`'s tag table, and the repo owns it.**
+On the bootstrap pass, seed it: derive 3–7 surface tags from the codebase's *actual* areas
+(the folders/verticals you just documented), record them in the table, and tag ADR-001 from
+that set. Afterwards, every ADR picks from the table; a genuinely new tag means adding its
+row in the same commit. Arc tags are not invented up front — they emerge when several ADRs
+turn out to share a storyline.
+
 ## Template
 
 ```markdown
