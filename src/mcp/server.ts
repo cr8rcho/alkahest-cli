@@ -53,7 +53,18 @@ export interface RemoteOptions {
 }
 
 export function buildServer(remote?: RemoteOptions): McpServer {
-  const server = new McpServer({ name: "alkahest", version: pkg.version });
+  const server = new McpServer({
+    name: "alkahest",
+    title: "Alkahest",
+    version: pkg.version,
+    // Connector-facing identity (MCP `icons`/`websiteUrl`): clients that render server metadata
+    // (e.g. claude.ai custom connectors) show these instead of a generic placeholder glyph.
+    websiteUrl: "https://www.alkahest.app",
+    icons: [
+      { src: "https://www.alkahest.app/icon.svg", mimeType: "image/svg+xml", sizes: ["any"] },
+      { src: "https://www.alkahest.app/apple-icon.png", mimeType: "image/png", sizes: ["180x180"] },
+    ],
+  });
   const rootOf = (path?: string) => resolve(path ?? process.cwd());
   /** Thread the connector's token/api into a core call's params (no-op for local stdio). */
   const withAuth = <const T extends object>(params: T): T =>
