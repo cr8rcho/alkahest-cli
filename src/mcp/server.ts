@@ -24,7 +24,11 @@ import { listProjects } from "../core/listProjects.js";
 import { listHistory } from "../core/history.js";
 import { findProjectRoot } from "../core/project.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
+import { fetchPublishedMap } from "../core/mapFetch.js";
 import type { ProductMap, Screen } from "../core/types.js";
+
+// Re-exported so the hosted repo's /api/mcp route needs no direct SDK dependency (ADR-095, hosted repo).
+export { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../../package.json") as { version: string };
@@ -33,12 +37,46 @@ const pkg = require("../../package.json") as { version: string };
  * MCP server that lets agents (Claude Code/Codex/Cursor) query the product map (ALKAHEST.md §7).
  * No LLM key required — reasoning is done by the calling agent. Tools provide only deterministic structure.
  * Default target is the server's working directory (cwd). Each tool's `path` can point to a different project.
+ *
+ * Remote mode (hosted ADR-095): the SAME server, mounted behind the web app's /api/mcp/{token}
+ * route as a claude.ai custom connector. `remote` carries the request's alk_ token + API base
+ * into every core call (env/credential fallbacks never fire on a server), the local-only tools
+ * (scan / publish / set_summary / set_prd / comment_to_issue / check_version) are not
+ * registered, and the graph tools read the PUBLISHED map through the `map` edge function
+ * instead of the local checkout.
  */
-export function buildServer(): McpServer {
+export interface RemoteOptions {
+  /** alk_ API token every call authenticates with. */
+  token: string;
+  /** Functions base URL (default: the hosted service). */
+  api?: string;
+}
+
+export function buildServer(remote?: RemoteOptions): McpServer {
   const server = new McpServer({ name: "alkahest", version: pkg.version });
   const rootOf = (path?: string) => resolve(path ?? process.cwd());
+  /** Thread the connector's token/api into a core call's params (no-op for local stdio). */
+  const withAuth = <const T extends object>(params: T): T =>
+    remote ? { ...params, token: remote.token, api: remote.api } : params;
+  /** The product map: the local checkout's map.json, or (remote) the published bytes. */
+  const getMap = async (path?: string, project?: string, mapSlug?: string): Promise<ProductMap | null> =>
+    remote ? fetchPublishedMap({ api: remote.api, token: remote.token, project, mapSlug }) : loadOrScan(rootOf(path));
+  const noMapMsg = remote
+    ? "No published code map. Pass `project` (a slug from list_projects), and `map` when the project has several code maps."
+    : "No screens, or unsupported project.";
+  /** Remote connectors have no env/config to edit — steer those hints to the connector URL + `project` arg. */
+  const hinted = (local: Record<string, string>): Record<string, string> =>
+    remote
+      ? {
+          ...local,
+          no_token: "The connector URL is missing its token — recreate it at alkahest.app → API tokens.",
+          no_api: "The connector's API base is misconfigured.",
+          no_slug: "Pass `project` — a slug from list_projects.",
+          invalid_token: "The token in the connector URL is invalid or revoked — create a new one at alkahest.app → API tokens and update the connector.",
+        }
+      : local;
 
-  server.registerTool(
+  if (!remote) server.registerTool(
     "scan",
     {
       title: "Scan project",
@@ -71,11 +109,15 @@ export function buildServer(): McpServer {
       description:
         "Full product map overview: list of screens (route/title/feature count) and list of resources (label/number of calling screens). " +
         "Auto-scans if map.json is missing. Call this first to grasp the product structure at a glance.",
-      inputSchema: { path: z.string().optional() },
+      inputSchema: {
+        path: z.string().optional(),
+        project: z.string().optional().describe("Which project (slug) — remote connectors read the PUBLISHED code map (slugs from list_projects). Ignored locally."),
+        map: z.string().optional().describe("Which code map when the project has several (remote connectors only; default: the oldest)"),
+      },
     },
-    async ({ path }) => {
-      const map = loadOrScan(rootOf(path));
-      if (!map) return text("No screens, or unsupported project.");
+    async ({ path, project, map: mapSlug }) => {
+      const map = await getMap(path, project, mapSlug);
+      if (!map) return text(noMapMsg);
       return json({
         framework: map.meta.framework,
         router: map.meta.router,
@@ -103,11 +145,16 @@ export function buildServer(): McpServer {
       description:
         "Full structure of one screen: UI features, outgoing/incoming transitions, called resources (API/data), components, and source location. " +
         "The agent can use this data to write a summary or PRD itself. Specify the screen by id/route/title.",
-      inputSchema: { screen: z.string().describe("screen id / route / title"), path: z.string().optional() },
+      inputSchema: {
+        screen: z.string().describe("screen id / route / title"),
+        path: z.string().optional(),
+        project: z.string().optional().describe("Which project (slug) — remote connectors read the PUBLISHED code map (slugs from list_projects). Ignored locally."),
+        map: z.string().optional().describe("Which code map when the project has several (remote connectors only; default: the oldest)"),
+      },
     },
-    async ({ screen, path }) => {
-      const map = loadOrScan(rootOf(path));
-      if (!map) return text("No screens, or unsupported project.");
+    async ({ screen, path, project, map: mapSlug }) => {
+      const map = await getMap(path, project, mapSlug);
+      if (!map) return text(noMapMsg);
       const s = matchScreen(map, screen);
       if (!s) return text(`Screen not found: ${screen}`);
       return json(screenDetail(map, s));
@@ -121,11 +168,16 @@ export function buildServer(): McpServer {
       description:
         "Returns the screens that call a specific resource (API endpoint/data). For understanding data dependencies and change impact. " +
         "Specify the resource by id ('GET /api/orders') or a path fragment ('/api/orders').",
-      inputSchema: { resource: z.string(), path: z.string().optional() },
+      inputSchema: {
+        resource: z.string(),
+        path: z.string().optional(),
+        project: z.string().optional().describe("Which project (slug) — remote connectors read the PUBLISHED code map (slugs from list_projects). Ignored locally."),
+        map: z.string().optional().describe("Which code map when the project has several (remote connectors only; default: the oldest)"),
+      },
     },
-    async ({ resource, path }) => {
-      const map = loadOrScan(rootOf(path));
-      if (!map) return text("No screens, or unsupported project.");
+    async ({ resource, path, project, map: mapSlug }) => {
+      const map = await getMap(path, project, mapSlug);
+      if (!map) return text(noMapMsg);
       const q = resource.toLowerCase();
       const matched = map.resources.filter(
         (r) => r.id.toLowerCase() === q || (r.path ?? "").toLowerCase().includes(q) || r.label.toLowerCase().includes(q),
@@ -143,7 +195,7 @@ export function buildServer(): McpServer {
 
   // ---- write-back tools: the agent saves its prose into map.json; publish shows it on the hosted viewer ----
 
-  server.registerTool(
+  if (!remote) server.registerTool(
     "set_summary",
     {
       title: "Set screen summary",
@@ -159,7 +211,7 @@ export function buildServer(): McpServer {
     async ({ screen, summary, path }) => writeField(rootOf(path), screen, (s) => { s.summary = summary; }),
   );
 
-  server.registerTool(
+  if (!remote) server.registerTool(
     "set_prd",
     {
       title: "Set screen PRD",
@@ -177,7 +229,7 @@ export function buildServer(): McpServer {
 
   // ---- publish: upload the map to the hosted viewer for a shareable link ----
 
-  server.registerTool(
+  if (!remote) server.registerTool(
     "publish",
     {
       title: "Publish to hosted viewer",
@@ -244,7 +296,7 @@ export function buildServer(): McpServer {
 
   // ---- check_version: let the agent tell the user whether to update ----
 
-  server.registerTool(
+  if (!remote) server.registerTool(
     "check_version",
     {
       title: "Check for alkahest updates",
@@ -291,19 +343,19 @@ export function buildServer(): McpServer {
     },
     async ({ path, open, project }) => {
       const root = rootOf(path);
-      const res = await pullComments(root, { open, slug: project });
+      const res = await pullComments(root, withAuth({ open, slug: project }));
       if (!res.ok) {
-        const hints: Record<string, string> = {
+        const hints: Record<string, string> = hinted({
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config (token from alkahest.app → Account).",
           no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
           no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
           invalid_token: "The API token is invalid or revoked — create a new one at alkahest.app → Account.",
           not_found: "No accessible project for this slug.",
-        };
+        });
         const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
         return text(`Couldn't read comments (${res.code}): ${res.message}.${hint}`);
       }
-      const map = loadMap(res.root ?? root);
+      const map = remote ? await getMap(undefined, res.slug) : loadMap(res.root ?? root);
       const comments = map ? enrichComments(res.comments ?? [], map) : (res.comments ?? []);
       return json({ ok: true, slug: res.slug, count: comments.length, comments });
     },
@@ -323,13 +375,13 @@ export function buildServer(): McpServer {
       },
     },
     async ({ id, resolved, path }) => {
-      const res = await resolveComment(rootOf(path), id, resolved === undefined ? true : resolved);
+      const res = await resolveComment(rootOf(path), id, resolved === undefined ? true : resolved, withAuth({}));
       if (!res.ok) {
-        const hints: Record<string, string> = {
+        const hints: Record<string, string> = hinted({
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
           forbidden: "Only the comment author or project owner can resolve it.",
           not_found: "No comment with that id.",
-        };
+        });
         const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
         return text(`Resolve failed (${res.code}): ${res.message}.${hint}`);
       }
@@ -354,17 +406,17 @@ export function buildServer(): McpServer {
     },
     async ({ node, body, path, project }) => {
       const root = findProjectRoot(rootOf(path));
-      const map = loadOrScan(root);
-      if (!map) return text("No map for this project — run the scan/publish tools first.");
+      const map = remote ? await getMap(undefined, project) : loadOrScan(root);
+      if (!map) return text(remote ? noMapMsg : "No map for this project — run the scan/publish tools first.");
       const n = resolveNode(map, node);
       if (!n) return text(`No node matches '${node}'. Use the overview tool to list screens/resources.`);
-      const res = await postComment(root, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: project });
+      const res = await postComment(root, withAuth({ node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: project }));
       if (!res.ok) {
-        const hints: Record<string, string> = {
+        const hints: Record<string, string> = hinted({
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
           no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
           forbidden: "Only the project owner or a collaborator can comment.",
-        };
+        });
         return text(`Add comment failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
       }
       return json({ ok: true, id: res.comment?.id, node_key: n.node_key, anchor_label: n.anchor_label });
@@ -385,20 +437,20 @@ export function buildServer(): McpServer {
       },
     },
     async ({ id, body, path }) => {
-      const res = await postComment(rootOf(path), { parent_id: id, body });
+      const res = await postComment(rootOf(path), withAuth({ parent_id: id, body }));
       if (!res.ok) {
-        const hints: Record<string, string> = {
+        const hints: Record<string, string> = hinted({
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
           not_found: "No comment with that id (parent).",
           forbidden: "Only the project owner or a collaborator can comment.",
-        };
+        });
         return text(`Reply failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
       }
       return json({ ok: true, id: res.comment?.id, parent_id: id });
     },
   );
 
-  server.registerTool(
+  if (!remote) server.registerTool(
     "comment_to_issue",
     {
       title: "File map comments as a GitHub issue",
@@ -436,7 +488,7 @@ export function buildServer(): McpServer {
 
   // ---- issues: the Issue Map — a map-shaped issue tracker on the hosted viewer ----
 
-  const issueHints: Record<string, string> = {
+  const issueHints: Record<string, string> = hinted({
     no_token: "Set ALKAHEST_TOKEN in this MCP server's config (token from alkahest.app → Account).",
     no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
     no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
@@ -444,7 +496,7 @@ export function buildServer(): McpServer {
     forbidden: "Only the project owner or a collaborator can write issues.",
     not_found: "Not found — list ids with the issues tool, or the project's issue maps with the maps tool.",
     ambiguous_map: "List the project's issue maps with the maps tool, then retry with `map` set to one (or create one with create_map).",
-  };
+  });
   // `maps` (present on ambiguous_map / unknown-slug) is appended as JSON so the agent can pick a map
   // without a second round-trip to the maps tool.
   const issueFail = (what: string, code?: string, message?: string, maps?: { slug: string; name: string | null }[]) =>
@@ -472,7 +524,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ path, open, map, q, project }) => {
-      const res = await pullIssues(rootOf(path), { mapSlug: map, q, slug: project });
+      const res = await pullIssues(rootOf(path), withAuth({ mapSlug: map, q, slug: project }));
       if (!res.ok || !res.graph) return issueFail("Read issues", res.code, res.message, res.maps);
       const states = deriveIssueStates(res.graph);
       const issues = res.graph.issues
@@ -528,7 +580,7 @@ export function buildServer(): McpServer {
             target_key: target,
           }
         : {};
-      const res = await createIssue(rootOf(path), { title, type, status, body, priority, due_on, assignee_id, props, parent_id, mapSlug: map, slug: project, ...targetFields });
+      const res = await createIssue(rootOf(path), withAuth({ title, type, status, body, priority, due_on, assignee_id, props, parent_id, mapSlug: map, slug: project, ...targetFields }));
       if (!res.ok || !res.issue) return issueFail("Add issue", res.code, res.message, res.maps);
       return json({ ok: true, issue: res.issue });
     },
@@ -574,7 +626,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ status, project, q, path }) => {
-      const res = await pullTasks(rootOf(path), { status, project, q });
+      const res = await pullTasks(rootOf(path), withAuth({ status, project, q }));
       if (!res.ok || !res.tasks) return issueFail("List tasks", res.code, res.message);
       return json({ ok: true, count: res.tasks.length, tasks: res.tasks });
     },
@@ -626,7 +678,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ title, body, project, workspace, tags, due_on, dedup_key, note_mode, note, skill, path }) => {
-      const res = await createTask(rootOf(path), { title, body, slug: project, workspace, tags, due_on, dedup_key, note_mode, note, skill });
+      const res = await createTask(rootOf(path), withAuth({ title, body, slug: project, workspace, tags, due_on, dedup_key, note_mode, note, skill }));
       if (!res.ok || !res.task) {
         const wsHint = res.workspaces?.length ? ` Workspaces: ${JSON.stringify(res.workspaces)}` : "";
         return issueFail("Add task", res.code, `${res.message ?? ""}${wsHint}`);
@@ -653,7 +705,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ id, reopen, path }) => {
-      const res = await completeTask(rootOf(path), { id, reopen });
+      const res = await completeTask(rootOf(path), withAuth({ id, reopen }));
       if (!res.ok || !res.task) return issueFail(reopen ? "Reopen task" : "Complete task", res.code, res.message);
       return json({ ok: true, task: res.task });
     },
@@ -683,7 +735,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ id, title, body, due_on, tags, note_mode, note, skill, path }) => {
-      const res = await updateTask(rootOf(path), {
+      const res = await updateTask(rootOf(path), withAuth({
         id,
         title,
         body: body === "" ? null : body,
@@ -692,7 +744,7 @@ export function buildServer(): McpServer {
         note_mode: note_mode === "" ? null : note_mode,
         note: note === "" ? null : note,
         skill: skill === "" ? null : skill,
-      });
+      }));
       if (!res.ok || !res.task) return issueFail("Update task", res.code, res.message);
       return json({ ok: true, task: res.task });
     },
@@ -718,7 +770,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ path }) => {
-      const res = await pullSkills(rootOf(path));
+      const res = await pullSkills(rootOf(path), withAuth({}));
       if (!res.ok || !res.skills) return issueFail("List skills", res.code, res.message);
       return json({ ok: true, count: res.skills.length, skills: res.skills });
     },
@@ -750,7 +802,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ name, body, default_for, rename_from, path }) => {
-      const res = await saveSkill(rootOf(path), { name, body, default_for, rename_from });
+      const res = await saveSkill(rootOf(path), withAuth({ name, body, default_for, rename_from }));
       if (!res.ok || !res.skill) return issueFail("Add skill", res.code, res.message);
       return json({ ok: true, skill: res.skill });
     },
@@ -776,7 +828,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ task, open, path }) => {
-      const res = await pullTaskComments(rootOf(path), { task, open });
+      const res = await pullTaskComments(rootOf(path), withAuth({ task, open }));
       if (!res.ok || !res.comments) return issueFail("Read task comments", res.code, res.message);
       return json({ ok: true, count: res.comments.length, comments: res.comments });
     },
@@ -799,7 +851,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ task, body, path }) => {
-      const res = await postTaskComment(rootOf(path), { task_id: task, body, kind: "question" });
+      const res = await postTaskComment(rootOf(path), withAuth({ task_id: task, body, kind: "question" }));
       if (!res.ok || !res.comment) return issueFail("Ask task", res.code, res.message);
       return json({ ok: true, comment: res.comment, note: "Question posted — re-check with task_comments, then resolve_task_comment once answered." });
     },
@@ -825,7 +877,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ task, parent, body, kind, path }) => {
-      const res = await postTaskComment(rootOf(path), { task_id: task, parent, body, kind });
+      const res = await postTaskComment(rootOf(path), withAuth({ task_id: task, parent, body, kind }));
       if (!res.ok || !res.comment) return issueFail("Comment on task", res.code, res.message);
       return json({ ok: true, comment: res.comment });
     },
@@ -847,7 +899,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ id, resolved, path }) => {
-      const res = await resolveTaskComment(rootOf(path), { id, resolved });
+      const res = await resolveTaskComment(rootOf(path), withAuth({ id, resolved }));
       if (!res.ok) return issueFail("Resolve task comment", res.code, res.message);
       return json({ ok: true, id: res.id, resolved: res.resolved });
     },
@@ -875,9 +927,9 @@ export function buildServer(): McpServer {
     async ({ q, path, project }) => {
       const root = rootOf(path);
       const [notesRes, issuesRes, tasksRes] = await Promise.all([
-        pullNotes(root, { q, bodies: "excerpt", slug: project }),
-        pullIssues(root, { q, slug: project }),
-        pullTasks(root, { q, status: "all", project }),
+        pullNotes(root, withAuth({ q, bodies: "excerpt", slug: project })),
+        pullIssues(root, withAuth({ q, slug: project })),
+        pullTasks(root, withAuth({ q, status: "all", project })),
       ]);
       const notes = notesRes.ok && notesRes.maps
         ? notesRes.maps.flatMap((m) => m.notes.map((n: any) => ({ slug: n.slug, title: n.title, map: m.slug, folder: n.folder ?? null, excerpt: n.body ?? null })))
@@ -918,7 +970,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ path, q, map, full_bodies, project }) => {
-      const res = await pullNotes(rootOf(path), { mapSlug: map, q, bodies: full_bodies ? undefined : "excerpt", slug: project });
+      const res = await pullNotes(rootOf(path), withAuth({ mapSlug: map, q, bodies: full_bodies ? undefined : "excerpt", slug: project }));
       if (!res.ok || !res.maps) return issueFail("Read notes", res.code, res.message, res.mapList);
       return json({ ok: true, project: res.project, count: res.maps.reduce((n, m) => n + m.notes.length, 0), maps: res.maps });
     },
@@ -939,7 +991,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ note, map, path, project }) => {
-      const res = await getNote(rootOf(path), { note, mapSlug: map, slug: project });
+      const res = await getNote(rootOf(path), withAuth({ note, mapSlug: map, slug: project }));
       if (!res.ok || !res.note) return issueFail("Get note", res.code, res.message, res.mapList);
       const { ok: _ok, code: _code, message: _message, mapList: _ml, ...rest } = res;
       return json({ ok: true, ...rest });
@@ -968,7 +1020,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ title, body, note_slug, folder, props, map, path, project }) => {
-      const res = await createNote(rootOf(path), { title, body, note_slug, folder, props, mapSlug: map, slug: project });
+      const res = await createNote(rootOf(path), withAuth({ title, body, note_slug, folder, props, mapSlug: map, slug: project }));
       if (!res.ok || !res.note) return issueFail("Add note", res.code, res.message, res.maps);
       return json({ ok: true, note: res.note });
     },
@@ -994,7 +1046,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ from, to, remove, path, project }) => {
-      const res = await linkNotes(rootOf(path), { from, to, remove, slug: project });
+      const res = await linkNotes(rootOf(path), withAuth({ from, to, remove, slug: project }));
       if (!res.ok) return issueFail(remove ? "Unlink notes" : "Link notes", res.code, res.message, res.maps);
       return json({ ok: true, ...(remove ? { removed: `${from} → ${to}` } : { linked: `${from} → ${to}` }) });
     },
@@ -1017,7 +1069,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ note, map, path, project }) => {
-      const res = await mapNote(rootOf(path), { noteRef: note, mapSlug: map, slug: project });
+      const res = await mapNote(rootOf(path), withAuth({ noteRef: note, mapSlug: map, slug: project }));
       if (!res.ok) return issueFail("Move note", res.code, res.message, res.maps);
       return json({ ok: true, note: res.note, map: res.map });
     },
@@ -1052,7 +1104,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ note, title, body, new_slug, folder, props, delete: del, reason, restore, map, path, project }) => {
-      const res = await updateNote(rootOf(path), { note, title, body, new_slug, folder, props, delete: del, reason, restore, mapSlug: map, slug: project });
+      const res = await updateNote(rootOf(path), withAuth({ note, title, body, new_slug, folder, props, delete: del, reason, restore, mapSlug: map, slug: project }));
       const what = del ? "Delete note" : restore ? "Restore note" : "Update note";
       if (!res.ok) return issueFail(what, res.code, res.message, res.maps);
       if (res.deleted) {
@@ -1095,7 +1147,7 @@ export function buildServer(): McpServer {
       if (!define?.length && !remove?.length) {
         return json({ ok: false, error: "bad_request", message: "Pass `define` (definitions to register) and/or `remove` (keys to unregister)." });
       }
-      const res = await editPropDefs(rootOf(path), { defs: define, remove, mapSlug: map, slug: project });
+      const res = await editPropDefs(rootOf(path), withAuth({ defs: define, remove, mapSlug: map, slug: project }));
       if (!res.ok) return issueFail("Edit note props", res.code, res.message, res.maps);
       return json({ ok: true, added: res.added ?? 0, merged: res.merged ?? 0, removed: res.removed ?? 0, skipped: res.skipped ?? 0 });
     },
@@ -1117,7 +1169,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ path, type, project }) => {
-      const res = await listMaps(rootOf(path), { type, slug: project });
+      const res = await listMaps(rootOf(path), withAuth({ type, slug: project }));
       if (!res.ok || !res.maps) return issueFail("List maps", res.code, res.message);
       return json({ ok: true, slug: res.slug, count: res.maps.length, maps: res.maps });
     },
@@ -1138,10 +1190,10 @@ export function buildServer(): McpServer {
       inputSchema: {},
     },
     async () => {
-      const res = await listProjects({});
+      const res = await listProjects(withAuth({}));
       if (!res.ok || !res.projects) {
-        const hint = res.code === "no_token" ? " Set ALKAHEST_TOKEN in this MCP server's config." : "";
-        return text(`List projects failed (${res.code}): ${res.message}.${hint}`);
+        const h = hinted({ no_token: "Set ALKAHEST_TOKEN in this MCP server's config." })[res.code ?? ""];
+        return text(`List projects failed (${res.code}): ${res.message}.${h ? ` ${h}` : ""}`);
       }
       return json({
         ok: true,
@@ -1178,7 +1230,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ path, map, limit, project }) => {
-      const res = await listHistory(rootOf(path), { map, limit, slug: project });
+      const res = await listHistory(rootOf(path), withAuth({ map, limit, slug: project }));
       if (!res.ok || !res.versions) return issueFail("History", res.code, res.message);
       // Newest first; include count deltas vs the previous version so the agent needn't recompute.
       const vs = res.versions;
@@ -1217,7 +1269,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ slug, type, name, path, project }) => {
-      const res = await createMap(rootOf(path), { mapSlug: slug, type, mapName: name, slug: project });
+      const res = await createMap(rootOf(path), withAuth({ mapSlug: slug, type, mapName: name, slug: project }));
       if (!res.ok || !res.map) return issueFail("Create map", res.code, res.message);
       return json({ ok: true, map: res.map });
     },
@@ -1263,7 +1315,7 @@ export function buildServer(): McpServer {
           set.target_key = target;
         }
       }
-      const res = await updateIssue(rootOf(path), { id, ...(del ? { delete: true } : { set }) });
+      const res = await updateIssue(rootOf(path), withAuth({ id, ...(del ? { delete: true } : { set }) }));
       if (!res.ok) return issueFail("Update issue", res.code, res.message);
       return json(res.deleted ? { ok: true, deleted: true, id } : { ok: true, issue: res.issue });
     },
@@ -1287,7 +1339,7 @@ export function buildServer(): McpServer {
     },
     async ({ from, to, kind, remove, path }) => {
       const edge = [{ to, kind: kind ?? ("blocks" as const) }];
-      const res = await updateIssue(rootOf(path), { id: from, ...(remove ? { remove_edges: edge } : { add_edges: edge }) });
+      const res = await updateIssue(rootOf(path), withAuth({ id: from, ...(remove ? { remove_edges: edge } : { add_edges: edge }) }));
       if (!res.ok) return issueFail("Link issues", res.code, res.message);
       return json({ ok: true, from, to, kind: kind ?? "blocks", removed: Boolean(remove) });
     },
@@ -1311,7 +1363,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ issue, map, remove, path, project }) => {
-      const res = await mapIssue(rootOf(path), { issueId: issue, mapSlug: map, remove, slug: project });
+      const res = await mapIssue(rootOf(path), withAuth({ issueId: issue, mapSlug: map, remove, slug: project }));
       if (!res.ok) return issueFail(remove ? "Unmap issue" : "Map issue", res.code, res.message, res.maps);
       return json({ ok: true, issue: res.issue, map: res.map, member: res.member });
     },
@@ -1336,7 +1388,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ issue, open, path, project }) => {
-      const res = await pullIssueComments(rootOf(path), { issue, open, slug: project });
+      const res = await pullIssueComments(rootOf(path), withAuth({ issue, open, slug: project }));
       if (!res.ok || !res.comments) return issueFail("Read issue comments", res.code, res.message);
       return json({ ok: true, count: res.comments.length, comments: res.comments });
     },
@@ -1362,7 +1414,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ issue, body, mention, path }) => {
-      const res = await postIssueComment(rootOf(path), { issue_id: issue, body, kind: "question", mention });
+      const res = await postIssueComment(rootOf(path), withAuth({ issue_id: issue, body, kind: "question", mention }));
       if (!res.ok || !res.comment) return issueFail("Ask issue", res.code, res.message);
       return json({ ok: true, comment: res.comment, note: "Question posted — the issue is now awaiting the user's decision. Re-check with issue_comments, then resolve_issue_question once answered." });
     },
@@ -1387,7 +1439,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ issue, parent, body, kind, mention, path }) => {
-      const res = await postIssueComment(rootOf(path), { issue_id: issue, parent, body, kind, mention });
+      const res = await postIssueComment(rootOf(path), withAuth({ issue_id: issue, parent, body, kind, mention }));
       if (!res.ok || !res.comment) return issueFail("Reply on issue", res.code, res.message);
       return json({ ok: true, comment: res.comment });
     },
@@ -1408,7 +1460,7 @@ export function buildServer(): McpServer {
       },
     },
     async ({ id, resolved, path }) => {
-      const res = await resolveIssueComment(rootOf(path), { id, resolved });
+      const res = await resolveIssueComment(rootOf(path), withAuth({ id, resolved }));
       if (!res.ok) return issueFail("Resolve question", res.code, res.message);
       return json({ ok: true, id: res.id, resolved: res.resolved });
     },
@@ -1437,15 +1489,15 @@ export function buildServer(): McpServer {
       // Resolve the terminal status to move to (explicit, else the project's first terminal status).
       let target = status;
       if (!target) {
-        const g = await pullIssues(root, { slug: project });
+        const g = await pullIssues(root, withAuth({ slug: project }));
         if (!g.ok || !g.graph) return issueFail("Complete issue", g.code, g.message, g.maps);
         const terminal = [...terminalStatuses(g.graph.issue_config)];
         if (!terminal.length) return text("Complete issue failed: this project's issue_config has no terminal status. Set one, or use update_issue with an explicit status.");
         target = terminal[0];
       }
-      const upd = await updateIssue(root, { id, set: { status: target } });
+      const upd = await updateIssue(root, withAuth({ id, set: { status: target } }));
       if (!upd.ok) return issueFail("Complete issue", upd.code, upd.message);
-      const cmt = await postIssueComment(root, { issue_id: id, body: result, kind: "result" });
+      const cmt = await postIssueComment(root, withAuth({ issue_id: id, body: result, kind: "result" }));
       if (!cmt.ok) return issueFail("Complete issue (result note)", cmt.code, cmt.message);
       return json({
         ok: true,

@@ -1,6 +1,6 @@
 {
   "name": "@cr8rcho/alkahest",
-  "version": "0.1.76",
+  "version": "0.1.77",
   "publishConfig": {
     "access": "public"
   },
@@ -8,6 +8,13 @@
   "type": "module",
   "bin": {
     "alkahest": "dist/cli.js"
+  },
+  "exports": {
+    "./mcp": {
+      "types": "./dist/mcp/server.d.ts",
+      "default": "./dist/mcp/server.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
