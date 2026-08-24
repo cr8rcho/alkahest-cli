@@ -24,7 +24,23 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
 - **Hosted service** — the web app (landing + `/account` + the `/p/{slug}` viewer),
   Supabase backend, and paid-plan logic live in the **separate private
   [`alkahest`](../alkahest) repo** (open-core split). This MIT CLI talks to it
-  only through the `map.json` **data contract** + `alkahest publish` — no shared code.
+  through the `map.json` **data contract** + `alkahest publish`; no renderer code is
+  shared. **One exception since 2026-08 (hosted ADR-095): the MCP server itself IS
+  shared** — the hosted repo depends on this package (`exports["./mcp"]`) and mounts
+  `buildServer(remote)` at `alkahest.app/api/mcp/{token}` as the claude.ai custom
+  connector. See "Touching the MCP server?" below.
+
+> **Touching the MCP server (`src/mcp/server.ts`)? The connector ships it too.**
+> `buildServer(remote?)` has two consumers: local stdio (`alkahest mcp`, 45 tools) and the
+> hosted remote connector (39 tools — `remote` mode skips scan/publish/set_summary/set_prd/
+> comment_to_issue/check_version and reads the PUBLISHED map via `core/mapFetch.ts`). When you
+> add or change a tool: (1) keep remote mode in mind — a tool that needs the local filesystem
+> must be registered under `if (!remote)`, auth must flow through `withAuth(...)`, and
+> user-facing error hints go through `hinted(...)`; (2) after the npm release, **bump the
+> `@cr8rcho/alkahest` dep in the `alkahest` repo and deploy** — until that lands, the connector
+> keeps serving the previous toolset. The subpath `exports["./mcp"]` is a public API surface:
+> don't rename/remove `buildServer`, `RemoteOptions`, or the transport re-export without
+> coordinating a web-repo change.
 
 > **`--map` (cloud ADR-011).** A hosted project can hold **many code/issue/note maps** (equal, no
 > default), each with a per-project slug. `publish --map <slug>`, `issues add/pull --map <slug>`,
@@ -95,6 +111,11 @@ the hosted viewer renders — not to internal refactors:
    additive schema changes so it rarely moves. (There is no `LATEST` constant — "a newer
    version exists" is detected client-side from the npm registry, so cutting the release in
    step 2 — which publishes to npm — is all the nudge needs.)
+4. **Did the release touch `src/mcp/server.ts` (or anything it pulls in)?** The hosted
+   remote connector serves the version pinned in the **alkahest** repo's `package.json` —
+   bump `@cr8rcho/alkahest` there, build, and push (Vercel deploys). Until then the
+   connector keeps the previous toolset/behavior; local stdio users get the new one via
+   `alkahest update` as usual. (Hosted ADR-095 — see "Touching the MCP server?" above.)
 
 How users find out they're behind (all probe the npm registry, fail-soft):
 - ambient one-line stderr notice after `scan` / `publish` (cached ~24h; opt out with
