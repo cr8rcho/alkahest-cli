@@ -24,6 +24,7 @@ import { listProjects } from "../core/listProjects.js";
 import { listHistory } from "../core/history.js";
 import { findProjectRoot } from "../core/project.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
+import { ICON_128_DATA_URI } from "./icon128.js";
 import { fetchPublishedMap } from "../core/mapFetch.js";
 import type { ProductMap, Screen } from "../core/types.js";
 
@@ -59,11 +60,13 @@ export function buildServer(remote?: RemoteOptions): McpServer {
     version: pkg.version,
     // Connector-facing identity (MCP `icons`/`websiteUrl`): clients that render server metadata
     // (e.g. claude.ai custom connectors) show these instead of a generic placeholder glyph.
-    // The `?v=8` marker + the /icon-512.png path exist to dodge stale icon caches: claude.ai was
-    // observed serving the pre-v8 indigo apple-icon it had harvested long ago, so the metadata
-    // now names URLs that cache never saw. PNG first — connector UIs prefer raster.
+    // Data URI FIRST — claude.ai was observed rendering the pre-v8 indigo icon from a stale
+    // image cache even though every live URL served v8; an embedded icon leaves no fetch for a
+    // cache to intercept. The URL entries stay for clients that prefer them (`?v=8` marks the
+    // icon generation — bump it, and regenerate icon128.ts, when the brand icon changes).
     websiteUrl: "https://www.alkahest.app",
     icons: [
+      { src: ICON_128_DATA_URI, mimeType: "image/png", sizes: ["128x128"] },
       { src: "https://www.alkahest.app/icon-512.png?v=8", mimeType: "image/png", sizes: ["512x512"] },
       { src: "https://www.alkahest.app/icon.svg?v=8", mimeType: "image/svg+xml", sizes: ["any"] },
     ],
