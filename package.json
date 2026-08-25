@@ -1,10 +1,10 @@
 {
   "name": "@cr8rcho/alkahest",
-  "version": "0.1.78",
+  "version": "0.1.79",
   "publishConfig": {
     "access": "public"
   },
-  "description": "Screen-graph CLI that reverse-engineers a product from code (React/Next static analysis → product map)",
+  "description": "Screen-graph CLI that reverse-engineers a product from code (React/Next static analysis \u2192 product map)",
   "type": "module",
   "bin": {
     "alkahest": "dist/cli.js"

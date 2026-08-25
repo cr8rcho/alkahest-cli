@@ -46,3 +46,21 @@ jobs:
       # No NODE_AUTH_TOKEN: npm publish authenticates via OIDC and attaches
       # provenance automatically. access=public comes from publishConfig.
       - run: npm publish
+
+  # Claude Desktop bundle (.mcpb): a thin stdio<->HTTP bridge onto the hosted connector,
+  # attached to the release as a one-click install. It carries NO tool logic — tools update
+  # server-side (hosted repo dep bump), so this asset only changes when mcpb/ itself does;
+  # rebuilding it every release just keeps the stamped version current.
+  mcpb-bundle:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload the release asset
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: node scripts/build-mcpb.mjs
+      - run: gh release upload "$GITHUB_REF_NAME" dist-mcpb/alkahest.mcpb --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

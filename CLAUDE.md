@@ -117,6 +117,14 @@ the hosted viewer renders — not to internal refactors:
    connector keeps the previous toolset/behavior; local stdio users get the new one via
    `alkahest update` as usual. (Hosted ADR-095 — see "Touching the MCP server?" above.)
 
+The release workflow also attaches **`alkahest.mcpb`** (the Claude Desktop one-click
+bundle, `mcpb/` + `scripts/build-mcpb.mjs`) to every GitHub release. It is a thin
+stdio↔HTTP bridge onto the hosted connector and carries **no tool logic** — tool changes
+reach installed bundles through step 4's dep bump, with no bundle re-release. Only a
+change to `mcpb/` itself (bridge, manifest, token form) alters the asset; already-installed
+users then need a one-time reinstall (download the new .mcpb, double-click) — there is no
+auto-update channel for bundles.
+
 How users find out they're behind (all probe the npm registry, fail-soft):
 - ambient one-line stderr notice after `scan` / `publish` (cached ~24h; opt out with
   `ALKAHEST_NO_UPDATE_NOTIFIER`),

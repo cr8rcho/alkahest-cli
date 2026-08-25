@@ -20,3 +20,6 @@ supabase/
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 .claude/*.lock
+
+# Claude Desktop bundle build output (scripts/build-mcpb.mjs)
+dist-mcpb/

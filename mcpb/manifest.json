@@ -1,0 +1,30 @@
+{
+  "manifest_version": "0.3",
+  "name": "alkahest",
+  "display_name": "Alkahest",
+  "version": "0.0.0",
+  "description": "Issues, notes, tasks and published code maps from alkahest.app — the hosted MCP server behind a one-click install.",
+  "author": { "name": "cr8rcho" },
+  "homepage": "https://www.alkahest.app",
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "ALKAHEST_MCP_URL": "https://www.alkahest.app/api/mcp/${user_config.token}"
+      }
+    }
+  },
+  "user_config": {
+    "token": {
+      "type": "string",
+      "title": "API token",
+      "description": "A full-access token from alkahest.app → API tokens (starts with alk_). Stored in your OS keychain.",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}
