@@ -59,10 +59,13 @@ export function buildServer(remote?: RemoteOptions): McpServer {
     version: pkg.version,
     // Connector-facing identity (MCP `icons`/`websiteUrl`): clients that render server metadata
     // (e.g. claude.ai custom connectors) show these instead of a generic placeholder glyph.
+    // The `?v=8` marker + the /icon-512.png path exist to dodge stale icon caches: claude.ai was
+    // observed serving the pre-v8 indigo apple-icon it had harvested long ago, so the metadata
+    // now names URLs that cache never saw. PNG first — connector UIs prefer raster.
     websiteUrl: "https://www.alkahest.app",
     icons: [
-      { src: "https://www.alkahest.app/icon.svg", mimeType: "image/svg+xml", sizes: ["any"] },
-      { src: "https://www.alkahest.app/apple-icon.png", mimeType: "image/png", sizes: ["180x180"] },
+      { src: "https://www.alkahest.app/icon-512.png?v=8", mimeType: "image/png", sizes: ["512x512"] },
+      { src: "https://www.alkahest.app/icon.svg?v=8", mimeType: "image/svg+xml", sizes: ["any"] },
     ],
   });
   const rootOf = (path?: string) => resolve(path ?? process.cwd());
