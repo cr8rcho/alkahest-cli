@@ -538,10 +538,11 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         open: z.boolean().optional().describe("Only issues that are not done (default: false = all)"),
         map: z.string().optional().describe("Restrict to one issue map (a project can hold several; omit when there's one). List them with the maps tool."),
         q: z.string().optional().describe("Filter issues by title/body substring (server-side). Edges/links stay unfiltered, so blockedBy may name issues outside the filtered list."),
+        archived: z.boolean().optional().describe("Include archived issues (default: false — archived issues are 'put away' and hidden). Archived rows carry archived_at and are never actionable."),
       },
     },
-    async ({ path, open, map, q, project }) => {
-      const res = await pullIssues(rootOf(path), withAuth({ mapSlug: map, q, slug: project }));
+    async ({ path, open, map, q, archived, project }) => {
+      const res = await pullIssues(rootOf(path), withAuth({ mapSlug: map, q, archived, slug: project }));
       if (!res.ok || !res.graph) return issueFail("Read issues", res.code, res.message, res.maps);
       const states = deriveIssueStates(res.graph);
       const issues = res.graph.issues

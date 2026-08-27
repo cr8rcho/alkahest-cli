@@ -35,6 +35,9 @@ export interface Issue {
   shipped_map_version_id: string | null;
   /** Issue properties (ADR-079): flat object; reserved key `tags` = string array. */
   props?: Record<string, unknown> | null;
+  /** When the issue was archived ("put away", ADR-024), or null. Archived issues only
+   *  appear in a pull that opted in with `archived: true`; they are never actionable. */
+  archived_at?: string | null;
   /** Unresolved decision questions on this issue (ADR-020). >0 ⇒ awaiting a human answer. */
   open_questions?: number;
   created_by: string | null;
@@ -171,6 +174,8 @@ export interface PullIssuesParams {
   mapSlug?: string;
   /** Server-side text filter: title/body substring. Edges/links stay unfiltered. */
   q?: string;
+  /** Include archived issues (default: false — the server hides them as non-workable). */
+  archived?: boolean;
 }
 
 /** Fetch the project's issue graph (issues + edges + map links + effective config). */
@@ -180,7 +185,8 @@ export async function pullIssues(path: string, params: PullIssuesParams = {}): P
 
   const mapQ = params.mapSlug ? `&map=${encodeURIComponent(params.mapSlug)}` : "";
   const textQ = params.q ? `&q=${encodeURIComponent(params.q)}` : "";
-  const res = await request(`${ctx.apiUrl}/issues-pull?slug=${encodeURIComponent(ctx.slug!)}${mapQ}${textQ}`, ctx.token);
+  const archQ = params.archived ? "&archived=1" : "";
+  const res = await request(`${ctx.apiUrl}/issues-pull?slug=${encodeURIComponent(ctx.slug!)}${mapQ}${textQ}${archQ}`, ctx.token);
   if (!res.ok) return fail(res, "pull");
   const proj = (res.body?.projects ?? []).find((p: any) => p.slug === ctx.slug) ?? res.body?.projects?.[0];
   return {
@@ -469,7 +475,8 @@ export function deriveIssueStates(
     const awaitingDecision = (issue.open_questions ?? 0) > 0;
     out.set(issue.id, {
       done,
-      actionable: !done && blockedBy.length === 0 && !awaitingDecision,
+      // An archived issue is "put away" — never workable, whatever its status.
+      actionable: !done && blockedBy.length === 0 && !awaitingDecision && !issue.archived_at,
       blockedBy,
       awaitingDecision,
     });

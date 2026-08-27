@@ -118,8 +118,9 @@ issues
   .argument("[path]", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--map <slug>", "restrict to one issue map within the project")
+  .option("--archived", "include archived issues (📦 — hidden by default)", false)
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .action(async (path: string, opts: { slug?: string; api?: string; map?: string }) => {
+  .action(async (path: string, opts: { slug?: string; api?: string; map?: string; archived?: boolean }) => {
     await issuesPull(path, opts);
     await maybeNotifyUpdate();
   });

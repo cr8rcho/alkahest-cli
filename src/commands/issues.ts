@@ -34,7 +34,7 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
   return known[code ?? ""] ?? `${action} failed: ${message}`;
 };
 
-export interface IssuesPullOptions { api?: string; slug?: string; map?: string; }
+export interface IssuesPullOptions { api?: string; slug?: string; map?: string; archived?: boolean; }
 
 export async function issuesPull(path: string, options: IssuesPullOptions): Promise<void> {
   const res = await pullIssues(path, { ...options, mapSlug: options.map });
@@ -55,7 +55,7 @@ export async function issuesPull(path: string, options: IssuesPullOptions): Prom
     ` (${open.length} open, ${actionable.length} actionable) → ${OUTPUT_DIR}/issues.json`);
   for (const i of graph.issues) {
     const st = states.get(i.id)!;
-    const mark = st.done ? "✓" : st.awaitingDecision ? "❓" : st.actionable ? "▶" : "⏳";
+    const mark = i.archived_at ? "📦" : st.done ? "✓" : st.awaitingDecision ? "❓" : st.actionable ? "▶" : "⏳";
     const pri = i.priority && i.priority !== "none" ? `  !${i.priority}` : "";
     const due = i.due_on ? `  due:${i.due_on}` : "";
     const blocked = st.blockedBy.length ? `  (blocked by ${st.blockedBy.length})` : "";
