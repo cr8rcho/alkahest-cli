@@ -311,9 +311,6 @@ export interface MapIssueParams {
   mapSlug?: string;
   /** true → take the issue OFF the map instead. The issue itself is never deleted. */
   remove?: boolean;
-  /** Canvas position on that map (add only; omit → the server picks). */
-  x?: number;
-  y?: number;
 }
 
 export interface IssueMembershipResult {
@@ -333,7 +330,9 @@ export interface IssueMembershipResult {
 /**
  * Place an issue on an issue map, or take it off (map membership). Issue maps are lenses
  * over the project's issue pool — an issue can appear on several maps at once, and removing
- * it from one never deletes the issue. Add is an idempotent upsert (x/y update the layout).
+ * it from one never deletes the issue. Add is an idempotent upsert. (Canvas x/y went with the
+ * hosted 0134 migration — the sim owns every position; the server accepts and ignores them
+ * from older clients.)
  */
 export async function mapIssue(path: string, params: MapIssueParams): Promise<IssueMembershipResult> {
   const ctx = authContext(path, params, true);
@@ -345,8 +344,6 @@ export async function mapIssue(path: string, params: MapIssueParams): Promise<Is
     issue: params.issueId.trim(),
     map: params.mapSlug,
     remove: params.remove === true,
-    x: params.x,
-    y: params.y,
   });
   if (!res.ok) return fail(res, params.remove ? "unmap" : "map");
   return { ok: true, issue: res.body?.issue, map: res.body?.map, member: !!res.body?.member };
