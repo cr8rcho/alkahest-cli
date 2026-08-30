@@ -31,8 +31,8 @@ product map), plus a hosted viewer so non-developers can read the map from a lin
   connector. See "Touching the MCP server?" below.
 
 > **Touching the MCP server (`src/mcp/server.ts`)? The connector ships it too.**
-> `buildServer(remote?)` has two consumers: local stdio (`alkahest mcp`, 45 tools) and the
-> hosted remote connector (39 tools — `remote` mode skips scan/publish/set_summary/set_prd/
+> `buildServer(remote?)` has two consumers: local stdio (`alkahest mcp`, 46 tools) and the
+> hosted remote connector (40 tools — `remote` mode skips scan/publish/set_summary/set_prd/
 > comment_to_issue/check_version and reads the PUBLISHED map via `core/mapFetch.ts`). When you
 > add or change a tool: (1) keep remote mode in mind — a tool that needs the local filesystem
 > must be registered under `if (!remote)`, auth must flow through `withAuth(...)`, and

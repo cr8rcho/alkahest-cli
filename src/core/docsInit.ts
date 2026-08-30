@@ -62,6 +62,78 @@ interface PresetManifest {
   maps?: { slug: string; name?: string }[];
 }
 
+/** Load one bundle's manifest, or an unknown_preset error naming what IS available. */
+function loadManifest(presetId: string): { dir: string; manifest: PresetManifest } | { code: string; message: string } {
+  const dir = join(presetsRoot(), presetId);
+  try {
+    return { dir, manifest: JSON.parse(readFileSync(join(dir, "preset.json"), "utf8")) as PresetManifest };
+  } catch {
+    const known = listPresets().presets?.map((p) => p.id).join(", ") || "(registry unreadable)";
+    return { code: "unknown_preset", message: `No preset '${presetId}'. Available: ${known}.` };
+  }
+}
+
+/**
+ * One preset's CONTENTS, read out of the package — every byte `docs init` would place,
+ * with nothing installed. This is the agent-facing half of ADR-083's "init is sugar":
+ * an agent that can call add_skill / create_map and write files reaches the same state
+ * from this payload, including on surfaces that have no shell (the remote connector).
+ */
+export interface PresetBundle {
+  id: string;
+  name: string;
+  description: string;
+  /** Account half — install by name (skip names the user already has). */
+  skills: { name: string; body: string }[];
+  /** Note maps the preset expects (type "note"). */
+  maps: { slug: string; name?: string }[];
+  /** Repo half — write verbatim at these repo-relative paths; never overwrite. */
+  scaffold: { file: string; content: string }[];
+  /** Reference scripts — copied once, then owned by the receiving repo. */
+  scripts: { dest: string; content: string }[];
+  /** Agent rules for the repo's CLAUDE.md (append only with the user's say-so). */
+  snippet?: string;
+}
+
+export interface PresetBundleResult {
+  ok: boolean;
+  bundle?: PresetBundle;
+  code?: string;
+  message?: string;
+}
+
+/** Read a preset's full contents (no writes, no auth). */
+export function readPresetBundle(presetId = "as-built"): PresetBundleResult {
+  const loaded = loadManifest(presetId.trim() || "as-built");
+  if (!("manifest" in loaded)) return { ok: false, code: loaded.code, message: loaded.message };
+  const { dir, manifest } = loaded;
+  try {
+    const scaffold = manifest.scaffold
+      ? walkFiles(join(dir, manifest.scaffold))
+          // .gitkeep files only exist to carry empty dirs into git — an agent creating the
+          // tree makes directories as it writes, so passing them along is noise.
+          .filter((rel) => !rel.endsWith(".gitkeep"))
+          .map((rel) => ({ file: rel, content: readFileSync(join(dir, manifest.scaffold!, ...rel.split("/")), "utf8") }))
+      : [];
+    return {
+      ok: true,
+      bundle: {
+        id: manifest.id,
+        name: manifest.name,
+        description: manifest.description,
+        skills: (manifest.skills ?? []).map((s) => ({ name: s.name, body: readFileSync(join(dir, s.file), "utf8") })),
+        maps: manifest.maps ?? [],
+        scaffold,
+        scripts: (manifest.scripts ?? []).map((s) => ({ dest: s.dest, content: readFileSync(join(dir, s.file), "utf8") })),
+        snippet: manifest.snippet ? readFileSync(join(dir, manifest.snippet), "utf8") : undefined,
+      },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, code: "bad_preset", message: `Preset '${presetId}' is incomplete: ${msg}` };
+  }
+}
+
 export interface DocsInitParams {
   api?: string;
   token?: string;
@@ -116,14 +188,9 @@ function walkFiles(dir: string): string[] {
  */
 export async function docsInit(path: string, params: DocsInitParams = {}): Promise<DocsInitResult> {
   const presetId = (params.preset ?? "as-built").trim();
-  const dir = join(presetsRoot(), presetId);
-  let manifest: PresetManifest;
-  try {
-    manifest = JSON.parse(readFileSync(join(dir, "preset.json"), "utf8")) as PresetManifest;
-  } catch {
-    const known = listPresets().presets?.map((p) => p.id).join(", ") || "(registry unreadable)";
-    return { ok: false, code: "unknown_preset", message: `No preset '${presetId}'. Available: ${known}.` };
-  }
+  const loaded = loadManifest(presetId);
+  if (!("manifest" in loaded)) return { ok: false, code: loaded.code, message: loaded.message };
+  const { dir, manifest } = loaded;
   const root = resolve(path || ".");
   const result: DocsInitResult = { ok: true, preset: presetId, skills: [], scaffold: [], scripts: [], maps: [] };
 

@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline";
-import { appendClaudeSnippet, docsInit, listPresets } from "../core/docsInit.js";
+import { appendClaudeSnippet, docsInit, listPresets, type DocsInitResult } from "../core/docsInit.js";
 
 /**
  * Printers for the docs-preset workflow (cloud ADR-083). Pure logic lives in
@@ -56,6 +56,12 @@ export async function docsInitCmd(options: DocsInitOptions): Promise<void> {
     process.exitCode = 1;
   }
 
+  await handleSnippet(options, res);
+  printNextStep(res);
+}
+
+/** The CLAUDE.md half — prompt / append / print, per the caller's mode. */
+async function handleSnippet(options: DocsInitOptions, res: DocsInitResult): Promise<void> {
   if (!res.snippet) return;
   if (res.snippetInstalled) {
     console.log("  CLAUDE.md: snippet already present — left untouched.");
@@ -78,4 +84,29 @@ export async function docsInitCmd(options: DocsInitOptions): Promise<void> {
   }
   console.log("  Non-interactive run — snippet NOT written (pass --claude-md to append). Snippet:\n");
   console.log(res.snippet);
+}
+
+/**
+ * The hand-off. `docs init` only PLACES things — the first docs (and the map link that
+ * makes the install visible) come from an agent session the user has to start. Ending on
+ * the install report left that step unsaid, so the run looked like it produced nothing;
+ * spell out the sentence to say, derived from the preset rather than hardcoded.
+ */
+function printNextStep(res: DocsInitResult): void {
+  const skill = res.skills?.[0]?.name;
+  const script = res.scripts?.[0]?.dest;
+  if (!skill) return;
+  const maps = (res.maps ?? []).map((m) => m.slug).join(" / ");
+
+  console.log("\n[alkahest] Next — hand it to your agent:\n");
+  console.log(`  "Read the ${skill} skill and write this repo's first as-built docs${
+    script ? `,\n   then mirror them with node ${script}"` : '"'}`);
+  console.log(
+    `\n  It writes a small first pass (one system map, 2-3 core modules, ADR-001)${
+      maps ? `, mirrors it\n  to the ${maps} note maps` : ""}, and hands you the map link.`,
+  );
+  if ((res.maps ?? []).some((m) => m.action === "no_project")) {
+    console.log("\n  This folder isn't bound to a project yet — run `alkahest publish` first,");
+    console.log("  or the mirror step has nowhere to land.");
+  }
 }
