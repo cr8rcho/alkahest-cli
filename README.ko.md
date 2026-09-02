@@ -95,7 +95,9 @@ alkahest scan          # 분석 → .alkahest/map.json (기본: 증분)
 alkahest scan --full   # 기준선 무시하고 전체 재스캔
 alkahest hook install  # 커밋·머지 시 scan 자동 실행 (diff 자동 갱신)
 alkahest mcp           # MCP 서버 실행 (에이전트가 제품 지도를 질의, 키 불필요)
-alkahest login         # publish 토큰 저장 (alkahest.app → Account → Create token)
+alkahest login         # publish 토큰 저장 (alkahest.app → Account → Create token); 인자 없이 실행하면 현재 상태 표시
+alkahest status        # 로그인 상태 + 이 체크아웃이 어느 프로젝트/맵으로 publish 되는지
+alkahest logout        # 저장된 토큰 삭제 (로컬 한정 — 서버에서 끊으려면 웹에서 revoke)
 alkahest publish       # 지도를 hosted 뷰어에 업로드 → 공유 링크
 alkahest projects      # 계정의 워크스페이스·프로젝트 목록 (이동 후 slug 복구 등)
 alkahest history       # 코드맵 발행 타임라인 — 언제 발행됐고 뭐가 바뀌었나
@@ -198,7 +200,9 @@ claude mcp add alkahest -s project \
 
 토큰만 있으면 됩니다 — CLI가 호스팅 서비스(alkahest.app)를 기본값으로 씁니다. 이미 `alkahest login` 을 했다면 토큰 env조차 생략 가능합니다(저장된 자격증명 사용). 그다음 에이전트에게 *"이거 publish 해줘"* 라고만 하면 링크를 돌려줍니다.
 
-> 백엔드를 직접 셀프호스팅한다면 `-e ALKAHEST_API_URL=https://<ref>.supabase.co/functions/v1` (또는 `alkahest login --api <url>`)로 CLI를 그쪽으로 가리키세요.
+> `ALKAHEST_API_URL`(또는 `alkahest login --api <url>`)은 CLI를 다른 백엔드 배포로 향하게 합니다.
+> 백엔드는 **이 저장소에 없습니다** — MIT 범위는 스캐너·어댑터·MCP 서버입니다. 자기 Supabase
+> 인스턴스를 상대로 개발하는 게 아니라면 비워두세요. 그러면 CLI가 alkahest.app 과 통신합니다.
 
 **체크아웃 없이 쓰기 — 노트·이슈·맵.** 폴더에서 나오는 건 코드맵뿐입니다. 노트·이슈·맵은 **프로젝트 slug**로 주소를 잡으므로, 지금 폴더가 전혀 모르는 프로젝트에도 쓸 수 있고 **그 프로젝트가 발행된 적이 없어도 됩니다**:
 

@@ -22,10 +22,12 @@ const CRED_FILE = join(CRED_DIR, "credentials.json");
 /**
  * The hosted service (alkahest.app). Used as the final fallback so that pointing
  * the CLI / MCP at the public instance needs no config — the URL is not a secret
- * (it ships in every served page). Self-hosters override via --api, `alkahest login
- * --api <url>`, or ALKAHEST_API_URL.
+ * (it ships in every served page). --api / `alkahest login --api <url>` / ALKAHEST_API_URL
+ * override it to reach ANOTHER DEPLOYMENT of the backend (a local Supabase, a branch DB) —
+ * that is a development escape hatch, not a self-hosting story: the backend lives in the
+ * private web repo, so nobody outside it has one to point at.
  */
-const DEFAULT_API_URL = "https://ytcmzkrvtomtcrcyqqcb.supabase.co/functions/v1";
+export const DEFAULT_API_URL = "https://ytcmzkrvtomtcrcyqqcb.supabase.co/functions/v1";
 
 export function loadCredentials(): Credentials {
   try {

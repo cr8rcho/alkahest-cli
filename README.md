@@ -95,7 +95,9 @@ alkahest scan          # analyze → .alkahest/map.json (incremental by default)
 alkahest scan --full   # ignore the baseline and rescan everything
 alkahest hook install  # run scan automatically on commit/merge (diff-driven refresh)
 alkahest mcp           # run the MCP server (agents query the product map; no key)
-alkahest login         # save your API token (Account → API tokens on alkahest.app)
+alkahest login         # save your API token (Account → API tokens on alkahest.app); bare = show current state
+alkahest status        # are you signed in, and where does this checkout publish?
+alkahest logout        # forget the saved token (local only — revoke it on the web to cut it off)
 alkahest publish       # upload the map to the hosted viewer → shareable link
 alkahest projects      # list your account's workspaces & projects (recover a slug after a move, etc.)
 alkahest history       # a code map's publish timeline — when each publish happened & what changed
@@ -221,7 +223,10 @@ claude mcp add alkahest -s project \
 
 The token is all you need — the CLI defaults to the hosted service (alkahest.app). If you've already run `alkahest login`, even the token env is optional (saved credentials are used). Then just ask the agent to *"publish this"* and it returns the link.
 
-> Self-hosting your own backend? Point the CLI at it with `-e ALKAHEST_API_URL=https://<ref>.supabase.co/functions/v1` (or `alkahest login --api <url>`).
+> `ALKAHEST_API_URL` (or `alkahest login --api <url>`) points the CLI at a different backend
+> deployment. The backend is **not** part of this repo — the MIT scope is the scanner, the
+> adapters and the MCP server — so unless you are developing against your own Supabase
+> instance, leave it unset and the CLI talks to alkahest.app.
 
 **Working without a checkout — notes, issues, maps.** Only the code map comes from a folder. Notes, issues and maps are addressed by **project slug**, so the agent can write to a project the current folder knows nothing about — and the project never has to have been published:
 

@@ -6,6 +6,8 @@ import { mcp } from "./commands/mcp.js";
 import { hook } from "./commands/hook.js";
 import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
+import { status } from "./commands/status.js";
+import { logout } from "./commands/logout.js";
 import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
 import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
@@ -37,11 +39,26 @@ program
   });
 
 program
+  .command("status")
+  .description("are you signed in, and where does this checkout publish?")
+  .argument("[path]", "project path", ".")
+  .option("--json", "print the raw payload", false)
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action(async (path: string, opts: { json?: boolean; api?: string }) => {
+    await status({ path, ...opts });
+  });
+
+program
   .command("login")
-  .description("save your personal API token (from the web app) so 'publish' can authenticate")
+  .description("save your personal API token (from the web app); run bare to see the current state")
   .option("--token <token>", "alk_… token from the web app (Account → Create token)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .action((opts: { token?: string; api?: string }) => login(opts));
+  .action(async (opts: { token?: string; api?: string }) => { await login(opts); });
+
+program
+  .command("logout")
+  .description("forget the saved API token (local only — revoke it on the web to cut it off)")
+  .action(async () => { await logout(); });
 
 program
   .command("publish")
