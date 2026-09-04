@@ -1339,7 +1339,8 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       title: "Update an issue",
       description:
         "Mutate an Issue Map node: move its status (e.g. to 'done' when you finish the work — this is how progress " +
-        "gets painted onto the map), edit title/body/type, set its priority or due date, set or clear its code-map target, or delete it " +
+        "gets painted onto the map), edit title/body/type, set its priority or due date, set or clear its code-map target, archive it " +
+        "(put away without deleting — archived: true; archived: false restores), or delete it " +
         "(delete: author/owner only). Statuses/types must come from the project's issue_config. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Issue id (from the issues tool)"),
@@ -1352,13 +1353,15 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         assignee_id: z.string().optional().describe("Assign to a project member (user id); pass '' to unassign"),
         target: z.string().optional().describe("New code-map target ('s:…'/'r:…'/'/route'/resource label); pass '' to clear"),
         props: z.record(z.any()).optional().describe("Properties patch (ADR-079), SHALLOW-merged: a null value deletes that key; other keys are untouched. See prop_defs in the issues tool."),
+        archived: z.boolean().optional().describe("true archives the issue (put away: hidden from the issues tool unless archived:true, never actionable, not deleted); false restores it (archived_at → null)"),
         delete: z.boolean().optional().describe("Delete the issue instead of updating it"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ id, status, title, body, type, priority, due_on, assignee_id, target, props, delete: del, path }) => {
+    async ({ id, status, title, body, type, priority, due_on, assignee_id, target, props, archived, delete: del, path }) => {
       const set: Record<string, unknown> = {};
       if (status !== undefined) set.status = status;
+      if (archived !== undefined) set.archived_at = archived ? new Date().toISOString() : null;
       if (title !== undefined) set.title = title;
       if (body !== undefined) set.body = body;
       if (type !== undefined) set.type = type;

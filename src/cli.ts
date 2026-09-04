@@ -9,7 +9,7 @@ import { login } from "./commands/login.js";
 import { status } from "./commands/status.js";
 import { logout } from "./commands/logout.js";
 import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsIssue } from "./commands/comments.js";
-import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
+import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesArchive, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
 import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
 import { docsInitCmd, presetsList } from "./commands/docs.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
@@ -198,6 +198,20 @@ issues
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string, opts: { path?: string; slug?: string; api?: string }) => issuesDone(id, opts));
+issues
+  .command("archive")
+  .description("put an issue away (📦 hidden from pull, never actionable — not deleted; undo with 'issues restore')")
+  .argument("<id>", "issue id (from 'issues pull')")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: { path?: string; api?: string }) => issuesArchive(id, false, opts));
+issues
+  .command("restore")
+  .description("bring an archived issue back (clears archived_at)")
+  .argument("<id>", "issue id (from 'issues pull --archived')")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: { path?: string; api?: string }) => issuesArchive(id, true, opts));
 issues
   .command("link")
   .description("connect two issues: <from> —kind→ <to> (blocks = from must finish first)")

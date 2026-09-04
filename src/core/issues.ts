@@ -281,6 +281,9 @@ export interface UpdateIssueParams {
     target_key?: string | null;
     /** ADR-079: SHALLOW-merged — a null value deletes that key; null clears all. */
     props?: Record<string, unknown> | null;
+    /** ADR-024 archive ("put away"): an ISO timestamp archives, null restores. Archived issues
+     *  are hidden from pulls (unless `archived: true`) and never actionable. */
+    archived_at?: string | null;
   };
   /** Edge specs name the OTHER endpoint; the issue `id` fills the omitted side. */
   add_edges?: { from?: string; to?: string; kind: IssueEdge["kind"] }[];

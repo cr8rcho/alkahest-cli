@@ -106,7 +106,7 @@ alkahest comments issue <ids…>  # file the given comments as ONE GitHub issue 
 alkahest comments resolve <id>  # mark a comment resolved (or --reopen) — author or project owner only
 alkahest issues pull   # pull the project's Issue Map (graph-shaped issue tracker) → .alkahest/issues.json
 alkahest issues add <title>     # create an issue (--parent epic, --target s:…/r:…//route, --type/--status, --priority/--due/--assignee)
-alkahest issues done <id>       # mark an issue finished (other ops: status / priority / due / assign / link / rm)
+alkahest issues done <id>       # mark an issue finished (other ops: status / priority / due / assign / archive / restore / link / rm)
 alkahest issues map <id>        # place an issue on an issue map (--map), or take it off with --remove (never deletes the issue)
 alkahest notes add <title>      # create a markdown note on the Note Map (--body, --folder, --map; --props '{"k":v}' sets property values)
 alkahest notes list             # list a note map's notes (--q to search); show <slug> for one note with connections
@@ -184,7 +184,7 @@ Or add it to any MCP-capable agent's config directly:
 | `comment_to_issue` | group one or more map comments into a single GitHub issue (via local `gh`) and link it back onto each, so the hosted viewer shows a "tracked" badge (needs a token) |
 | `issues` | read the project's **Issue Map** — a dependency-first issue tracker drawn as a graph. Each issue comes with derived state: `done` and `actionable` (nothing unfinished blocks it), so the agent can pick what to work on next (needs a token) |
 | `add_issue` | create an issue while planning with the user — `parent_id` groups under an epic, `target` ties it to the code map (existing node key, or a planned `/route` that converges when the screen ships); `props` sets issue properties (reserved key `tags`) (needs a token) |
-| `update_issue` | move status (e.g. to done when the work ships — progress gets painted onto the map), edit fields, or delete (needs a token) |
+| `update_issue` | move status (e.g. to done when the work ships — progress gets painted onto the map), edit fields, archive/restore (`archived: true|false`), or delete (needs a token) |
 | `link_issues` | add/remove an edge between issues: `blocks` (dependency), `contains` (epic→task), `relates` (needs a token) |
 | `map_issue` | place an issue on an issue map, or take it off with `remove` — issue maps are lenses over the project's issue pool, so an issue can appear on several maps; removing it from one never deletes the issue (needs a token) |
 | `list_tasks` | read **your personal tasks** — a private checklist item (only you see it); `open` by default, `status: all` includes done, `project` filters by a project tag (needs a token) |

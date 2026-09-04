@@ -128,6 +128,13 @@ export async function issuesStatus(id: string, status: string, options: IssuesWr
   console.log(`[alkahest] ${res.issue.title} → ${res.issue.status}`);
 }
 
+/** Archive an issue ("put away", ADR-024) or restore it — the issue is never deleted. */
+export async function issuesArchive(id: string, restore: boolean, options: IssuesWriteOptions): Promise<void> {
+  const res = await updateIssue(options.path || ".", { api: options.api, id, set: { archived_at: restore ? null : new Date().toISOString() } });
+  if (!res.ok || !res.issue) return die(failMessage(res.code, res.message, restore ? "issues restore" : "issues archive"));
+  console.log(`[alkahest] ${res.issue.title} → ${res.issue.archived_at ? "archived 📦" : "restored"}`);
+}
+
 /** Move an issue to the project's (first) terminal status — "I finished this". */
 export async function issuesDone(id: string, options: IssuesWriteOptions): Promise<void> {
   const pulled = await pullIssues(options.path || ".", { api: options.api, slug: options.slug });
