@@ -159,6 +159,42 @@ export async function updateTask(path: string, params: UpdateTaskParams): Promis
   return { ok: true, task: res.body?.task };
 }
 
+export interface PromoteTaskParams {
+  api?: string;
+  token?: string;
+  /** Task id (from list_tasks / add_task). */
+  id: string;
+  /** Optional ISSUE map slug to place the new issue on (default: none — pool issue, map_issue later). */
+  map?: string;
+}
+
+export interface PromoteTaskResult extends TaskWriteResult {
+  /** The issue the task became — cite `ref` ("#13") from here on. */
+  issue?: { id: string; ref?: number | null; title?: string };
+  project?: string | null;
+}
+
+/** Promote one of the token user's personal tasks into an issue (ADR-105) — the SAME atomic path
+ * as the web's "Promote to issue": issue created from the title/body, lineage stamped on the task
+ * (it leaves the open list), the task thread MOVED onto the issue, one `task_promoted` journal row.
+ * Refused by the backend: 404 not yours, 400 `unfiled` (Inbox task — file it first), 403
+ * `forbidden` (needs editor), 409 `promoted` (already an issue — carries `issue_id`). */
+export async function promoteTask(path: string, params: PromoteTaskParams): Promise<PromoteTaskResult> {
+  const ctx = authContext(path, { api: params.api, token: params.token }, false);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.id?.trim()) return { ok: false, code: "no_id", message: "Task id is required." };
+  const res = await request(`${ctx.apiUrl}/tasks-promote`, ctx.token, {
+    id: params.id.trim(),
+    map: params.map?.trim() || undefined,
+  });
+  if (!res.ok) {
+    const f = fail(res, "promote") as PromoteTaskResult;
+    if (res.body?.issue_id) f.issue = { id: res.body.issue_id };
+    return f;
+  }
+  return { ok: true, task: res.body?.task, issue: res.body?.issue, project: res.body?.project ?? null };
+}
+
 /** Create a personal task (origin='agent'). No published project required — the project is an
  * optional tag; without one the task lands in the token user's workspace Inbox. */
 export async function createTask(path: string, params: CreateTaskParams): Promise<TaskWriteResult> {

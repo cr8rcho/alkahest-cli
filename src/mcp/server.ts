@@ -17,7 +17,7 @@ import {
   resolveIssueComment,
   mapIssue,
 } from "../core/issues.js";
-import { completeTask, createTask, postTaskComment, pullSkills, pullTaskComments, pullTasks, resolveTaskComment, saveSkill, updateTask } from "../core/tasks.js";
+import { completeTask, createTask, postTaskComment, promoteTask, pullSkills, pullTaskComments, pullTasks, resolveTaskComment, saveSkill, updateTask } from "../core/tasks.js";
 import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listPresets, readPresetBundle } from "../core/docsInit.js";
@@ -574,7 +574,9 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         "issue, parent_id groups it under an epic (contains edge), and target ties it to the code map — pass an " +
         "existing node key ('s:…'/'r:…'), or a planned route ('/orders/refund') for a screen that doesn't exist yet " +
         "(it shows as a ghost node and auto-converges when a scan finds the real screen). type/status must come from " +
-        "the project's issue_config (see the issues tool). Needs an API token; owner or collaborator only.",
+        "the project's issue_config (see the issues tool). If the work ALREADY EXISTS as one of the user's tasks " +
+        "(list_tasks), do not re-create it here — call promote_task on that task instead, so the task's lineage and " +
+        "thread carry over. Needs an API token; owner or collaborator only.",
       inputSchema: {
         title: z.string().describe("Issue title"),
         type: z.string().optional().describe("Node type from issue_config (default: task)"),
@@ -661,7 +663,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         'agent). Reach for it when you spot small personal work ("remind me to X", "add a task to Y") or when asked to ' +
         "surface work that might be getting missed. **No project or publish is required** — omit `project` for a personal " +
         "Inbox task. For shared/team work that needs a thread, decision, status, or code-map link, use add_issue instead " +
-        "(a task can be promoted to an issue later). Needs an API token.\n\n" +
+        "(a task can be promoted to an issue later with promote_task). Needs an API token.\n\n" +
         "WRITE A USEFUL TASK, not just a title:\n" +
         "- `title` — the action, imperative and specific ('Bump MIN_CLI_VERSION for the 0.2 map schema'), not a topic ('버전').\n" +
         "- `body` — markdown, and it RENDERS with clickable links, so put the context there: why it matters, what 'done' " +
@@ -715,7 +717,8 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         "task describes is actually finished (or the user says it is), so their list reflects reality: the task moves " +
         "into Done on their Tasks page, and project-tagged tasks log a Completed row in the activity feed. Get the id " +
         "from list_tasks (or the add_task response). reopen:true puts a done task back on the open list instead. A " +
-        "task that was promoted to an issue is refused — complete the issue itself (complete_issue). Needs a publish " +
+        "task that was promoted to an issue is refused — complete the issue itself (complete_issue). NEVER use this to " +
+        "\"close a task because it became an issue\" — that is promote_task, which keeps the lineage and moves the thread. Needs a publish " +
         "token — no project or publish required.",
       inputSchema: {
         id: z.string().describe("Task id (from list_tasks / add_task)"),
@@ -727,6 +730,39 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       const res = await completeTask(rootOf(path), withAuth({ id, reopen }));
       if (!res.ok || !res.task) return issueFail(reopen ? "Reopen task" : "Complete task", res.code, res.message);
       return json({ ok: true, task: res.task });
+    },
+  );
+
+  server.registerTool(
+    "promote_task",
+    {
+      title: "Promote a task to an issue",
+      description:
+        "Turn one of your PERSONAL tasks into a full issue — the same single verb as the web's \"Promote to issue\" " +
+        "button (ADR-105). Use it whenever the user says a task should become an issue, or a task grows a thread, " +
+        "dependencies, a status or a code-map link: the issue is created from the task's title/body, the task keeps " +
+        "a lineage pointer and leaves the open list, its comment thread MOVES onto the issue, and the activity feed " +
+        "logs one 'Promoted' row. Do NOT emulate this with add_issue + complete_task — that loses the lineage and " +
+        "strands the thread. Get the id from list_tasks. The task must be filed in a project (an Inbox task is " +
+        "refused with `unfiled` — ask the user to file it, or add_issue directly if they name a project) and you " +
+        "need editor access there. By default the issue joins the project's pool without a map (like the web); pass " +
+        "`map` to place it on an issue map right away, or use map_issue later. Already-promoted tasks answer " +
+        "`promoted` with the existing issue id. Needs an API token.",
+      inputSchema: {
+        id: z.string().describe("Task id (from list_tasks / add_task)"),
+        map: z.string().optional().describe("Issue map slug to place the new issue on (default: none — see maps)"),
+        path: z.string().optional().describe("Project root (default: cwd — used only to find your token/API)"),
+      },
+    },
+    async ({ id, map, path }) => {
+      const res = await promoteTask(rootOf(path), withAuth({ id, map }));
+      if (!res.ok) {
+        if (res.code === "promoted" && res.issue?.id) {
+          return json({ ok: false, code: "promoted", message: res.message, issue: res.issue });
+        }
+        return issueFail("Promote task", res.code, res.message);
+      }
+      return json({ ok: true, issue: res.issue, task: res.task, project: res.project });
     },
   );
 
