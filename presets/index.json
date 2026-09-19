@@ -4,9 +4,36 @@
       "id": "as-built",
       "name": "as-built docs",
       "description": "Living as-built documentation + an ADR log, written by your agent and mirrored to note maps.",
-      "skills": ["alkahest/as-built-docs", "alkahest/adr"],
-      "maps": ["as-built", "adr"],
-      "contents": ["skills", "scaffold", "claude-snippet", "sync-script"]
+      "skills": [
+        "alkahest/as-built-docs",
+        "alkahest/adr"
+      ],
+      "maps": [
+        "as-built",
+        "adr"
+      ],
+      "contents": [
+        "skills",
+        "scaffold",
+        "claude-snippet",
+        "sync-script"
+      ]
+    },
+    {
+      "id": "llm-wiki",
+      "name": "LLM wiki",
+      "description": "A knowledge wiki your agent maintains for you — ingest sources, capture what you learn, lint it periodically. Karpathy's LLM Wiki pattern on a note map.",
+      "skills": [
+        "alkahest/wiki",
+        "alkahest/wiki-capture",
+        "alkahest/wiki-lint"
+      ],
+      "maps": [
+        "wiki"
+      ],
+      "contents": [
+        "skills"
+      ]
     }
   ]
 }

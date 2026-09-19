@@ -1,0 +1,14 @@
+{
+  "id": "llm-wiki",
+  "name": "LLM wiki",
+  "description": "A knowledge wiki your agent maintains for you — ingest sources, capture what you learn, lint it periodically. Karpathy's LLM Wiki pattern on a note map.",
+  "skills": [
+    { "name": "alkahest/wiki", "file": "skills/wiki.md" },
+    { "name": "alkahest/wiki-capture", "file": "skills/wiki-capture.md" },
+    { "name": "alkahest/wiki-lint", "file": "skills/wiki-lint.md" }
+  ],
+  "maps": [
+    { "slug": "wiki", "name": "wiki" }
+  ],
+  "handoff": "Read the alkahest/wiki skill and set up my knowledge wiki in this project — write the Conventions page, then ingest the first source I give you."
+}

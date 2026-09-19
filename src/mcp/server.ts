@@ -20,7 +20,7 @@ import {
 import { completeTask, createTask, postTaskComment, promoteTask, pullSkills, pullTaskComments, pullTasks, resolveTaskComment, saveSkill, updateTask } from "../core/tasks.js";
 import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
-import { listPresets, readPresetBundle } from "../core/docsInit.js";
+import { listPresets, readPresetBundle } from "../core/presets.js";
 import { listProjects } from "../core/listProjects.js";
 import { listHistory } from "../core/history.js";
 import { findProjectRoot } from "../core/project.js";
@@ -814,22 +814,24 @@ export function buildServer(remote?: RemoteOptions): McpServer {
   server.registerTool(
     "presets",
     {
-      title: "List or read a docs preset",
+      title: "List or read a preset",
       description:
         "START HERE when the user asks to set up documentation for a repo — \"start documenting this project\", " +
-        "\"set up as-built docs / an ADR log\", \"연동해줘/문서화 시작해줘\". PRESETS are alkahest's packaged " +
-        "opinions (ADR-083): a documentation convention plus everything needed to run it. Call with no argument " +
-        "to list what's available; call with `preset` to get that bundle's full contents — skill bodies, the note " +
-        "maps it expects, repo scaffold files, a reference sync script, and a CLAUDE.md snippet. " +
-        "TO INSTALL ONE, use the tools you already have: (1) `skills` first, then `add_skill` for each preset " +
-        "skill whose name is NOT already there — an existing same-name skill is the user's own, LEAVE IT; " +
-        "(2) `create_map` for each map slug that doesn't exist yet (type 'note'); (3) write the scaffold files and " +
-        "the script at their given paths, never overwriting an existing file; (4) ASK before appending the snippet " +
-        "to CLAUDE.md. Then follow the installed skill's bootstrap protocol to write the first docs and mirror " +
-        "them, so the user ends the session with a map link rather than an empty folder. The CLI equivalent is " +
-        "`alkahest docs init`; doing it through these tools reaches the same state. No token or project needed.",
+        "\"set up as-built docs / an ADR log\", \"연동해줘/문서화 시작해줘\" — OR a knowledge wiki the agent maintains " +
+        "(\"set up my wiki\", \"Karpathy-style LLM wiki\", \"위키 만들어줘\"). PRESETS are alkahest's packaged " +
+        "opinions (ADR-083/106): a convention the agent follows plus everything needed to run it. Call with no " +
+        "argument to list what's available; call with `preset` to get that bundle's full contents — skill bodies, " +
+        "the note maps it expects, and (when the preset has a repo half) scaffold files, a reference script and a " +
+        "CLAUDE.md snippet. TO INSTALL ONE, use the tools you already have: (1) `skills` first, then `add_skill` " +
+        "for each preset skill whose name is NOT already there — an existing same-name skill is the user's own, " +
+        "LEAVE IT; (2) `create_map` for each map slug that doesn't exist yet (type 'note'); (3) write any scaffold " +
+        "files and scripts at their given paths, never overwriting an existing file; (4) ASK before appending a " +
+        "snippet to CLAUDE.md. Then do what the bundle's `handoff` sentence says — the first docs pass, or the " +
+        "wiki's Conventions page and first ingest — so the user ends the session with a map link rather than an " +
+        "empty install. The CLI equivalent is `alkahest preset install <id>`; doing it through these tools reaches " +
+        "the same state. No token or project needed.",
       inputSchema: {
-        preset: z.string().optional().describe("Preset id (e.g. 'as-built') — omit to list the registry"),
+        preset: z.string().optional().describe("Preset id ('as-built', 'llm-wiki') — omit to list the registry"),
       },
     },
     async ({ preset }) => {

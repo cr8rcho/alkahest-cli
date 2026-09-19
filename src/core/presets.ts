@@ -6,13 +6,16 @@ import { createMap, listMaps } from "./maps.js";
 import { resolveProject } from "./project.js";
 
 /**
- * Docs presets (cloud ADR-083): installable bundles of an OPINION — a documentation
- * convention (account skills), a repo scaffold, a CLAUDE.md snippet carrying the agent
- * rules + mirroring spec, and a reference sync script. The preset gates nothing: every
- * step rides public primitives (skills-post upsert, plain file copies), so a user who
- * skips it and builds their own environment loses nothing. `docs init` is sugar for
- * discoverability, not a gate — an agent driving MCP `add_skill` + copying files by hand
- * lands in the same state.
+ * Presets (cloud ADR-083, generalized by ADR-106): installable bundles of an OPINION — a
+ * convention the agent follows, packaged as account skills plus whatever running it
+ * needs. The first preset (`as-built`) is a repo documentation convention and carries a
+ * repo half — a docs/ scaffold, a CLAUDE.md snippet, a reference sync script. The second
+ * (`llm-wiki`) is a knowledge-wiki convention with NO repo half: skills + a note map, and
+ * every manifest field beyond `skills` is optional for exactly that reason. The preset
+ * gates nothing: every step rides public primitives (skills-post upsert, plain file
+ * copies, create-map), so a user who skips it and builds their own environment loses
+ * nothing. `preset install` is sugar for discoverability, not a gate — an agent driving
+ * MCP `add_skill` + `create_map` + copying files by hand lands in the same state.
  *
  * Bundles live in the package's `presets/` directory (shipped via npm `files`), which
  * doubles as the public, MIT-licensed home of the method itself.
@@ -60,6 +63,8 @@ interface PresetManifest {
   snippet?: string;
   scripts?: { file: string; dest: string }[];
   maps?: { slug: string; name?: string }[];
+  /** The sentence to hand the agent after an install — the preset's first pass, in its own words. */
+  handoff?: string;
 }
 
 /** Load one bundle's manifest, or an unknown_preset error naming what IS available. */
@@ -93,6 +98,8 @@ export interface PresetBundle {
   scripts: { dest: string; content: string }[];
   /** Agent rules for the repo's CLAUDE.md (append only with the user's say-so). */
   snippet?: string;
+  /** What to ask the agent once everything is in place. */
+  handoff?: string;
 }
 
 export interface PresetBundleResult {
@@ -134,7 +141,7 @@ export function readPresetBundle(presetId = "as-built"): PresetBundleResult {
   }
 }
 
-export interface DocsInitParams {
+export interface InstallPresetParams {
   api?: string;
   token?: string;
   slug?: string;
@@ -144,7 +151,7 @@ export interface DocsInitParams {
   force?: boolean;
 }
 
-export interface DocsInitResult {
+export interface InstallPresetResult {
   ok: boolean;
   preset?: string;
   /** Per-skill outcome. "skipped" = a same-name skill already exists and --force was not given. */
@@ -159,11 +166,14 @@ export interface DocsInitResult {
   snippet?: string;
   /** True when the target CLAUDE.md already carries the snippet marker. */
   snippetInstalled?: boolean;
+  /** The preset's hand-off sentence, for the command layer's "Next" block. */
+  handoff?: string;
   code?: string;
   message?: string;
 }
 
-const SNIPPET_MARKER = "alkahest as-built preset";
+/** Each snippet opens with an HTML comment naming its preset — that line is the "already installed" marker. */
+const snippetMarker = (presetId: string): string => `alkahest ${presetId} preset`;
 
 /** Every file under dir, as paths relative to dir. */
 function walkFiles(dir: string): string[] {
@@ -180,19 +190,20 @@ function walkFiles(dir: string): string[] {
 }
 
 /**
- * Install a docs preset into the repo at `path`: account skills (upsert-by-name; existing
- * names are respected unless force), scaffold files (never overwritten), the reference
- * sync script, and — when the folder resolves to a project — the preset's note maps.
- * Returns the CLAUDE.md snippet for the caller to print or append; never edits CLAUDE.md
- * itself (file mutation is the command layer's explicit, opt-in step).
+ * Install a preset: account skills (upsert-by-name; existing names are respected unless
+ * force), then whatever repo half the manifest declares — scaffold files (never
+ * overwritten) into `path`, reference scripts — and, when `path`/`slug` resolve to a
+ * project, the preset's note maps. Returns the CLAUDE.md snippet (if any) for the caller
+ * to print or append; never edits CLAUDE.md itself (file mutation is the command layer's
+ * explicit, opt-in step). A preset with no repo half never touches the filesystem.
  */
-export async function docsInit(path: string, params: DocsInitParams = {}): Promise<DocsInitResult> {
+export async function installPreset(path: string, params: InstallPresetParams = {}): Promise<InstallPresetResult> {
   const presetId = (params.preset ?? "as-built").trim();
   const loaded = loadManifest(presetId);
   if (!("manifest" in loaded)) return { ok: false, code: loaded.code, message: loaded.message };
   const { dir, manifest } = loaded;
   const root = resolve(path || ".");
-  const result: DocsInitResult = { ok: true, preset: presetId, skills: [], scaffold: [], scripts: [], maps: [] };
+  const result: InstallPresetResult = { ok: true, preset: presetId, skills: [], scaffold: [], scripts: [], maps: [], handoff: manifest.handoff };
 
   // 1) Account skills — upsert by name, but never silently clobber a user-edited body:
   //    an existing name is skipped unless --force (mirrors deploy_skill being explicit).
@@ -274,7 +285,7 @@ export async function docsInit(path: string, params: DocsInitParams = {}): Promi
   if (manifest.snippet) {
     result.snippet = readFileSync(join(dir, manifest.snippet), "utf8");
     const claudeMd = join(root, "CLAUDE.md");
-    result.snippetInstalled = existsSync(claudeMd) && readFileSync(claudeMd, "utf8").includes(SNIPPET_MARKER);
+    result.snippetInstalled = existsSync(claudeMd) && readFileSync(claudeMd, "utf8").includes(snippetMarker(manifest.id));
   }
   return result;
 }
