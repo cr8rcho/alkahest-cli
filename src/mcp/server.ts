@@ -1526,8 +1526,8 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       description:
         "Post a reply or a note on an issue's discussion thread (ADR-020). Reply under a comment with `parent` (e.g. to " +
         "acknowledge the user's decision or add follow-up), or start a top-level note with `issue`. Defaults to kind " +
-        "'answer' for a reply and 'note' otherwise; pass `kind` to override. For a completion summary, prefer " +
-        "complete_issue. Needs an API token.",
+        "'answer' for a reply and 'note' otherwise; pass `kind` to override. To close the issue as well, use " +
+        "complete_issue (its optional `result` posts the summary for you). Needs an API token.",
       inputSchema: {
         issue: z.string().optional().describe("Issue id for a top-level note (omit when replying)"),
         parent: z.string().optional().describe("Comment id to reply under (inherits the issue)"),
@@ -1568,16 +1568,17 @@ export function buildServer(remote?: RemoteOptions): McpServer {
   server.registerTool(
     "complete_issue",
     {
-      title: "Complete an issue with a result",
+      title: "Complete an issue",
       description:
-        "Finish an issue: move it to a terminal status AND leave a result summary on its thread, in one step (ADR-020 " +
-        "layer 3). This is the right way to close work — the status flip paints progress onto the map, and the result " +
-        "comment records WHAT you did and why for the human history (don't just silently flip status). After this, run " +
-        "scan + publish so the code map reflects your changes; the publish stamps this issue with the map version that " +
-        "shipped it. Needs an API token.",
+        "Finish an issue: move it to a terminal status (default: the project's first terminal status, usually 'done'). " +
+        "Completion IS the status change — the same write the web's status chip makes — so nothing else is required " +
+        "(ADR-107 in the web repo retired the mandatory result note). Pass `result` only when there is something worth " +
+        "a line on the thread (an outcome the user should read, a caveat); routine closes need none — the issue's " +
+        "discussion already holds the why. After this, run scan + publish so the code map reflects your changes; the " +
+        "publish stamps this issue with the map version that shipped it. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Issue id to complete (from the issues tool)"),
-        result: z.string().describe("What you did / the outcome — recorded as a 'result' comment on the issue"),
+        result: z.string().optional().describe("Optional outcome note — posted as a 'result' comment on the issue's thread when given"),
         status: z.string().optional().describe("Terminal status id from issue_config (default: the first terminal status, usually 'done')"),
         project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
@@ -1596,13 +1597,20 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       }
       const upd = await updateIssue(root, withAuth({ id, set: { status: target } }));
       if (!upd.ok) return issueFail("Complete issue", upd.code, upd.message);
-      const cmt = await postIssueComment(root, withAuth({ issue_id: id, body: result, kind: "result" }));
-      if (!cmt.ok) return issueFail("Complete issue (result note)", cmt.code, cmt.message);
+      // The status flip is the completion. A result note is optional (ADR-107): when the caller has
+      // one, it lands on the thread as before; when not, nothing is posted — a silent close is the
+      // normal close, as it is from the web's status chip.
+      let comment: unknown = null;
+      if (result && result.trim()) {
+        const cmt = await postIssueComment(root, withAuth({ issue_id: id, body: result, kind: "result" }));
+        if (!cmt.ok) return issueFail("Complete issue (result note)", cmt.code, cmt.message);
+        comment = cmt.comment;
+      }
       return json({
         ok: true,
         issue: upd.issue,
-        result: cmt.comment,
-        note: "Done + result recorded. Now run scan + publish so the code map reflects the change — publish stamps this issue with the shipping map version.",
+        ...(comment ? { result: comment } : {}),
+        note: (comment ? "Done + result recorded. " : "Done. ") + "Now run scan + publish so the code map reflects the change — publish stamps this issue with the shipping map version.",
       });
     },
   );
