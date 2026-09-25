@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import { diff3Merge, diffComm } from "node-diff3";
 import { pullSkills, saveSkill } from "./tasks.js";
 import { listPresets, loadManifest, snippetMarker, type PresetManifest } from "./presets.js";
@@ -18,7 +20,10 @@ import { listPresets, loadManifest, snippetMarker, type PresetManifest } from ".
  *    replaced local lines are reported so an agent (or person) can put back what mattered
  *
  * The update always completes — the user ran it because they want it; "merge later" leftovers
- * were rejected. The judge's ground truth is presets/<id>/history.json + history/<sha>, built
+ * were rejected. The one exception is a copy the preset can't merge into without breaking it
+ * (`diverged`: the repo's own rewrite, or a merged script that no longer parses). That copy is
+ * left exactly as it was and the preset's change is printed to apply by hand. A working sync
+ * must never be traded for a half-merged one. The judge's ground truth is presets/<id>/history.json + history/<sha>, built
  * from git by scripts/preset-history.mjs and shipped in the package. No DB state: skills are
  * judged by body, repo files by content.
  */
@@ -35,6 +40,7 @@ export type UpdateState =
   | "replaced" // was an unedited shipped body — now the current one
   | "merged" // edited copy — preset changes merged in, every local edit kept
   | "merged_with_conflicts" // edited copy — merged, but some local lines lost to the preset's
+  | "diverged" // not a copy the preset can merge into (a rewrite, or the merge wouldn't run) — left untouched
   | "not_installed" // nothing of this item in the account / repo
   | "failed";
 
@@ -57,6 +63,8 @@ export interface UpdateItem {
   /** False when the base had to be guessed from an edited copy (closest shipped body). */
   exactBase?: boolean;
   conflicts?: UpdateConflict[];
+  /** For `diverged`: what the preset changed (its previous body → current), to apply by hand. */
+  presetChange?: string[];
   message?: string;
 }
 
@@ -104,6 +112,31 @@ interface Judged {
   from?: string;
   exactBase?: boolean;
   conflicts?: UpdateConflict[];
+  presetChange?: string[];
+  message?: string;
+}
+
+/**
+ * Below this share of lines in common with its closest shipped body, a copy is not an edited
+ * copy but the repo's own rewrite — a line merge would splice the preset's head and tail onto
+ * a body that never declared what they use (seen 2026-09-26: iobook/iomatrix rewrote the sync
+ * script from scratch, 18% shared, and the merge didn't parse). Real edited copies measured
+ * 61–98%.
+ */
+const MIN_SHARED = 0.5;
+
+/** The preset's own change between two of its bodies, as -/+ lines with a location. */
+function presetPatch(from: string[], to: string[]): string[] {
+  const out: string[] = [];
+  let line = 1;
+  for (const c of diffComm(from, to)) {
+    if (c.common) { line += c.common.length; continue; }
+    out.push(`@@ at line ${line} of the preset's previous version`);
+    for (const l of c.buffer1) out.push(`- ${l}`);
+    for (const l of c.buffer2) out.push(`+ ${l}`);
+    line += c.buffer1.length;
+  }
+  return out;
 }
 
 /**
@@ -130,9 +163,20 @@ export function judgeCopy(local: string, current: string, shipped: { since: stri
   }
   if (!base) return { state: "current", text: local }; // no history — nothing to merge against
 
+  const baseLines = lines(bodyOf(base.sha));
+  const presetChange = presetPatch(baseLines, lines(current));
+  let shared = 0;
+  for (const c of diffComm(localLines, baseLines)) if (c.common) shared += c.common.length;
+  if (shared / localLines.length < MIN_SHARED) {
+    return {
+      state: "diverged", text: local, from: base.since, exactBase: false, presetChange,
+      message: `your copy is its own version (${Math.round((100 * shared) / localLines.length)}% of lines shared with the preset) — merging would mix the two`,
+    };
+  }
+
   const out: string[] = [];
   const conflicts: UpdateConflict[] = [];
-  for (const region of diff3Merge(localLines, lines(bodyOf(base.sha)), lines(current))) {
+  for (const region of diff3Merge(localLines, baseLines, lines(current))) {
     if (region.ok) out.push(...region.ok);
     else if (region.conflict && region.conflict.o.length === 0) {
       // Both sides only ADDED lines at the same spot (e.g. the user appended a rule to the
@@ -152,7 +196,28 @@ export function judgeCopy(local: string, current: string, shipped: { since: stri
     from: base.since,
     exactBase: false,
     conflicts: conflicts.length ? conflicts : undefined,
+    presetChange,
   };
+}
+
+/**
+ * A merged SCRIPT must still run: `node --check` on the result, and a failure turns the merge
+ * into `diverged` (nothing written). Line merges can't see that code in one hunk depends on a
+ * declaration in another; this is the backstop behind MIN_SHARED.
+ */
+function checkScript(dest: string, j: Judged): Judged {
+  if (!["merged", "merged_with_conflicts"].includes(j.state) || !/\.(mjs|cjs|js)$/.test(dest)) return j;
+  const dir = mkdtempSync(join(tmpdir(), "alkahest-preset-check-"));
+  try {
+    const probe = join(dir, basename(dest));
+    writeFileSync(probe, j.text);
+    const run = spawnSync(process.execPath, ["--check", probe], { encoding: "utf8" });
+    if (run.status === 0) return j;
+    const why = (run.stderr ?? "").split("\n").find((l) => /Error/.test(l))?.trim() ?? "syntax check failed";
+    return { ...j, state: "diverged", text: "", conflicts: undefined, message: `the merged result doesn't run (${why})` };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -231,7 +296,10 @@ async function updateOne(
   const changedFiles: { file: string; from?: string }[] = [];
   const itemFrom = (kind: UpdateItem["kind"], name: string, j: Judged, file: string): UpdateItem => {
     if (j.state !== "current") changedFiles.push({ file, from: j.from });
-    return { kind, name, state: j.state, from: j.from, exactBase: j.exactBase, conflicts: j.conflicts };
+    return {
+      kind, name, state: j.state, from: j.from, exactBase: j.exactBase, conflicts: j.conflicts,
+      presetChange: j.state === "diverged" ? j.presetChange : undefined, message: j.message,
+    };
   };
 
   // 1) Account skills — the personal row of the same name.
@@ -240,7 +308,7 @@ async function updateOne(
     if (local === undefined) { items.push({ kind: "skill", name: s.name, state: "not_installed" }); continue; }
     const j = judgeCopy(local, readFileSync(join(dir, s.file), "utf8"), shippedOf(s.file));
     const item = itemFrom("skill", s.name, j, s.file);
-    if (j.state !== "current" && !params.dryRun) {
+    if (j.state !== "current" && j.state !== "diverged" && !params.dryRun) {
       const saved = await saveSkill(path, { api: params.api, token: params.token, name: s.name, body: j.text });
       if (!saved.ok) { item.state = "failed"; item.message = saved.message ?? saved.code; }
     }
@@ -251,8 +319,8 @@ async function updateOne(
   for (const s of manifest.scripts ?? []) {
     const dest = join(root, ...s.dest.split("/"));
     if (!existsSync(dest)) { items.push({ kind: "script", name: s.dest, state: "not_installed" }); continue; }
-    const j = judgeCopy(readFileSync(dest, "utf8"), readFileSync(join(dir, s.file), "utf8"), shippedOf(s.file));
-    if (j.state !== "current" && !params.dryRun) writeFileSync(dest, j.text);
+    const j = checkScript(dest, judgeCopy(readFileSync(dest, "utf8"), readFileSync(join(dir, s.file), "utf8"), shippedOf(s.file)));
+    if (j.state !== "current" && j.state !== "diverged" && !params.dryRun) writeFileSync(dest, j.text);
     items.push(itemFrom("script", s.dest, j, s.file));
   }
 
@@ -273,7 +341,7 @@ async function updateOne(
       if (j.state === "current" && lines(local).some((l) => l.trim() === close) !== lines(current).some((l) => l.trim() === close)) {
         j.state = "merged"; // only the marker differs
       }
-      if (j.state !== "current" && !params.dryRun) {
+      if (j.state !== "current" && j.state !== "diverged" && !params.dryRun) {
         const merged = lines(j.text);
         while (merged.length && merged[merged.length - 1] === "") merged.pop();
         if (lines(current).some((l) => l.trim() === close)) merged.push(close);
@@ -326,7 +394,7 @@ export async function repoPresetsBehind(path: string): Promise<string[]> {
     const loaded = loadManifest(p.id);
     if (!("manifest" in loaded)) continue;
     const report = await updateOne(root, path, loaded.dir, { ...loaded.manifest, skills: [] }, new Map(), { dryRun: true });
-    if (report.items.some((i) => ["replaced", "merged", "merged_with_conflicts"].includes(i.state))) behind.push(p.id);
+    if (report.items.some((i) => ["replaced", "merged", "merged_with_conflicts", "diverged"].includes(i.state))) behind.push(p.id);
   }
   return behind;
 }

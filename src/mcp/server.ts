@@ -833,7 +833,9 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         "its files are behind): with a shell, run `alkahest preset update` in the repo — unedited copies are " +
         "replaced, edited ones merged; where an edit and a preset change hit the same lines the preset's lines win " +
         "and the command lists the replaced lines — READ that list and restore any line that was a deliberate " +
-        "customization, then show the user `git diff`. Without a shell, update the skills only: compare each " +
+        "customization. A copy it can't merge safely (the repo's own rewrite, or a merge that wouldn't run) is " +
+        "left untouched and the preset's change is printed: apply that change to the repo's version yourself, keeping " +
+        "how it works. Then show the user `git diff`. Without a shell, update the skills only: compare each " +
         "installed skill with this bundle's body, and rewrite it with add_skill keeping the user's own edits. " +
         "No token or project needed.",
       inputSchema: {

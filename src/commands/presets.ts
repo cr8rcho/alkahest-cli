@@ -126,6 +126,7 @@ const updateLabel: Record<UpdateState, string> = {
   replaced: "updated",
   merged: "updated — your edits kept",
   merged_with_conflicts: "updated — some of your lines replaced (below)",
+  diverged: "NOT updated — left as is",
   not_installed: "not installed",
   failed: "FAILED",
 };
@@ -152,6 +153,7 @@ export async function presetUpdateCmd(id: string | undefined, options: PresetUpd
 
   const touchedFiles = new Set<string>();
   let replacedLines = false;
+  const diverged: string[] = [];
   for (const p of res.presets) {
     console.log(`[alkahest] preset '${p.id}'${options.dryRun ? " (dry run — nothing written)" : ""}:`);
     for (const i of p.items) {
@@ -159,6 +161,11 @@ export async function presetUpdateCmd(id: string | undefined, options: PresetUpd
       const from = i.from && i.state !== "current" ? ` (from ${i.from}${i.exactBase === false ? ", closest match to your copy" : ""})` : "";
       console.log(`  ${i.kind} ${i.name}: ${updateLabel[i.state]}${from}${i.message ? ` — ${i.message}` : ""}`);
       if (i.kind !== "skill" && ["replaced", "merged", "merged_with_conflicts"].includes(i.state)) touchedFiles.add(i.name);
+      if (i.state === "diverged") {
+        diverged.push(i.name);
+        console.log("    The preset's change to apply to your version by hand:");
+        for (const l of i.presetChange ?? []) console.log(`      ${l}`);
+      }
       for (const c of i.conflicts ?? []) {
         replacedLines = true;
         console.log(`    at line ${c.line}:`);
@@ -177,5 +184,9 @@ export async function presetUpdateCmd(id: string | undefined, options: PresetUpd
   if (replacedLines) {
     console.log("[alkahest] Some of your lines were replaced by the preset's. If they were deliberate, hand it to your agent:");
     console.log('  "Review the lines alkahest preset update replaced and restore the ones that were our customizations."');
+  }
+  if (diverged.length) {
+    console.log(`[alkahest] ${diverged.join(", ")} ${diverged.length === 1 ? "was" : "were"} left untouched — still working as before, but without the preset's change. Hand it to your agent:`);
+    console.log(`  "Apply the preset change alkahest preset update printed for ${diverged.join(", ")} to our version, keeping how ours works."`);
   }
 }
