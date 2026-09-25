@@ -36,6 +36,10 @@
       {
         "sha": "32be1c85c4b2757d",
         "since": "0.1.90"
+      },
+      {
+        "sha": "2eb353c13db7e5a7",
+        "since": "0.1.92"
       }
     ],
     "CLAUDE-snippet.md": [

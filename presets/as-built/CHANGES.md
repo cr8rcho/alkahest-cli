@@ -4,6 +4,11 @@ Why each shipped file changed, newest first. `alkahest preset update` prints the
 than the version an installed copy came from, so whoever merges knows what the change is for.
 One `## <version>` per release that touched the preset; each bullet names its file.
 
+## 0.1.92
+- `sync-docs-maps.mjs`: removes its staging dir after a successful sync (it is this run's own
+  since 0.1.90, so nothing else is touched); kept on `--stage-only` and on failure, with the path
+  printed.
+
 ## 0.1.91
 - `CLAUDE-snippet.md`: closes with an end marker (`<!-- /alkahest as-built preset -->`) so
   `alkahest preset update` can find the block's boundary; the header names the update command.
