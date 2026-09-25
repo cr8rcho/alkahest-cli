@@ -17,7 +17,7 @@
 // Re-running is safe: import is idempotent by source_path, then title.
 // This script belongs to the repo it lives in — adapt titles/sets/maps to local conventions.
 // Usage: node scripts/sync-docs-maps.mjs [--stage-only]
-import { readdirSync, readFileSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { readdirSync, readFileSync, mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,8 +25,9 @@ import { tmpdir } from "node:os";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DOCS = join(ROOT, "docs");
-const OUT = join(tmpdir(), "alkahest-docs-staging");
-rmSync(OUT, { recursive: true, force: true });
+// A fresh dir per run: a fixed shared path let another repo's copy of this script, running at the
+// same time, restage its own docs under us, and our import pushed them into this project's maps.
+const OUT = mkdtempSync(join(tmpdir(), "alkahest-docs-staging-"));
 
 const sanitize = (t) =>
   t.replace(/\(\//g, "(").replace(/[/\\:]/g, "-").replace(/`/g, "").replace(/\s+/g, " ").trim();
