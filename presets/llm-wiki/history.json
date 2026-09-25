@@ -1,0 +1,22 @@
+{
+  "files": {
+    "skills/wiki.md": [
+      {
+        "sha": "59cf7b5051fce7e3",
+        "since": "0.1.88"
+      }
+    ],
+    "skills/wiki-capture.md": [
+      {
+        "sha": "44e1874c74476cd7",
+        "since": "0.1.88"
+      }
+    ],
+    "skills/wiki-lint.md": [
+      {
+        "sha": "b5f313af919c6236",
+        "since": "0.1.88"
+      }
+    ]
+  }
+}

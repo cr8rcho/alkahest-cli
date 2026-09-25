@@ -1,0 +1,56 @@
+{
+  "files": {
+    "skills/as-built-docs.md": [
+      {
+        "sha": "8a9e3845f322e51c",
+        "since": "0.1.72"
+      },
+      {
+        "sha": "5a9ef521edb13aa1",
+        "since": "0.1.74"
+      },
+      {
+        "sha": "0fe9dc4fc94d413f",
+        "since": "0.1.76"
+      }
+    ],
+    "skills/adr.md": [
+      {
+        "sha": "bd84de1dd9759c12",
+        "since": "0.1.72"
+      },
+      {
+        "sha": "6e0b36b4d353b6b6",
+        "since": "0.1.75"
+      },
+      {
+        "sha": "87497464ab8cfa7d",
+        "since": "0.1.76"
+      }
+    ],
+    "sync-docs-maps.mjs": [
+      {
+        "sha": "f431a6fcf54a4906",
+        "since": "0.1.72"
+      },
+      {
+        "sha": "32be1c85c4b2757d",
+        "since": "0.1.90"
+      }
+    ],
+    "CLAUDE-snippet.md": [
+      {
+        "sha": "8e8f6eebcb4b2a58",
+        "since": "0.1.72"
+      },
+      {
+        "sha": "ed625ebd1209c061",
+        "since": "0.1.76"
+      },
+      {
+        "sha": "96497831c905de56",
+        "since": "0.1.91"
+      }
+    ]
+  }
+}

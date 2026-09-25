@@ -38,7 +38,7 @@ export interface PresetsListResult {
 }
 
 /** The packaged presets/ dir — package root relative to this file (works from dist/ and src/). */
-function presetsRoot(): string {
+export function presetsRoot(): string {
   return join(dirname(fileURLToPath(import.meta.url)), "..", "..", "presets");
 }
 
@@ -54,7 +54,7 @@ export function listPresets(): PresetsListResult {
   }
 }
 
-interface PresetManifest {
+export interface PresetManifest {
   id: string;
   name: string;
   description: string;
@@ -68,7 +68,7 @@ interface PresetManifest {
 }
 
 /** Load one bundle's manifest, or an unknown_preset error naming what IS available. */
-function loadManifest(presetId: string): { dir: string; manifest: PresetManifest } | { code: string; message: string } {
+export function loadManifest(presetId: string): { dir: string; manifest: PresetManifest } | { code: string; message: string } {
   const dir = join(presetsRoot(), presetId);
   try {
     return { dir, manifest: JSON.parse(readFileSync(join(dir, "preset.json"), "utf8")) as PresetManifest };
@@ -173,7 +173,7 @@ export interface InstallPresetResult {
 }
 
 /** Each snippet opens with an HTML comment naming its preset — that line is the "already installed" marker. */
-const snippetMarker = (presetId: string): string => `alkahest ${presetId} preset`;
+export const snippetMarker = (presetId: string): string => `alkahest ${presetId} preset`;
 
 /** Every file under dir, as paths relative to dir. */
 function walkFiles(dir: string): string[] {

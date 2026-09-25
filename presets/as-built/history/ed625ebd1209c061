@@ -1,4 +1,4 @@
-<!-- alkahest as-built preset — installed by `alkahest preset install as-built`. Owned by this repo: edit freely; `alkahest preset update` merges later preset changes into your edits. -->
+<!-- alkahest as-built preset — installed by `alkahest docs init`. Owned by this repo: edit freely. -->
 ## Documentation — as-built docs + ADR
 
 This repo keeps **as-built documentation** under `docs/` (four layers: system / components /
@@ -22,4 +22,3 @@ alkahest MCP `skills` tool before writing docs.
    is idempotent by source_path first, title second — re-runs and retitles update notes in
    place. The script is a reference implementation and belongs to this repo: adapt it to
    local conventions freely.
-<!-- /alkahest as-built preset -->

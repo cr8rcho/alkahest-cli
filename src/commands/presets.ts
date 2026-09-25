@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline";
 import { appendClaudeSnippet, installPreset, listPresets, type InstallPresetResult } from "../core/presets.js";
+import { updatePreset, type UpdateState } from "../core/presetUpdate.js";
 
 /**
  * Printers for the preset workflow (cloud ADR-083 → ADR-106). Pure logic lives in
@@ -34,7 +35,7 @@ export interface PresetInstallOptions {
 }
 
 const label: Record<string, string> = {
-  installed: "installed", updated: "updated (--force)", skipped: "skipped — exists (yours; --force to overwrite)",
+  installed: "installed", updated: "updated (--force)", skipped: "skipped — exists (kept; `alkahest preset update` brings it up to date, keeping your edits)",
   created: "created", exists: "exists", failed: "FAILED", no_project: "no project bound — create later (web Maps page or MCP create_map)",
 };
 
@@ -110,5 +111,71 @@ function printNextStep(res: InstallPresetResult): void {
   if ((res.maps ?? []).some((m) => m.action === "no_project")) {
     console.log("\n  This folder isn't bound to a project yet — pass --slug <project>, or run `alkahest publish` first,");
     console.log("  or the note maps have nowhere to land.");
+  }
+}
+
+export interface PresetUpdateOptions {
+  api?: string;
+  path?: string;
+  dryRun?: boolean;
+  json?: boolean;
+}
+
+const updateLabel: Record<UpdateState, string> = {
+  current: "up to date",
+  replaced: "updated",
+  merged: "updated — your edits kept",
+  merged_with_conflicts: "updated — some of your lines replaced (below)",
+  not_installed: "not installed",
+  failed: "FAILED",
+};
+
+/**
+ * `alkahest preset update [id]` (cloud ADR-108) — bring installed skills / script / snippet up
+ * to the preset's current bodies. It always completes: where an edit and a preset change hit
+ * the same lines the preset wins, and those replaced lines are printed so the agent (or the
+ * person) can restore what was deliberate. `--dry-run` reports without writing.
+ */
+export async function presetUpdateCmd(id: string | undefined, options: PresetUpdateOptions): Promise<void> {
+  const res = await updatePreset(options.path || ".", { api: options.api, preset: id, dryRun: options.dryRun });
+  if (!res.ok || !res.presets) return die(res.message ?? res.code ?? "update failed");
+  if (options.json) {
+    console.log(JSON.stringify({ ok: true, dryRun: !!options.dryRun, presets: res.presets }, null, 2));
+    if (res.presets.some((p) => p.items.some((i) => i.state === "failed"))) process.exitCode = 1;
+    return;
+  }
+  if (!res.presets.length) {
+    console.log("[alkahest] no preset is installed here (account skills or this repo) — nothing to update.");
+    console.log("  Install one with `alkahest preset install <id>` (see `alkahest preset list`).");
+    return;
+  }
+
+  const touchedFiles = new Set<string>();
+  let replacedLines = false;
+  for (const p of res.presets) {
+    console.log(`[alkahest] preset '${p.id}'${options.dryRun ? " (dry run — nothing written)" : ""}:`);
+    for (const i of p.items) {
+      if (i.state === "not_installed" && !id) continue;
+      const from = i.from && i.state !== "current" ? ` (from ${i.from}${i.exactBase === false ? ", closest match to your copy" : ""})` : "";
+      console.log(`  ${i.kind} ${i.name}: ${updateLabel[i.state]}${from}${i.message ? ` — ${i.message}` : ""}`);
+      if (i.kind !== "skill" && ["replaced", "merged", "merged_with_conflicts"].includes(i.state)) touchedFiles.add(i.name);
+      for (const c of i.conflicts ?? []) {
+        replacedLines = true;
+        console.log(`    at line ${c.line}:`);
+        for (const l of c.local) console.log(`      - ${l}`);
+        for (const l of c.preset) console.log(`      + ${l}`);
+      }
+    }
+    if (p.changes.length) {
+      console.log("  What changed in the preset:");
+      for (const l of p.changes) console.log(`    ${l}`);
+    }
+    if (p.items.some((i) => i.state === "failed")) process.exitCode = 1;
+  }
+  if (options.dryRun) return;
+  if (touchedFiles.size) console.log(`\n[alkahest] Review the repo changes: git diff ${[...touchedFiles].join(" ")}`);
+  if (replacedLines) {
+    console.log("[alkahest] Some of your lines were replaced by the preset's. If they were deliberate, hand it to your agent:");
+    console.log('  "Review the lines alkahest preset update replaced and restore the ones that were our customizations."');
   }
 }

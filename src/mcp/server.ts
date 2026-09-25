@@ -829,7 +829,13 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         "snippet to CLAUDE.md. Then do what the bundle's `handoff` sentence says — the first docs pass, or the " +
         "wiki's Conventions page and first ingest — so the user ends the session with a map link rather than an " +
         "empty install. The CLI equivalent is `alkahest preset install <id>`; doing it through these tools reaches " +
-        "the same state. No token or project needed.",
+        "the same state. TO UPDATE an installed preset (the user asks to update presets, or `alkahest update` said " +
+        "its files are behind): with a shell, run `alkahest preset update` in the repo — unedited copies are " +
+        "replaced, edited ones merged; where an edit and a preset change hit the same lines the preset's lines win " +
+        "and the command lists the replaced lines — READ that list and restore any line that was a deliberate " +
+        "customization, then show the user `git diff`. Without a shell, update the skills only: compare each " +
+        "installed skill with this bundle's body, and rewrite it with add_skill keeping the user's own edits. " +
+        "No token or project needed.",
       inputSchema: {
         preset: z.string().optional().describe("Preset id ('as-built', 'llm-wiki') — omit to list the registry"),
       },

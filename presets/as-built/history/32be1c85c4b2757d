@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+// Reference implementation (alkahest as-built preset) — mirror this repo's docs into the
+// project's note maps:
+//   docs/decisions/NNN-*.md                        → note map `adr`      (flat)
+//   docs/{system,components,features,modules}/*.md → note map `as-built` (folder = category)
+//
+// Staging transforms (the importer's rules: filename = title, frontmatter passes through):
+//   - title from the first H1 ("ADR-NNN: rest — tail" → "ADR-NNN rest"; as-built strips a
+//     "System|Component|Feature|Module — " class prefix and a " — " tail), sanitized;
+//   - the H1 line is dropped from the body (the note title renders it);
+//   - relative .md links WITHIN each set become [[wikilinks]] so the graph connects
+//     (cross-set links stay plain markdown);
+//   - the ORIGINAL repo path rides in as `source_path:` frontmatter — the staged filename
+//     is title-derived, so this is what keeps identity through a retitle (the importer
+//     matches source_path before title and renames the note in place).
+//
+// Re-running is safe: import is idempotent by source_path, then title.
+// This script belongs to the repo it lives in — adapt titles/sets/maps to local conventions.
+// Usage: node scripts/sync-docs-maps.mjs [--stage-only]
+import { readdirSync, readFileSync, mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { join, dirname, basename } from "node:path";
+import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const DOCS = join(ROOT, "docs");
+// A fresh dir per run: a fixed shared path let another repo's copy of this script, running at the
+// same time, restage its own docs under us, and our import pushed them into this project's maps.
+const OUT = mkdtempSync(join(tmpdir(), "alkahest-docs-staging-"));
+
+const sanitize = (t) =>
+  t.replace(/\(\//g, "(").replace(/[/\\:]/g, "-").replace(/`/g, "").replace(/\s+/g, " ").trim();
+const firstH1 = (src) => (src.match(/^#\s+(.+)$/m) ?? [null, ""])[1].trim();
+// Frontmatter rides through to the staged file — the importer strips it from the stored body
+// and harvests its keys into note props (`tags:` is the reserved one). Split it off first so
+// stripH1 still sees the H1 at the head of what's left.
+const splitFm = (src) => {
+  const m = src.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n+/);
+  return m ? [m[0], src.slice(m[0].length)] : ["", src];
+};
+const stripH1 = (src) => {
+  const [fm, body] = splitFm(src);
+  return fm + body.replace(/^#\s+.+\n+/, "");
+};
+// Rename-safe identity: inject the ORIGINAL repo path as source_path: frontmatter (merged
+// into an existing block, or a new block is minted).
+const withSource = (staged, rel) => {
+  const [fm, body] = splitFm(staged);
+  const line = `source_path: ${rel}\n`;
+  return fm ? fm.replace(/---\r?\n*$/, (close) => line + close) + body : `---\n${line}---\n\n${staged}`;
+};
+
+// ---- ADRs ------------------------------------------------------------------
+const adrDir = join(DOCS, "decisions");
+const adrFiles = readdirSync(adrDir).filter((f) => /^\d{3}-.*\.md$/.test(f));
+const adrTitle = {};
+for (const f of adrFiles) {
+  const h1 = firstH1(readFileSync(join(adrDir, f), "utf8"));
+  // Convention "ADR-NNN: title — tail"; the em-dash variant "ADR-NNN — title" also parses.
+  const m = h1.match(/^ADR-(\d{3})(?::|\s+—)\s*(.+)$/);
+  const num = m ? m[1] : f.slice(0, 3);
+  adrTitle[num] = sanitize(`ADR-${num} ${(m ? m[2] : h1).split(" — ")[0].trim()}`);
+}
+const linkAdrs = (body) =>
+  body.replace(/\[([^\]]*)\]\((?:\.\/)?(\d{3})-[^)#\s]*\.md(?:#[^)]*)?\)/g, (all, _label, num) =>
+    adrTitle[num] ? `[[${adrTitle[num]}]]` : all);
+mkdirSync(join(OUT, "adr"), { recursive: true });
+for (const f of adrFiles) {
+  const t = adrTitle[f.slice(0, 3)];
+  const staged = linkAdrs(stripH1(readFileSync(join(adrDir, f), "utf8")));
+  writeFileSync(join(OUT, "adr", `${t}.md`), withSource(staged, `docs/decisions/${f}`));
+}
+
+// ---- as-built --------------------------------------------------------------
+const cats = ["system", "components", "features", "modules"];
+const abTitle = {};
+const abSrc = {};
+for (const cat of cats) {
+  for (const f of readdirSync(join(DOCS, cat)).filter((x) => x.endsWith(".md"))) {
+    const src = readFileSync(join(DOCS, cat, f), "utf8");
+    let t = firstH1(src).replace(/^(System|Component|Feature|Module)\s*—\s*/i, "");
+    t = t.split(" — ")[0].trim() || firstH1(src);
+    abTitle[basename(f, ".md")] = sanitize(t);
+    abSrc[basename(f, ".md")] = { cat, src };
+  }
+}
+const linkAb = (body) =>
+  body.replace(/\[([^\]]*)\]\((?:\.\.\/(?:system|components|features|modules)\/|\.\/)?([a-z0-9-]+)\.md(?:#[^)]*)?\)/g,
+    (all, _label, name) => (abTitle[name] ? `[[${abTitle[name]}]]` : all));
+for (const [name, { cat, src }] of Object.entries(abSrc)) {
+  mkdirSync(join(OUT, "as-built", cat), { recursive: true });
+  writeFileSync(join(OUT, "as-built", cat, `${abTitle[name]}.md`), withSource(linkAb(stripH1(src)), `docs/${cat}/${name}.md`));
+}
+
+console.log(`staged ${adrFiles.length} ADRs + ${Object.keys(abSrc).length} as-built docs → ${OUT}`);
+if (process.argv.includes("--stage-only")) process.exit(0);
+
+// A full mirror is many sequential POSTs, so a transient failure is a question of when, not
+// if. The CLI handles it per file (keeps going, prints `✗ <file>: <message>`, exits 1) — act
+// on the exit code and retry the whole set: rows that already landed come back as updates.
+const ATTEMPTS = 3;
+const failed = [];
+
+for (const [dir, map] of [["adr", "adr"], ["as-built", "as-built"]]) {
+  let ok = false;
+  for (let attempt = 1; attempt <= ATTEMPTS && !ok; attempt++) {
+    console.log(`\n== notes import ${dir} → map ${map}${attempt > 1 ? ` (retry ${attempt - 1})` : ""} ==`);
+    const run = spawnSync("alkahest", ["notes", "import", join(OUT, dir), "--map", map, "--path", ROOT], {
+      stdio: "inherit",
+    });
+    if (run.error) console.error(`[sync] could not run alkahest: ${run.error.message}`);
+    ok = !run.error && run.status === 0;
+    if (!ok && attempt < ATTEMPTS) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
+  }
+  if (!ok) failed.push(`${dir} → ${map}`);
+}
+
+if (failed.length) {
+  console.error(`\n[sync] FAILED after ${ATTEMPTS} attempts: ${failed.join(", ")}`);
+  console.error("[sync] scroll up for the per-file '✗ <file>: <message>' lines from the importer.");
+  process.exit(1);
+}
+console.log("\n[sync] both maps up to date.");

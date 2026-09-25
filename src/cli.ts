@@ -11,7 +11,7 @@ import { logout } from "./commands/logout.js";
 import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsIssue } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesArchive, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
 import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
-import { docsInitCmd, presetInstallCmd, presetsList } from "./commands/presets.js";
+import { docsInitCmd, presetInstallCmd, presetsList, presetUpdateCmd } from "./commands/presets.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
 import { history } from "./commands/history.js";
@@ -403,6 +403,15 @@ preset
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string, opts: Parameters<typeof presetInstallCmd>[1]) => presetInstallCmd(id, opts));
 
+preset
+  .command("update")
+  .argument("[id]", "preset id (default: every preset installed here)")
+  .description("bring installed preset skills, reference script and CLAUDE.md snippet up to the preset's current version — unedited copies are replaced, edited ones merged (your edits kept; where an edit and a preset change hit the same lines the preset's win and the replaced lines are listed)")
+  .option("--dry-run", "judge and report, write nothing", false)
+  .option("--json", "machine-readable report (for agents)", false)
+  .option("--path <dir>", "repo root holding the preset's files", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string | undefined, opts: Parameters<typeof presetUpdateCmd>[1]) => presetUpdateCmd(id, opts));
 // Aliases from the docs-only era (ADR-083): `docs init` and `presets` keep working.
 const docs = program
   .command("docs")
