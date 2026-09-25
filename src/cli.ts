@@ -409,6 +409,7 @@ preset
   .description("bring installed preset skills, reference script and CLAUDE.md snippet up to the preset's current version — unedited copies are replaced, edited ones merged (your edits kept; where an edit and a preset change hit the same lines the preset's win and the replaced lines are listed)")
   .option("--dry-run", "judge and report, write nothing", false)
   .option("--json", "machine-readable report (for agents)", false)
+  .option("--adopt", "switch an edited/hand-written sync script to the preset's engine even when its staged notes can't be compared (after moving its settings into the config)", false)
   .option("--path <dir>", "repo root holding the preset's files", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string | undefined, opts: Parameters<typeof presetUpdateCmd>[1]) => presetUpdateCmd(id, opts));

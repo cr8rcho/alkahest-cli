@@ -17,7 +17,13 @@
   "scripts": [
     {
       "file": "sync-docs-maps.mjs",
-      "dest": "scripts/sync-docs-maps.mjs"
+      "dest": "scripts/sync-docs-maps.mjs",
+      "owner": "preset"
+    },
+    {
+      "file": "sync-docs-maps.config.mjs",
+      "dest": "scripts/sync-docs-maps.config.mjs",
+      "owner": "repo"
     }
   ],
   "maps": [

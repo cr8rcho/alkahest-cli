@@ -119,6 +119,7 @@ export interface PresetUpdateOptions {
   path?: string;
   dryRun?: boolean;
   json?: boolean;
+  adopt?: boolean;
 }
 
 const updateLabel: Record<UpdateState, string> = {
@@ -127,6 +128,8 @@ const updateLabel: Record<UpdateState, string> = {
   merged: "updated — your edits kept",
   merged_with_conflicts: "updated — some of your lines replaced (below)",
   diverged: "NOT updated — left as is",
+  replaced_edits: "updated — now the preset's engine",
+  created: "created",
   not_installed: "not installed",
   failed: "FAILED",
 };
@@ -138,7 +141,7 @@ const updateLabel: Record<UpdateState, string> = {
  * person) can restore what was deliberate. `--dry-run` reports without writing.
  */
 export async function presetUpdateCmd(id: string | undefined, options: PresetUpdateOptions): Promise<void> {
-  const res = await updatePreset(options.path || ".", { api: options.api, preset: id, dryRun: options.dryRun });
+  const res = await updatePreset(options.path || ".", { api: options.api, preset: id, dryRun: options.dryRun, adopt: options.adopt });
   if (!res.ok || !res.presets) return die(res.message ?? res.code ?? "update failed");
   if (options.json) {
     console.log(JSON.stringify({ ok: true, dryRun: !!options.dryRun, presets: res.presets }, null, 2));
@@ -154,14 +157,16 @@ export async function presetUpdateCmd(id: string | undefined, options: PresetUpd
   const touchedFiles = new Set<string>();
   let replacedLines = false;
   const diverged: string[] = [];
+  const reset: string[] = [];
   for (const p of res.presets) {
     console.log(`[alkahest] preset '${p.id}'${options.dryRun ? " (dry run — nothing written)" : ""}:`);
     for (const i of p.items) {
       if (i.state === "not_installed" && !id) continue;
       const from = i.from && i.state !== "current" ? ` (from ${i.from}${i.exactBase === false ? ", closest match to your copy" : ""})` : "";
       console.log(`  ${i.kind} ${i.name}: ${updateLabel[i.state]}${from}${i.message ? ` — ${i.message}` : ""}`);
-      if (i.kind !== "skill" && ["replaced", "merged", "merged_with_conflicts"].includes(i.state)) touchedFiles.add(i.name);
-      if (i.state === "diverged") {
+      if (i.kind !== "skill" && ["replaced", "replaced_edits", "created", "merged", "merged_with_conflicts"].includes(i.state)) touchedFiles.add(i.name);
+      if (i.state === "diverged" && !i.presetChange) reset.push(i.name);
+      if (i.state === "diverged" && i.presetChange) {
         diverged.push(i.name);
         console.log("    The preset's change to apply to your version by hand:");
         for (const l of i.presetChange ?? []) console.log(`      ${l}`);
@@ -184,6 +189,15 @@ export async function presetUpdateCmd(id: string | undefined, options: PresetUpd
   if (replacedLines) {
     console.log("[alkahest] Some of your lines were replaced by the preset's. If they were deliberate, hand it to your agent:");
     console.log('  "Review the lines alkahest preset update replaced and restore the ones that were our customizations."');
+  }
+  if (reset.length) {
+    const cfg = res.presets.flatMap((p) => p.items).find((i) => i.kind === "script" && i.name.endsWith(".config.mjs"))?.name
+      ?? "scripts/sync-docs-maps.config.mjs";
+    console.log(`[alkahest] ${reset.join(", ")} kept — your sync works exactly as before. To move it onto the preset's engine (so later fixes arrive by themselves), hand it to your agent:`);
+    console.log(`  "Move what our ${reset.join(", ")} does differently from the alkahest preset into ${cfg} (its comments list the keys), ` +
+      "then run alkahest preset update again — it switches once the engine stages the same notes " +
+      "(if our old script has no --stage-only, run alkahest preset update --adopt instead, then " +
+      `node scripts/sync-docs-maps.mjs --dry-run and confirm it plans no new notes)."`);
   }
   if (diverged.length) {
     console.log(`[alkahest] ${diverged.join(", ")} ${diverged.length === 1 ? "was" : "were"} left untouched — still working as before, but without the preset's change. Hand it to your agent:`);

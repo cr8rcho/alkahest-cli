@@ -32,7 +32,8 @@ const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8"
 function updatableFiles(manifest) {
   return [
     ...(manifest.skills ?? []).map((s) => s.file),
-    ...(manifest.scripts ?? []).map((s) => s.file),
+    // A repo-owned file (owner: "repo") is created once and never updated — no history to keep.
+    ...(manifest.scripts ?? []).filter((s) => s.owner !== "repo").map((s) => s.file),
     ...(manifest.snippet ? [manifest.snippet] : []),
   ];
 }

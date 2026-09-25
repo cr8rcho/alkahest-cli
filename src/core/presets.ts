@@ -61,7 +61,12 @@ export interface PresetManifest {
   skills: { name: string; file: string }[];
   scaffold?: string;
   snippet?: string;
-  scripts?: { file: string; dest: string }[];
+  /**
+   * Repo files. `owner: "preset"` = the preset's engine — `preset update` replaces it wholesale
+   * (repos customise through a repo-owned file beside it); `owner: "repo"` = the repo's own
+   * settings, created once and never touched again; no owner = a reference copy, merged.
+   */
+  scripts?: { file: string; dest: string; owner?: "preset" | "repo" }[];
   maps?: { slug: string; name?: string }[];
   /** The sentence to hand the agent after an install — the preset's first pass, in its own words. */
   handoff?: string;
@@ -94,8 +99,8 @@ export interface PresetBundle {
   maps: { slug: string; name?: string }[];
   /** Repo half — write verbatim at these repo-relative paths; never overwrite. */
   scaffold: { file: string; content: string }[];
-  /** Reference scripts — copied once, then owned by the receiving repo. */
-  scripts: { dest: string; content: string }[];
+  /** Repo scripts — `owner: "preset"` is replaced by updates (don't edit it), `"repo"` is the repo's to edit. */
+  scripts: { dest: string; content: string; owner?: "preset" | "repo" }[];
   /** Agent rules for the repo's CLAUDE.md (append only with the user's say-so). */
   snippet?: string;
   /** What to ask the agent once everything is in place. */
@@ -131,7 +136,7 @@ export function readPresetBundle(presetId = "as-built"): PresetBundleResult {
         skills: (manifest.skills ?? []).map((s) => ({ name: s.name, body: readFileSync(join(dir, s.file), "utf8") })),
         maps: manifest.maps ?? [],
         scaffold,
-        scripts: (manifest.scripts ?? []).map((s) => ({ dest: s.dest, content: readFileSync(join(dir, s.file), "utf8") })),
+        scripts: (manifest.scripts ?? []).map((s) => ({ dest: s.dest, content: readFileSync(join(dir, s.file), "utf8"), owner: s.owner })),
         snippet: manifest.snippet ? readFileSync(join(dir, manifest.snippet), "utf8") : undefined,
       },
     };
@@ -242,7 +247,7 @@ export async function installPreset(path: string, params: InstallPresetParams = 
     }
   }
 
-  // 3) Reference script — copied once; ownership transfers to the repo (we never update it).
+  // 3) Repo scripts — copied when missing; an existing file is left for `preset update` (ADR-109).
   for (const s of manifest.scripts ?? []) {
     const dest = join(root, ...s.dest.split("/"));
     if (existsSync(dest)) {

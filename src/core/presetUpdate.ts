@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { diff3Merge, diffComm } from "node-diff3";
 import { pullSkills, saveSkill } from "./tasks.js";
 import { listPresets, loadManifest, snippetMarker, type PresetManifest } from "./presets.js";
@@ -40,6 +40,8 @@ export type UpdateState =
   | "replaced" // was an unedited shipped body — now the current one
   | "merged" // edited copy — preset changes merged in, every local edit kept
   | "merged_with_conflicts" // edited copy — merged, but some local lines lost to the preset's
+  | "replaced_edits" // a preset-owned engine that had local edits — replaced; the edits are in `git diff` (or <file>.bak)
+  | "created" // a repo-owned settings file that didn't exist yet
   | "diverged" // not a copy the preset can merge into (a rewrite, or the merge wouldn't run) — left untouched
   | "not_installed" // nothing of this item in the account / repo
   | "failed";
@@ -82,6 +84,11 @@ export interface UpdatePresetParams {
   preset?: string;
   /** Judge and report, write nothing. */
   dryRun?: boolean;
+  /**
+   * Switch an edited or hand-written engine copy to the preset's even when the staged notes
+   * can't be shown identical — for a repo that has moved its settings into the config.
+   */
+  adopt?: boolean;
 }
 
 export interface UpdatePresetResult {
@@ -205,6 +212,57 @@ export function judgeCopy(local: string, current: string, shipped: { since: stri
  * into `diverged` (nothing written). Line merges can't see that code in one hunk depends on a
  * declaration in another; this is the backstop behind MIN_SHARED.
  */
+/** Every file under a staged dir, relative path → content. */
+function snapshot(dir: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const walk = (d: string) => {
+    for (const name of readdirSync(d)) {
+      const p = join(d, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else out.set(relative(dir, p).split(sep).join("/"), readFileSync(p, "utf8"));
+    }
+  };
+  if (existsSync(dir)) walk(dir);
+  return out;
+}
+
+/** Run a sync script with --stage-only and return its staging dir (from its `→ <dir>` line). */
+function stageWith(script: string): string | undefined {
+  const run = spawnSync(process.execPath, [script, "--stage-only"], { cwd: dirname(dirname(script)), encoding: "utf8", timeout: 120_000 });
+  if (run.status !== 0) return undefined;
+  return /→\s*(\S+)\s*$/m.exec(run.stdout ?? "")?.[1];
+}
+
+/**
+ * Does the preset engine (written at `dest`, reading the repo's config beside it) stage the same
+ * notes as the repo's previous script? Only copies whose script honours --stage-only can be
+ * compared — running anything else could import for real. Leaves `dest` holding the engine.
+ */
+function sameStaging(dest: string, previous: string, engine: string): { same: boolean; message: string } {
+  if (!previous.includes("--stage-only")) {
+    return { same: false, message: "your script is its own version (no --stage-only to compare with) — kept as is" };
+  }
+  const prevFile = join(dirname(dest), `.${basename(dest, ".mjs")}.previous.mjs`);
+  const dirs: string[] = [];
+  try {
+    writeFileSync(prevFile, previous);
+    const before = stageWith(prevFile);
+    writeFileSync(dest, engine);
+    const after = stageWith(dest);
+    for (const d of [before, after]) if (d) dirs.push(d);
+    if (!before || !after) return { same: false, message: "couldn't stage with both versions to compare — kept yours" };
+    const a = snapshot(before), b = snapshot(after);
+    const names = new Set([...a.keys(), ...b.keys()]);
+    let differ = 0;
+    for (const n of names) if (a.get(n) !== b.get(n)) differ++;
+    if (!differ) return { same: true, message: `your settings carried over — the engine stages the same ${a.size} notes` };
+    return { same: false, message: `the engine would stage ${differ} of ${names.size} notes differently — kept yours` };
+  } finally {
+    rmSync(prevFile, { force: true });
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  }
+}
+
 function checkScript(dest: string, j: Judged): Judged {
   if (!["merged", "merged_with_conflicts"].includes(j.state) || !/\.(mjs|cjs|js)$/.test(dest)) return j;
   const dir = mkdtempSync(join(tmpdir(), "alkahest-preset-check-"));
@@ -315,10 +373,69 @@ async function updateOne(
     items.push(item);
   }
 
-  // 2) Reference scripts — the repo's copy at its install path.
-  for (const s of manifest.scripts ?? []) {
+  // 2) Repo scripts (ADR-109). The repo-owned settings file goes first so it can read what the
+  //    old engine hard-coded before the engine is replaced.
+  const scripts = [...(manifest.scripts ?? [])].sort((a, b) => Number(b.owner === "repo") - Number(a.owner === "repo"));
+  const engine = (manifest.scripts ?? []).find((s) => s.owner === "preset");
+  const engineDest = engine ? join(root, ...engine.dest.split("/")) : undefined;
+  for (const s of scripts) {
     const dest = join(root, ...s.dest.split("/"));
+    if (s.owner === "repo") {
+      // Created once, beside an installed engine, and never touched again — it is the repo's.
+      if (existsSync(dest)) { items.push({ kind: "script", name: s.dest, state: "current", message: "yours — never updated" }); continue; }
+      if (!engineDest || !existsSync(engineDest)) { items.push({ kind: "script", name: s.dest, state: "not_installed" }); continue; }
+      let body = readFileSync(join(dir, s.file), "utf8");
+      const slug = /ALKAHEST_PROJECT\s*\?\?\s*["']([a-z0-9-]+)["']/.exec(readFileSync(engineDest, "utf8"))?.[1];
+      let message: string | undefined;
+      if (slug) {
+        body = body.replace(/^ {2}\/\/ project: .*$/m, `  project: "${slug}", // carried over from the previous sync script`);
+        message = `project "${slug}" carried over from the previous script`;
+      }
+      if (!params.dryRun) writeFileSync(dest, body);
+      items.push({ kind: "script", name: s.dest, state: "created", message });
+      continue;
+    }
     if (!existsSync(dest)) { items.push({ kind: "script", name: s.dest, state: "not_installed" }); continue; }
+    if (s.owner === "preset") {
+      // The engine is the preset's: always the current body, never merged. A copy that isn't a
+      // body the preset shipped had local edits — they belong in the settings file now.
+      const local = readFileSync(dest, "utf8");
+      const current = readFileSync(join(dir, s.file), "utf8");
+      const shipped = history.files[s.file] ?? [];
+      const localSha = shaOf(local);
+      if (localSha === shaOf(current)) { items.push({ kind: "script", name: s.dest, state: "current" }); continue; }
+      const from = shipped.find((v) => v.sha === localSha)?.since;
+      if (from) {
+        // An unedited shipped engine: nothing of the repo's is in it — replace.
+        if (!params.dryRun) writeFileSync(dest, current);
+        changedFiles.push({ file: s.file, from });
+        items.push({ kind: "script", name: s.dest, state: "replaced", from, exactBase: true });
+        continue;
+      }
+      // An edited (or hand-written) copy. Switch only when the engine + the repo's settings file
+      // stage EXACTLY what the old script staged — the sync must keep producing the same notes.
+      // Otherwise the old script stays and the repo moves its settings into the config first.
+      if (params.dryRun) {
+        items.push({ kind: "script", name: s.dest, state: "replaced_edits", message: "your copy has edits — on update, the switch happens only if the engine + config stage the same notes" });
+        continue;
+      }
+      if (params.adopt) {
+        writeFileSync(dest, current);
+        changedFiles.push({ file: s.file });
+        items.push({ kind: "script", name: s.dest, state: "replaced_edits", message: "adopted (--adopt) — now run it with --dry-run and check it plans no NEW notes (new = a title changed)" });
+        continue;
+      }
+      const verdict = sameStaging(dest, local, current);
+      if (verdict.same) {
+        changedFiles.push({ file: s.file });
+        items.push({ kind: "script", name: s.dest, state: "replaced_edits", message: verdict.message });
+        continue;
+      }
+      writeFileSync(dest, local); // keep the working script
+      changedFiles.push({ file: s.file });
+      items.push({ kind: "script", name: s.dest, state: "diverged", message: verdict.message, presetChange: undefined });
+      continue;
+    }
     const j = checkScript(dest, judgeCopy(readFileSync(dest, "utf8"), readFileSync(join(dir, s.file), "utf8"), shippedOf(s.file)));
     if (j.state !== "current" && j.state !== "diverged" && !params.dryRun) writeFileSync(dest, j.text);
     items.push(itemFrom("script", s.dest, j, s.file));
@@ -394,7 +511,7 @@ export async function repoPresetsBehind(path: string): Promise<string[]> {
     const loaded = loadManifest(p.id);
     if (!("manifest" in loaded)) continue;
     const report = await updateOne(root, path, loaded.dir, { ...loaded.manifest, skills: [] }, new Map(), { dryRun: true });
-    if (report.items.some((i) => ["replaced", "merged", "merged_with_conflicts", "diverged"].includes(i.state))) behind.push(p.id);
+    if (report.items.some((i) => ["replaced", "replaced_edits", "created", "merged", "merged_with_conflicts", "diverged"].includes(i.state))) behind.push(p.id);
   }
   return behind;
 }

@@ -825,7 +825,8 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         "CLAUDE.md snippet. TO INSTALL ONE, use the tools you already have: (1) `skills` first, then `add_skill` " +
         "for each preset skill whose name is NOT already there — an existing same-name skill is the user's own, " +
         "LEAVE IT; (2) `create_map` for each map slug that doesn't exist yet (type 'note'); (3) write any scaffold " +
-        "files and scripts at their given paths, never overwriting an existing file; (4) ASK before appending a " +
+        "files and scripts at their given paths, never overwriting an existing file (a script with owner 'preset' is " +
+        "the preset's ENGINE — never edit it; repo-specific settings go in the owner 'repo' file beside it); (4) ASK before appending a " +
         "snippet to CLAUDE.md. Then do what the bundle's `handoff` sentence says — the first docs pass, or the " +
         "wiki's Conventions page and first ingest — so the user ends the session with a map link rather than an " +
         "empty install. The CLI equivalent is `alkahest preset install <id>`; doing it through these tools reaches " +
