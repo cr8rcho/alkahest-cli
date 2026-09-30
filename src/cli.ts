@@ -12,6 +12,7 @@ import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsIssu
 import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesArchive, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
 import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
 import { docsInitCmd, presetInstallCmd, presetsList, presetUpdateCmd } from "./commands/presets.js";
+import { skillsList, skillsShow } from "./commands/skills.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
 import { history } from "./commands/history.js";
@@ -432,6 +433,27 @@ program
   .command("presets")
   .description("alias of `alkahest preset list`")
   .action(() => presetsList());
+
+const skills = program
+  .command("skills")
+  .description("your SKILLS — named markdown instructions an agent follows when writing for you (personal + team, cloud ADR-068/070); managed on the web, read here");
+skills
+  .command("list")
+  .description("list your skills: name, team scope, and the contexts each is the default of")
+  .option("--path <dir>", "project path (only used to find your token/API)", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action(async (opts: Parameters<typeof skillsList>[0]) => {
+    await skillsList(opts);
+    await maybeNotifyUpdate();
+  });
+skills
+  .command("show")
+  .description("print one skill's markdown body (pipe it into a prompt); personal wins on a name collision unless --team picks the team copy")
+  .argument("<name>", "skill name")
+  .option("--team <workspace>", "take the team copy shared in this workspace (slug)")
+  .option("--path <dir>", "project path (only used to find your token/API)", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((name: string, opts: Parameters<typeof skillsShow>[1]) => skillsShow(name, opts));
 
 const maps = program
   .command("maps")

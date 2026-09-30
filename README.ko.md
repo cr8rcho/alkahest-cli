@@ -110,6 +110,8 @@ alkahest issues map <id>        # 이슈를 이슈 맵에 올리기 (--map), --r
 alkahest notes add <제목>       # 프로젝트의 마인드맵 Note Map에 노트 생성 (--body, --parent, --map); 뷰어 캔버스에서 배치/연결
 alkahest notes map <slug>       # 풀의 노트를 노트 맵에 올리기 (--map), --remove 로 내리기 (노트 자체는 삭제되지 않음)
 alkahest notes delete <slug>    # 노트를 휴지통으로 (소프트 삭제; --reason "<이유>" 필수, 30일간 복원 가능) — restore <slug> 로 복원
+alkahest skills list            # 내 스킬 목록 — 에이전트가 글을 쓸 때 따르는 마크다운 지침 문서 (개인 + 팀, 기본값 표시)
+alkahest skills show <name>     # 스킬 본문 하나 출력 (프롬프트에 파이프; 이름이 겹치면 --team <workspace>로 팀 사본 선택)
 alkahest update        # 최신 GitHub 릴리스로 업데이트 (--check: 확인만)
 ```
 
