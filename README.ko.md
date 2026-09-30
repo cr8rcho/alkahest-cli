@@ -166,7 +166,7 @@ claude mcp add alkahest -s project -- alkahest mcp
 | `comments` | 발행된 지도에 달린 댓글 목록 — 각 댓글에 코드 위치를 조인: 화면 댓글 → 소스 파일/라우트 + 화면 요소(라인 번호), 리소스 댓글 → 그 엔드포인트를 부르는 화면들(파일+라인). 피드백을 에디터 안에서 처리 가능 (토큰 필요) |
 | `resolve_comment` | 처리한 댓글을 resolve(또는 reopen) (토큰 필요) |
 | `add_comment` / `reply_comment` | 지도 노드에 새 댓글 작성 / 기존 댓글에 답글 (토큰 필요) |
-| `comment_to_issue` | 댓글 여러 개를 GitHub 이슈 하나로 묶어 파일링(로컬 `gh` 사용)하고 역링크 — hosted 뷰어에 "tracked" 배지 표시 (토큰 필요) |
+| `promote_comment` | 댓글 여러 개를 이슈맵의 alkahest 이슈 하나로 승격(그 노드에 타겟)하고 역링크 — hosted 뷰어에 "promoted" 배지 표시 (토큰 필요) |
 | `issues` | 프로젝트의 **Issue Map** 읽기 — 의존성이 1급인 그래프형 이슈 트래커. 각 이슈에 파생 상태 `done`·`actionable`(막는 미완료 이슈 없음)이 붙어 다음 할 일을 고를 수 있음 (토큰 필요) |
 | `add_issue` | 사용자와 기획하며 이슈 생성 — `parent_id`로 에픽 아래 묶고, `target`으로 코드 맵에 연결(기존 노드 키, 또는 아직 없는 `/route` — 화면이 실제로 생기면 자동 수렴) (토큰 필요) |
 | `update_issue` | 상태 이동(작업 완료 시 done — 진행 상황이 맵에 칠해짐)·필드 수정·삭제 (토큰 필요) |
