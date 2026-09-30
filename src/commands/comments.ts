@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { OUTPUT_DIR } from "../core/emit.js";
 import { loadMap } from "../core/pipeline.js";
 import { findProjectRoot } from "../core/project.js";
-import { pullComments, enrichComments, postComment, resolveComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
+import { pullComments, enrichComments, postComment, resolveComment, resolveNode, promoteComments } from "../core/comments.js";
 
 export interface CommentsPullOptions {
   api?: string;
@@ -59,33 +59,30 @@ export async function commentsPull(path: string, options: CommentsPullOptions): 
   for (const [k, e] of byNode) console.log(`  ${k}  ${e.label}  —  ${e.open} open / ${e.total}`);
 }
 
-export interface CommentsIssueOptions { path?: string; slug?: string; api?: string; title?: string; repo?: string; force?: boolean; }
+export interface CommentsPromoteOptions { slug?: string; api?: string; path?: string; title?: string; map?: string; type?: string; status?: string; force?: boolean; }
 
-/**
- * File the selected comments as ONE GitHub issue (via `gh`, in the project's git repo) and
- * link it back onto each. Ids come from `comments pull`; the heavy lifting is in the core
- * `fileCommentsIssue` (shared with the MCP `comment_to_issue` tool).
- */
-export async function commentsIssue(ids: string[], options: CommentsIssueOptions): Promise<void> {
+/** `comments promote <ids…>` — ONE alkahest issue from a group of comments (ADR-111). */
+export async function commentsPromote(ids: string[], options: CommentsPromoteOptions): Promise<void> {
   const list = (ids ?? []).flatMap((s) => s.split(",")).map((s) => s.trim()).filter(Boolean);
   if (!list.length) { console.error("[alkahest] provide one or more comment ids (from 'comments pull')."); process.exitCode = 1; return; }
   const projectRoot = findProjectRoot(options.path || ".");
-  const res = await fileCommentsIssue(projectRoot, list, {
-    slug: options.slug, api: options.api, title: options.title, repo: options.repo, force: options.force,
+  const res = await promoteComments(projectRoot, list, {
+    slug: options.slug, api: options.api, title: options.title, mapSlug: options.map, type: options.type, status: options.status, force: options.force,
   });
   if (!res.ok) {
     const msg: Record<string, string> = {
-      already_tracked: `[alkahest] ✗ ${res.message} Use --force to file a new issue anyway.`,
-      gh_failed: `[alkahest] ✗ ${res.message}`,
-      forbidden: "[alkahest] ✗ Only the project owner or a collaborator can file issues.",
+      already_tracked: `[alkahest] ✗ ${res.message} Use --force to promote again (a new issue).`,
+      ambiguous_map: `[alkahest] ✗ ${res.message ?? "This project has several issue maps."}\n  Pass --map <slug> — 'alkahest maps list' shows them.`,
+      forbidden: "[alkahest] ✗ You need editor access to promote comments.",
       no_slug: `[alkahest] ✗ ${res.message}\n  Pass --slug <slug> — 'alkahest projects' lists them, or set ALKAHEST_PROJECT.`,
       not_found: `[alkahest] ✗ ${res.message}`,
     };
-    console.error(msg[res.code ?? ""] ?? `[alkahest] file issue failed: ${res.message}`);
+    console.error(msg[res.code ?? ""] ?? `[alkahest] promote failed: ${res.message}`);
     process.exitCode = 1;
     return;
   }
-  console.log(`[alkahest] filed ${res.ids!.length} comment${res.ids!.length === 1 ? "" : "s"} as ${res.issue_url}`);
+  const ref = res.issue?.ref != null ? `#${res.issue.ref}` : res.issue?.id;
+  console.log(`[alkahest] promoted ${res.ids!.length} comment${res.ids!.length === 1 ? "" : "s"} → issue ${ref} [${res.issue?.type}/${res.issue?.status}] ${res.issue?.title}`);
 }
 
 export interface CommentsAddOptions { body?: string; slug?: string; map?: string; api?: string; path?: string; }

@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { loadCredentials, resolveApiUrl, resolveToken } from "./credentials.js";
 import { resolveProject } from "./project.js";
@@ -38,8 +37,8 @@ export interface PulledComment {
   resolved: boolean;
   /** True if the anchored node is gone from the current map (route renamed/removed). */
   orphaned?: boolean;
-  /** GitHub issue this comment was filed into (set via `comments issue` / the comment_to_issue tool). */
-  issue_url?: string | null;
+  /** Alkahest issue this comment was promoted into (ADR-111 — `comments promote` / the promote_comment tool). */
+  issue_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -323,9 +322,9 @@ const firstLine = (s: string, max = 72): string => {
 function issueTitle(selected: PulledComment[], slug: string): string {
   if (selected.length === 1) {
     const c = selected[0];
-    return `[map] ${c.anchor_label || c.node_key}: ${firstLine(c.body)}`;
+    return `${c.anchor_label || c.node_key}: ${firstLine(c.body)}`;
   }
-  return `[map] ${slug}: ${selected.length} comments`;
+  return `${selected.length} map comments on ${slug}`;
 }
 
 /** One issue body aggregating the selected comments (each with its node, author, and replies). */
@@ -338,51 +337,52 @@ function issueBody(selected: PulledComment[], all: PulledComment[], slug: string
       `${c.body}\n` +
       (replies.length ? `\n` + replies.map((r) => `**${r.author_name || r.author_id}**: ${r.body}`).join("\n\n") + "\n" : "");
   };
-  return `Filed from Alkahest map comment${selected.length === 1 ? "" : "s"} on **${slug}**.\n\n` +
+  return `Promoted from ${selected.length === 1 ? "a map comment" : "map comments"} on **${slug}**.\n\n` +
     selected.map(section).join("\n---\n\n");
 }
 
-export interface FileIssueParams {
+export interface PromoteParams {
   api?: string;
   token?: string;
   /** Project slug (else the saved slug for this path). */
   slug?: string;
   /** Issue title override (else derived from the comments). */
   title?: string;
-  /** Target GitHub repo `owner/repo` (else `gh`'s default for the cwd). */
-  repo?: string;
-  /** File even if some selected comments already carry an issue_url (would create a new issue). */
+  /** Which issue map (slug) to put the issue on — the sole one when omitted. */
+  mapSlug?: string;
+  /** Issue type / status from the project's issue config (default task / todo). */
+  type?: string;
+  status?: string;
+  /** Promote even if some selected comments already carry an issue (creates a NEW issue). */
   force?: boolean;
 }
 
-export interface FileIssueResult {
+export interface PromoteResult {
   ok: boolean;
-  issue_url?: string;
+  issue?: { id: string; ref?: number | null; title: string; status: string; type: string };
   ids?: string[];
-  title?: string;
-  /** no_api | no_token | no_slug | not_found | already_tracked | gh_failed | <server error>. */
+  /** no_api | no_token | no_slug | not_found | already_tracked | ambiguous_map | forbidden | <server error>. */
   code?: string;
   message?: string;
+  maps?: { slug: string; name: string | null }[];
 }
 
 /**
- * File a GROUP of selected map comments as ONE GitHub issue and link it back onto each.
+ * Promote a GROUP of selected map comments into ONE alkahest issue (ADR-111) and link it
+ * back onto each — the code-map twin of promote_task. The issue lands on the project's issue
+ * map, targeted at the comments' node when they share one; the viewer then shows a "promoted"
+ * badge linking to it. Until 2026-10 this created a GitHub issue through the local `gh` CLI
+ * (the Issue Map didn't exist yet when it was written); the cloud now creates the issue itself,
+ * so the remote connector can do it too.
  *
- * Issue CREATION is client-side: this runs `gh issue create` in the project's git repo
- * (the dev already has `gh` authenticated — they deploy that repo). The cloud never talks
- * to GitHub; once the URL exists we POST it to the `comments-issue` edge function, which
- * records it on each comment so the hosted viewer shows a "tracked" badge. Backs the CLI
- * `comments issue` command and the MCP `comment_to_issue` tool (see alkahest TODO §1).
- *
- * Re-filing comments that are ALREADY tracked would create a duplicate GitHub issue, so
- * that's refused unless `force` is set. Like the rest of this module, returns a structured
- * result and never writes to stdout/stderr.
+ * The client still composes title/body when it can — the local map lets it add source-file
+ * hints (`enrichComments`) the server doesn't have. Already-promoted comments are refused
+ * unless `force` (which makes a second issue). Structured result, no stdout.
  */
-export async function fileCommentsIssue(path: string, ids: string[], params: FileIssueParams = {}): Promise<FileIssueResult> {
+export async function promoteComments(path: string, ids: string[], params: PromoteParams = {}): Promise<PromoteResult> {
   const list = (ids ?? []).map((s) => String(s).trim()).filter(Boolean);
   if (!list.length) return { ok: false, code: "bad_request", message: "At least one comment id is required." };
 
-  // Pull current comments to build the body (and see which are already tracked).
   const pull = await pullComments(path, { api: params.api, slug: params.slug, token: params.token });
   if (!pull.ok) return { ok: false, code: pull.code, message: pull.message };
   const all = pull.comments ?? [];
@@ -390,36 +390,19 @@ export async function fileCommentsIssue(path: string, ids: string[], params: Fil
   const missing = list.filter((id) => !byId.has(id));
   if (missing.length) return { ok: false, code: "not_found", message: `Unknown comment id(s): ${missing.join(", ")}` };
   const selected = list.map((id) => byId.get(id)!) as PulledComment[];
-
   if (!params.force) {
-    const tracked = selected.filter((c) => c.issue_url);
-    if (tracked.length) {
-      return { ok: false, code: "already_tracked", message: `Already linked to an issue: ${tracked.map((c) => c.id).join(", ")}.` };
-    }
+    const tracked = selected.filter((c) => c.issue_id);
+    if (tracked.length) return { ok: false, code: "already_tracked", message: `Already promoted to an issue: ${tracked.map((c) => c.id).join(", ")}.` };
   }
 
   const title = params.title?.trim() || issueTitle(selected, pull.slug!);
   const body = issueBody(selected, all, pull.slug!);
-  const cwd = pull.root ?? resolve(path);
-
-  let url: string;
-  try {
-    const args = ["issue", "create", "--title", title, "--body", body];
-    if (params.repo) args.push("--repo", params.repo);
-    url = execFileSync("gh", args, { cwd, encoding: "utf8" }).trim();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, code: "gh_failed", message: `gh failed (${msg.split("\n")[0]}). Is the GitHub CLI installed and authenticated?` };
-  }
-
-  // Record the URL on each selected comment (the cloud only stores it — see above).
   const creds = loadCredentials();
   const apiUrl = resolveApiUrl(params.api, creds);
   const token = resolveToken(params.token, creds);
-  const res = await postJson(`${apiUrl}/comments-issue`, { ids: list, issue_url: url }, token);
-  if (!res.ok) {
-    // The issue exists on GitHub but linking failed — surface the URL so it isn't lost.
-    return { ok: false, issue_url: url, ids: list, code: res.body?.error ?? "http", message: `Issue created (${url}) but linking failed: ${res.body?.message ?? res.body?.error ?? res.status}` };
-  }
-  return { ok: true, issue_url: url, ids: list, title };
+  const res = await postJson(`${apiUrl}/comments-promote`, {
+    ids: list, title, body, map: params.mapSlug, type: params.type, status: params.status, force: params.force,
+  }, token);
+  if (!res.ok) return { ok: false, code: res.body?.error ?? "http", message: res.body?.message ?? res.body?.error ?? res.status, maps: res.body?.maps };
+  return { ok: true, issue: res.body?.issue, ids: list };
 }

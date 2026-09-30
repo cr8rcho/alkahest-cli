@@ -8,7 +8,7 @@ import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { status } from "./commands/status.js";
 import { logout } from "./commands/logout.js";
-import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsIssue } from "./commands/comments.js";
+import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsPromote } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesEdit, issuesStatus, issuesDone, issuesArchive, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
 import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
 import { docsInitCmd, presetInstallCmd, presetsList, presetUpdateCmd } from "./commands/presets.js";
@@ -93,16 +93,18 @@ comments
     await maybeNotifyUpdate();
   });
 comments
-  .command("issue")
-  .description("file the given comments as ONE GitHub issue (requires gh) and link it back onto each")
+  .command("promote")
+  .description("promote the given comments into ONE alkahest issue on the issue map (targeted at their node) and link it back onto each")
   .argument("<ids...>", "comment ids to group into one issue (from 'comments pull')")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .option("--title <title>", "issue title (else derived from the comments)")
-  .option("--repo <owner/repo>", "target GitHub repo (else gh's default for the project's repo)")
-  .option("--force", "file even if some selected comments are already linked to an issue", false)
-  .action((ids: string[], opts: { path?: string; slug?: string; api?: string; title?: string; repo?: string; force?: boolean }) => commentsIssue(ids, opts));
+  .option("--map <slug>", "which issue map (a project can hold several)")
+  .option("--type <type>", "issue type from the project's issue config (default: task)")
+  .option("--status <status>", "status from the project's issue config (default: todo)")
+  .option("--force", "promote even if some comments already carry an issue (creates a new one)", false)
+  .action((ids: string[], opts: Parameters<typeof commentsPromote>[1]) => commentsPromote(ids, opts));
 comments
   .command("add")
   .description("post a new comment on a screen/resource of the published map")

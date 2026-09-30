@@ -102,7 +102,7 @@ alkahest publish       # 지도를 hosted 뷰어에 업로드 → 공유 링크
 alkahest projects      # 계정의 워크스페이스·프로젝트 목록 (이동 후 slug 복구 등)
 alkahest history       # 코드맵 발행 타임라인 — 언제 발행됐고 뭐가 바뀌었나
 alkahest comments pull # 발행된 지도에 달린 댓글 가져오기 → .alkahest/comments.json
-alkahest comments issue <ids…>  # 선택한 댓글들을 GitHub 이슈 하나로 파일링(gh) + 역링크
+alkahest comments promote <ids…>  # 선택한 코멘트들을 이슈맵의 alkahest 이슈 하나로 승격 (그 노드에 타겟) + 링크백 (--title, --map, --type, --status, --force)
 alkahest issues pull   # 프로젝트의 Issue Map(그래프형 이슈 트래커) 가져오기 → .alkahest/issues.json
 alkahest issues add <제목>      # 이슈 생성 (--parent 에픽, --target s:…/r:…//route, --type/--status)
 alkahest issues done <id>       # 이슈 완료 처리 (그 외: status / link / rm)

@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
 import { emitMap } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
-import { pullComments, resolveComment, enrichComments, postComment, resolveNode, fileCommentsIssue } from "../core/comments.js";
+import { pullComments, resolveComment, enrichComments, postComment, resolveNode, promoteComments } from "../core/comments.js";
 import {
   pullIssues,
   createIssue,
@@ -44,7 +44,7 @@ const pkg = require("../../package.json") as { version: string };
  * Remote mode (hosted ADR-095): the SAME server, mounted behind the web app's /api/mcp/{token}
  * route as a claude.ai custom connector. `remote` carries the request's alk_ token + API base
  * into every core call (env/credential fallbacks never fire on a server), the local-only tools
- * (scan / publish / set_summary / set_prd / comment_to_issue / check_version) are not
+ * (scan / publish / set_summary / set_prd / check_version) are not
  * registered, and the graph tools read the PUBLISHED map through the `map` edge function
  * instead of the local checkout.
  */
@@ -442,39 +442,43 @@ export function buildServer(remote?: RemoteOptions): McpServer {
     },
   );
 
-  if (!remote) server.registerTool(
-    "comment_to_issue",
+  // ADR-111: comments promote to an ALKAHEST issue (was: a GitHub issue via the local `gh` —
+  // predates the Issue Map). Cloud-side creation, so the remote connector registers it too.
+  server.registerTool(
+    "promote_comment",
     {
-      title: "File map comments as a GitHub issue",
+      title: "Promote map comments to an issue",
       description:
-        "Group one or more map comments (ids from the comments tool) into a SINGLE GitHub issue and link it back onto each. " +
-        "Creates the issue with the local `gh` CLI (must be installed and authenticated; it runs in the project's git repo), " +
-        "then records the issue URL on the comments so the hosted viewer shows a 'tracked' badge. Use this to turn feedback " +
-        "into tracked work. Needs an API token; owner or collaborator only. Pass force:true to re-file comments that are " +
-        "already linked to an issue (creates a new one).",
+        "Turn one or more code-map comments (ids from the comments tool) into ONE alkahest issue on the project's " +
+        "issue map — the code-map twin of promote_task. The issue is targeted at the comments' node when they share " +
+        "one, its body aggregates the comments (with replies), and each comment gets a 'promoted' badge linking to " +
+        "it in the viewer. Use this to turn feedback into tracked work. Already-promoted comments are refused unless " +
+        "force:true (makes a new issue). Needs an API token; editor only.",
       inputSchema: {
         ids: z.array(z.string()).min(1).describe("Comment ids to group into one issue (from the comments tool)"),
         project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
         title: z.string().optional().describe("Issue title (else derived from the comments)"),
-        repo: z.string().optional().describe("Target GitHub repo owner/repo (else gh's default for the repo)"),
-        force: z.boolean().optional().describe("File even if some selected comments are already tracked"),
+        map: z.string().optional().describe("Which issue map (slug) when the project has several"),
+        type: z.string().optional().describe("Issue type from issue_config (default: task)"),
+        status: z.string().optional().describe("Status from issue_config (default: todo)"),
+        force: z.boolean().optional().describe("Promote even if some selected comments already carry an issue"),
       },
     },
-    async ({ ids, path, title, repo, force, project }) => {
-      const res = await fileCommentsIssue(rootOf(path), ids, { title, repo, force, slug: project });
+    async ({ ids, path, title, map, type, status, force, project }) => {
+      const res = await promoteComments(rootOf(path), ids, withAuth({ title, mapSlug: map, type, status, force, slug: project }));
       if (!res.ok) {
-        const hints: Record<string, string> = {
+        const hints = hinted({
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
           no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
-          already_tracked: "Some comments already have an issue — pass force:true to file a new one.",
-          gh_failed: "Install and authenticate the GitHub CLI (`gh auth login`) for this repo.",
-          forbidden: "Only the project owner or a collaborator can file issues.",
+          already_tracked: "Some comments already have an issue — pass force:true to promote again.",
+          ambiguous_map: "This project has several issue maps — pass `map` (list them with the maps tool).",
+          forbidden: "You need editor access to promote comments.",
           not_found: "One or more ids don't exist — list them with the comments tool.",
-        };
-        return text(`File issue failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
+        });
+        return json({ ok: false, error: res.code, message: res.message, hint: hints[res.code ?? ""], maps: res.maps });
       }
-      return json({ ok: true, issue_url: res.issue_url, ids: res.ids, title: res.title });
+      return json({ ok: true, issue: res.issue, ids: res.ids });
     },
   );
 
