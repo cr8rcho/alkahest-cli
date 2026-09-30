@@ -284,6 +284,8 @@ export interface UpdateIssueParams {
     /** ADR-024 archive ("put away"): an ISO timestamp archives, null restores. Archived issues
      *  are hidden from pulls (unless `archived: true`) and never actionable. */
     archived_at?: string | null;
+    /** Reparent: replaces the `contains` edge into this issue (null = detach from any epic). */
+    parent_id?: string | null;
   };
   /** Edge specs name the OTHER endpoint; the issue `id` fills the omitted side. */
   add_edges?: { from?: string; to?: string; kind: IssueEdge["kind"] }[];

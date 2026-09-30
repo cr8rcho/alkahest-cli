@@ -106,12 +106,18 @@ alkahest comments issue <ids…>  # 선택한 댓글들을 GitHub 이슈 하나�
 alkahest issues pull   # 프로젝트의 Issue Map(그래프형 이슈 트래커) 가져오기 → .alkahest/issues.json
 alkahest issues add <제목>      # 이슈 생성 (--parent 에픽, --target s:…/r:…//route, --type/--status)
 alkahest issues done <id>       # 이슈 완료 처리 (그 외: status / link / rm)
+alkahest issues edit <id>       # 제목 / 본문 / 타입 / 코드맵 타겟 / props / 상위 에픽을 한 번에 수정 (--parent none 으로 분리)
 alkahest issues map <id>        # 이슈를 이슈 맵에 올리기 (--map), --remove 로 내리기 (이슈 자체는 삭제되지 않음)
 alkahest notes add <제목>       # 프로젝트의 마인드맵 Note Map에 노트 생성 (--body, --parent, --map); 뷰어 캔버스에서 배치/연결
 alkahest notes map <slug>       # 풀의 노트를 노트 맵에 올리기 (--map), --remove 로 내리기 (노트 자체는 삭제되지 않음)
 alkahest notes delete <slug>    # 노트를 휴지통으로 (소프트 삭제; --reason "<이유>" 필수, 30일간 복원 가능) — restore <slug> 로 복원
 alkahest skills list            # 내 스킬 목록 — 에이전트가 글을 쓸 때 따르는 마크다운 지침 문서 (개인 + 팀, 기본값 표시)
 alkahest skills show <name>     # 스킬 본문 하나 출력 (프롬프트에 파이프; 이름이 겹치면 --team <workspace>로 팀 사본 선택)
+alkahest map overview           # 셸에서 제품 지도 질의 (MCP overview / get_screen / who_calls의 CLI 짝): 화면·리소스와 엣지 수; JSON 출력
+alkahest map screen <screen>    # 화면 하나 전체 (기능, 들어오고 나가는 내비게이션, 리소스 호출, summary/PRD); --slug <project>면 로컬 대신 발행본을 읽음
+alkahest map who-calls <res>    # 리소스를 호출하는 화면들 — 바꿨을 때의 영향 범위
+alkahest search <q>             # 프로젝트의 노트·이슈와 내 태스크를 한 번에 검색 (MCP search 툴의 짝; --json)
+alkahest tasks list             # 열린 태스크 목록, 스레드 대기 노트·미답 질문 표시 (--all, --project, --q; 쓰기는 MCP/웹)
 alkahest update        # 최신 GitHub 릴리스로 업데이트 (--check: 확인만)
 ```
 

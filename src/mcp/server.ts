@@ -27,6 +27,7 @@ import { findProjectRoot } from "../core/project.js";
 import { checkForUpdate, cachedUpdateStatus } from "../core/version.js";
 import { ICON_128_DATA_URI } from "./icon128.js";
 import { fetchPublishedMap } from "../core/mapFetch.js";
+import { matchScreen, overview, screenDetail, whoCalls } from "../core/mapQuery.js";
 import type { ProductMap, Screen } from "../core/types.js";
 
 // Re-exported so the hosted repo's /api/mcp route needs no direct SDK dependency (ADR-095, hosted repo).
@@ -136,23 +137,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
     async ({ path, project, map: mapSlug }) => {
       const map = await getMap(path, project, mapSlug);
       if (!map) return text(noMapMsg);
-      return json({
-        framework: map.meta.framework,
-        router: map.meta.router,
-        screens: map.screens.map((s) => ({
-          id: s.id,
-          route: s.route,
-          title: s.title,
-          features: s.features.length,
-          navigatesTo: map.transitions.filter((t) => t.from === s.id).length,
-          calls: map.calls.filter((c) => c.from === s.id).length,
-        })),
-        resources: map.resources.map((r) => ({
-          id: r.id,
-          label: r.label,
-          calledByScreens: new Set(map.calls.filter((c) => c.to === r.id).map((c) => c.from)).size,
-        })),
-      });
+      return json(overview(map));
     },
   );
 
@@ -196,18 +181,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
     async ({ resource, path, project, map: mapSlug }) => {
       const map = await getMap(path, project, mapSlug);
       if (!map) return text(noMapMsg);
-      const q = resource.toLowerCase();
-      const matched = map.resources.filter(
-        (r) => r.id.toLowerCase() === q || (r.path ?? "").toLowerCase().includes(q) || r.label.toLowerCase().includes(q),
-      );
-      return json(
-        matched.map((r) => ({
-          resource: r.label,
-          callers: map.calls
-            .filter((c) => c.to === r.id)
-            .map((c) => ({ screen: c.from, via: c.trigger, loc: c.loc })),
-        })),
-      );
+      return json(whoCalls(map, resource));
     },
   );
 
@@ -1387,7 +1361,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       description:
         "Mutate an Issue Map node: move its status (e.g. to 'done' when you finish the work — this is how progress " +
         "gets painted onto the map), edit title/body/type, set its priority or due date, set or clear its code-map target, archive it " +
-        "(put away without deleting — archived: true; archived: false restores), or delete it " +
+        "(put away without deleting — archived: true; archived: false restores), move it under another epic (parent_id; '' detaches), or delete it " +
         "(delete: author/owner only). Statuses/types must come from the project's issue_config. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Issue id (from the issues tool)"),
@@ -1401,11 +1375,12 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         target: z.string().optional().describe("New code-map target ('s:…'/'r:…'/'/route'/resource label); pass '' to clear"),
         props: z.record(z.any()).optional().describe("Properties patch (ADR-079), SHALLOW-merged: a null value deletes that key; other keys are untouched. See prop_defs in the issues tool."),
         archived: z.boolean().optional().describe("true archives the issue (put away: hidden from the issues tool unless archived:true, never actionable, not deleted); false restores it (archived_at → null)"),
+        parent_id: z.string().optional().describe("Move the issue under another epic (replaces its contains parent); pass '' to detach it from any epic"),
         delete: z.boolean().optional().describe("Delete the issue instead of updating it"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ id, status, title, body, type, priority, due_on, assignee_id, target, props, archived, delete: del, path }) => {
+    async ({ id, status, title, body, type, priority, due_on, assignee_id, target, props, archived, parent_id, delete: del, path }) => {
       const set: Record<string, unknown> = {};
       if (status !== undefined) set.status = status;
       if (archived !== undefined) set.archived_at = archived ? new Date().toISOString() : null;
@@ -1416,6 +1391,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       if (due_on !== undefined) set.due_on = due_on === "" ? null : due_on;
       if (assignee_id !== undefined) set.assignee_id = assignee_id === "" ? null : assignee_id;
       if (props !== undefined) set.props = props;
+      if (parent_id !== undefined) set.parent_id = parent_id === "" ? null : parent_id;
       if (target !== undefined) {
         if (target === "") Object.assign(set, { target_kind: null, target_key: null });
         else {
@@ -1647,31 +1623,3 @@ function writeField(root: string, screenArg: string, mutate: (s: Screen) => void
   return text(`Saved to ${s.id}. Publish to update the hosted map.`);
 }
 
-function matchScreen(map: ProductMap, arg: string): Screen | undefined {
-  const norm = (s: string) => s.toLowerCase().replace(/^\/+|\/+$/g, "");
-  const t = norm(arg);
-  return map.screens.find((s) => norm(s.id) === t || norm(s.route) === t || norm(s.title) === t);
-}
-
-function screenDetail(map: ProductMap, s: Screen) {
-  const resourceLabel = (id: string) => map.resources.find((r) => r.id === id)?.label ?? id;
-  return {
-    id: s.id,
-    route: s.route,
-    title: s.title,
-    sourceFile: s.sourceFile,
-    summary: s.summary || null,
-    prd: s.prd || null,
-    features: s.features,
-    components: s.components,
-    navigatesTo: map.transitions
-      .filter((t) => t.from === s.id)
-      .map((t) => ({ to: t.to ?? t.rawTarget ?? "(unresolved)", via: t.trigger, loc: t.loc })),
-    navigatedFrom: map.transitions
-      .filter((t) => t.to === s.id)
-      .map((t) => ({ from: t.from, via: t.trigger, loc: t.loc })),
-    calls: map.calls
-      .filter((c) => c.from === s.id)
-      .map((c) => ({ resource: c.to ? resourceLabel(c.to) : c.rawTarget ?? "(unresolved)", via: c.trigger, loc: c.loc })),
-  };
-}

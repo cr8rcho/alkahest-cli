@@ -9,10 +9,13 @@ import { login } from "./commands/login.js";
 import { status } from "./commands/status.js";
 import { logout } from "./commands/logout.js";
 import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsIssue } from "./commands/comments.js";
-import { issuesPull, issuesAdd, issuesStatus, issuesDone, issuesArchive, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
+import { issuesPull, issuesAdd, issuesEdit, issuesStatus, issuesDone, issuesArchive, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
 import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
 import { docsInitCmd, presetInstallCmd, presetsList, presetUpdateCmd } from "./commands/presets.js";
 import { skillsList, skillsShow } from "./commands/skills.js";
+import { mapOverview, mapScreen, mapWhoCalls } from "./commands/map.js";
+import { search } from "./commands/search.js";
+import { tasksList } from "./commands/tasks.js";
 import { mapsList, mapsCreate } from "./commands/maps.js";
 import { projects } from "./commands/projects.js";
 import { history } from "./commands/history.js";
@@ -159,6 +162,19 @@ issues
   .option("--map <slug>", "which issue map to add to (a project can hold several)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((title: string, opts: Parameters<typeof issuesAdd>[1]) => issuesAdd(title, opts));
+issues
+  .command("edit")
+  .description("edit an issue's title, body, type, code-map target, props or parent epic (any subset in one call)")
+  .argument("<id>", "issue id (from 'issues pull')")
+  .option("--title <title>", "new title")
+  .option("--body <markdown>", "new body ('none' clears)")
+  .option("--type <type>", "node type from the project's issue config")
+  .option("--target <key>", "code-map target: s:/r: node key, /route, or a resource label ('none' clears)")
+  .option("--props <json>", "properties patch as a JSON object, shallow-merged (a null value deletes that key)")
+  .option("--parent <id>", "move under another epic — replaces the contains parent ('none' detaches)")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: Parameters<typeof issuesEdit>[1]) => issuesEdit(id, opts));
 issues
   .command("status")
   .description("move an issue to a status from the project's issue config")
@@ -480,6 +496,66 @@ maps
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((slug: string, opts: { type?: string; name?: string; path?: string; slug?: string; api?: string }) =>
     mapsCreate(slug, opts));
+
+const mapCmd = program
+  .command("map")
+  .description("ask the product map — the same questions the MCP overview / get_screen / who_calls tools answer (local .alkahest/map.json, or --slug for the published map); JSON output");
+mapCmd
+  .command("overview")
+  .description("screens and resources with their edge counts")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <project>", "read the PUBLISHED map of this project instead of the local map.json")
+  .option("--map <slug>", "which code map when the project has several (with --slug; default: the oldest)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((opts: Parameters<typeof mapOverview>[0]) => mapOverview(opts));
+mapCmd
+  .command("screen")
+  .description("one screen in full: features, components, navigation in/out, resource calls, summary/PRD")
+  .argument("<screen>", "screen id, route or title")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <project>", "read the PUBLISHED map of this project instead of the local map.json")
+  .option("--map <slug>", "which code map when the project has several (with --slug; default: the oldest)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((screen: string, opts: Parameters<typeof mapScreen>[1]) => mapScreen(screen, opts));
+mapCmd
+  .command("who-calls")
+  .description("which screens call a resource (impact of changing it)")
+  .argument("<resource>", "resource id, or a path/label substring")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <project>", "read the PUBLISHED map of this project instead of the local map.json")
+  .option("--map <slug>", "which code map when the project has several (with --slug; default: the oldest)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((resource: string, opts: Parameters<typeof mapWhoCalls>[1]) => mapWhoCalls(resource, opts));
+
+program
+  .command("search")
+  .description("one query across this project's notes and issues and your tasks (title/body substring — the MCP search tool's twin)")
+  .argument("<q>", "text to find")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--json", "print the raw result", false)
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action(async (q: string, opts: Parameters<typeof search>[1]) => {
+    await search(q, opts);
+    await maybeNotifyUpdate();
+  });
+
+const tasks = program
+  .command("tasks")
+  .description("your personal tasks (captured on the phone/web, processed by an agent) — read-only here; writes are MCP/web");
+tasks
+  .command("list")
+  .description("open tasks, with pending thread notes / open questions flagged (--all includes done)")
+  .option("--all", "include done tasks", false)
+  .option("--project <slug>", "only tasks tagged to this project")
+  .option("--q <text>", "title/body substring filter")
+  .option("--path <dir>", "project path (only used to find your token/API)", ".")
+  .option("--json", "print the raw payload", false)
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action(async (opts: Parameters<typeof tasksList>[0]) => {
+    await tasksList(opts);
+    await maybeNotifyUpdate();
+  });
 
 program
   .command("projects")

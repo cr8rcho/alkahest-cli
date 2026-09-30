@@ -95,6 +95,38 @@ export async function issuesAdd(title: string, options: IssuesAddOptions): Promi
   console.log(`[alkahest] created [${res.issue.type}/${res.issue.status}] ${res.issue.title} — id ${res.issue.id}`);
 }
 
+export interface IssuesEditOptions extends IssuesWriteOptions {
+  title?: string; body?: string; type?: string; target?: string; props?: string; parent?: string;
+}
+
+/**
+ * Edit the fields `issues add` set at creation but no single-field verb covers — title, body,
+ * type, code-map target, props, parent epic. One call, any subset (the same `set` the MCP
+ * `update_issue` tool sends). 'none'/'-' clears --target / --parent; --props is a JSON object
+ * shallow-merged (a null value deletes that key).
+ */
+export async function issuesEdit(id: string, options: IssuesEditOptions): Promise<void> {
+  const clear = (v: string | undefined) => v === "none" || v === "-" || v === "";
+  const set: NonNullable<Parameters<typeof updateIssue>[1]["set"]> = {};
+  if (options.title !== undefined) set.title = options.title;
+  if (options.body !== undefined) set.body = clear(options.body) ? null : options.body;
+  if (options.type !== undefined) set.type = options.type;
+  if (options.target !== undefined) Object.assign(set, clear(options.target) ? { target_kind: null, target_key: null } : inferTarget(options.target));
+  if (options.parent !== undefined) set.parent_id = clear(options.parent) ? null : options.parent;
+  if (options.props !== undefined) {
+    let parsed: unknown;
+    try { parsed = JSON.parse(options.props); }
+    catch { return die(`✗ --props must be a JSON object, e.g. --props '{"area": "auth", "old": null}' (couldn't parse it).`); }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return die("✗ --props must be a JSON object (key→value).");
+    set.props = parsed as Record<string, unknown>;
+  }
+  if (!Object.keys(set).length) return die("✗ Nothing to change — pass at least one of --title, --body, --type, --target, --props, --parent.");
+  const res = await updateIssue(options.path || ".", { api: options.api, id, set });
+  if (!res.ok || !res.issue) return die(failMessage(res.code, res.message, "issues edit"));
+  const changed = Object.keys(set).map((k) => k.replace("_id", "").replace("_kind", "").replace("_key", "")).filter((k, i, a) => a.indexOf(k) === i);
+  console.log(`[alkahest] ${res.issue.title} — updated ${changed.join(", ")}`);
+}
+
 /** Assign (or unassign) an issue. `user` is a member's user id, or 'none'/'-' to clear. */
 export async function issuesAssign(id: string, user: string, options: IssuesWriteOptions): Promise<void> {
   const clear = user === "none" || user === "-" || user === "";

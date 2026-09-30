@@ -107,6 +107,7 @@ alkahest comments resolve <id>  # mark a comment resolved (or --reopen) — auth
 alkahest issues pull   # pull the project's Issue Map (graph-shaped issue tracker) → .alkahest/issues.json
 alkahest issues add <title>     # create an issue (--parent epic, --target s:…/r:…//route, --type/--status, --priority/--due/--assignee)
 alkahest issues done <id>       # mark an issue finished (other ops: status / priority / due / assign / archive / restore / link / rm)
+alkahest issues edit <id>       # edit title / body / type / code-map target / props / parent epic in one call (--parent none detaches; 'none' clears --body/--target)
 alkahest issues map <id>        # place an issue on an issue map (--map), or take it off with --remove (never deletes the issue)
 alkahest notes add <title>      # create a markdown note on the Note Map (--body, --folder, --map; --props '{"k":v}' sets property values)
 alkahest notes list             # list a note map's notes (--q to search); show <slug> for one note with connections
@@ -120,6 +121,11 @@ alkahest preset install <id>    # install one: account skills + note maps, plus 
 alkahest preset update [id]     # bring installed preset skills / reference script / CLAUDE.md snippet up to the current version: unedited copies are replaced, edited ones merged (your edits kept; where an edit and a preset change hit the same lines the preset's win and the replaced lines are listed; a copy that can't be merged safely — your own rewrite, or a merge that wouldn't run — is left untouched and the preset's change printed). The as-built sync script is the preset's ENGINE — always replaced; your settings live in `scripts/sync-docs-maps.config.mjs`, which updates never touch (an edited old script switches only once the engine stages the same notes; `--adopt` forces it). --dry-run, --json, --adopt
 alkahest skills list            # list your skills — named markdown instructions an agent follows when writing for you (personal + team, with defaults)
 alkahest skills show <name>     # print one skill's body (pipe it into a prompt; --team <workspace> picks a team copy on a name collision)
+alkahest map overview           # ask the product map from the shell (the MCP overview / get_screen / who_calls twins): screens + resources with edge counts; JSON output
+alkahest map screen <screen>    # one screen in full (features, navigation in/out, resource calls, summary/PRD); --slug <project> reads the PUBLISHED map instead of the local one
+alkahest map who-calls <res>    # which screens call a resource — the impact of changing it
+alkahest search <q>             # one query across this project's notes and issues and your tasks (the MCP search tool's twin; --json)
+alkahest tasks list             # your open tasks with pending thread notes / open questions flagged (--all, --project, --q; writes stay on MCP/web)
 alkahest update        # update to the latest GitHub release (--check to only check)
 ```
 
