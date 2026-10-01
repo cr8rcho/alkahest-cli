@@ -64,13 +64,14 @@ export function buildServer(remote?: RemoteOptions): McpServer {
     // (e.g. claude.ai custom connectors) show these instead of a generic placeholder glyph.
     // Data URI FIRST — claude.ai was observed rendering the pre-v8 indigo icon from a stale
     // image cache even though every live URL served v8; an embedded icon leaves no fetch for a
-    // cache to intercept. The URL entries stay for clients that prefer them (`?v=8` marks the
-    // icon generation — bump it, and regenerate icon128.ts, when the brand icon changes).
+    // cache to intercept. The URL entries stay for clients that prefer them (`?v=` marks the
+    // icon generation — bump it, and regenerate icon128.ts, when the brand icon changes). v9 points
+    // at the rounded icon-mcp-* assets: the maskable icon-512 tile has square corners.
     websiteUrl: "https://www.alkahest.app",
     icons: [
       { src: ICON_128_DATA_URI, mimeType: "image/png", sizes: ["128x128"] },
-      { src: "https://www.alkahest.app/icon-512.png?v=8", mimeType: "image/png", sizes: ["512x512"] },
-      { src: "https://www.alkahest.app/icon.svg?v=8", mimeType: "image/svg+xml", sizes: ["any"] },
+      { src: "https://www.alkahest.app/icon-mcp-512.png?v=9", mimeType: "image/png", sizes: ["512x512"] },
+      { src: "https://www.alkahest.app/icon.svg?v=9", mimeType: "image/svg+xml", sizes: ["any"] },
     ],
   });
   const rootOf = (path?: string) => resolve(path ?? process.cwd());
