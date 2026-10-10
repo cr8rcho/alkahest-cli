@@ -28,6 +28,12 @@ import { createNote, mapNote, pullNotes, registerPropDefs, updateNote, type Prop
  * whose filenames follow titles) should write the ORIGINAL repo path into `source_path:`
  * frontmatter so the identity survives the transform.
  *
+ * Skips what is already current: the opening pull fetches full bodies, so a file whose body,
+ * folder and props (after the server's shallow merge) already match its note — and whose note
+ * already sits on the target map — makes no write call at all. Re-running a docs sync over a
+ * mostly unchanged tree costs one pull, not two edge-function calls per file. notes-update
+ * keeps its own no-op prune as the backstop.
+ *
  * Like notes.ts, everything returns a structured result and never writes to stdout.
  */
 
@@ -48,8 +54,8 @@ export interface ImportFilePlan {
   source: string;
   /** Normalized [[wikilink]] targets found in the body (deduped, self-links dropped). */
   links: string[];
-  /** What the import will do with it: create | update. */
-  action: "create" | "update";
+  /** What the import will do with it: create | update | unchanged (already current — no call). */
+  action: "create" | "update" | "unchanged";
   /** For updates: which key found the existing note. */
   matched_by?: "source" | "title";
   /** For source-matched updates whose title changed: the note is retitled in place. */
@@ -76,6 +82,8 @@ export interface NotesImportResult {
   files?: ImportFilePlan[];
   created?: number;
   updated?: number;
+  /** Matched notes already current (content + target-map membership) — no write was made. */
+  unchanged?: number;
   /** Of the updates: notes retitled in place via a source_path match (no duplicate minted). */
   renamed?: number;
   linked?: number;
@@ -224,6 +232,50 @@ function extractLinks(body: string): string[] {
   return [...found];
 }
 
+/** A pulled (or just-written) note, as much as the skip check needs. */
+interface KnownNote {
+  id: string;
+  slug: string;
+  title: string;
+  body?: string | null;
+  folder?: string | null;
+  props?: Record<string, unknown> | null;
+  /** Already a member of the import's target map. */
+  onTarget: boolean;
+}
+
+/** notes-update's folder normalization (trimmed segments, '' → null) — mirrored so the skip
+ *  check compares what the server would store. */
+function normFolder(v: string | null | undefined): string | null {
+  return String(v ?? "").split("/").map((s) => s.trim()).filter(Boolean).join("/") || null;
+}
+
+/** JSON with object keys sorted — props compare by content, not by jsonb key order. */
+function stableJson(v: unknown): string {
+  return JSON.stringify(v ?? null, (_k, val) =>
+    val && typeof val === "object" && !Array.isArray(val)
+      ? Object.fromEntries(Object.keys(val).sort().map((k) => [k, (val as Record<string, unknown>)[k]]))
+      : val);
+}
+
+/** The props notes-update would store: the note's current props shallow-merged with ours. */
+function mergedProps(current: Record<string, unknown> | null | undefined, ours: Record<string, unknown>): Record<string, unknown> | null {
+  const merged: Record<string, unknown> = { ...(current && typeof current === "object" ? current : {}) };
+  for (const [k, v] of Object.entries(ours)) {
+    if (v === null) delete merged[k];
+    else merged[k] = v;
+  }
+  return Object.keys(merged).length ? merged : null;
+}
+
+/** Would notes-update leave this note as it is? Conservative: anything unknown counts as a change. */
+function isCurrent(note: KnownNote, p: { body: string; folder: string; props: Record<string, unknown>; source: string }): boolean {
+  if (note.body === undefined) return false;
+  if (p.body !== note.body) return false;
+  if (normFolder(p.folder) !== (note.folder ?? null)) return false;
+  return stableJson(mergedProps(note.props, { ...p.props, [SOURCE_KEY]: p.source })) === stableJson(note.props ?? null);
+}
+
 export async function importNotes(path: string, params: NotesImportParams): Promise<NotesImportResult> {
   let files: string[];
   try {
@@ -237,17 +289,28 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
   files = files.filter((f) => !excluded.has(basename(f, ".md").toLowerCase()));
   if (!files.length) return { ok: false, code: "no_files", message: `No .md files under ${params.dir}.` };
 
-  // Existing pool notes (every readable map), for dedupe-by-title and cross-links into
-  // pages that already live on the hosted wiki.
-  const pull = await pullNotes(path, { api: params.api, token: params.token, slug: params.slug, bodies: "none" });
+  // Existing pool notes (every readable map), for dedupe-by-title, cross-links into pages that
+  // already live on the hosted wiki, and the skip check — so the bodies come along.
+  const pull = await pullNotes(path, { api: params.api, token: params.token, slug: params.slug }); // no `bodies` → full
   if (!pull.ok) return { ok: false, code: pull.code, message: pull.message, maps: pull.mapList };
-  const existingByTitle = new Map<string, { id: string; slug: string; title: string }>();
-  const existingBySource = new Map<string, { id: string; slug: string; title: string }>();
-  for (const m of pull.maps ?? []) {
+  // No --map → notes-map/notes-post use the sole note map; with several, membership stays
+  // unknown and the server answers ambiguous_map as before.
+  const pulledMaps = pull.maps ?? [];
+  const targetMap = params.mapSlug ?? (pulledMaps.length === 1 ? pulledMaps[0].slug : undefined);
+  const known = new Map<string, KnownNote>(); // one object per note id, shared by both indexes
+  const existingByTitle = new Map<string, KnownNote>();
+  const existingBySource = new Map<string, KnownNote>();
+  for (const m of pulledMaps) {
     for (const n of m.notes) {
-      existingByTitle.set(n.title.trim().toLowerCase(), { id: n.id, slug: n.slug, title: n.title });
+      let k = known.get(n.id);
+      if (!k) {
+        k = { id: n.id, slug: n.slug, title: n.title, body: n.body, folder: n.folder ?? null, props: n.props ?? null, onTarget: false };
+        known.set(n.id, k);
+      }
+      if (targetMap !== undefined && m.slug === targetMap) k.onTarget = true;
+      existingByTitle.set(n.title.trim().toLowerCase(), k);
       const src = n.props?.[SOURCE_KEY];
-      if (typeof src === "string" && src.trim()) existingBySource.set(src.trim(), { id: n.id, slug: n.slug, title: n.title });
+      if (typeof src === "string" && src.trim()) existingBySource.set(src.trim(), k);
     }
   }
   /** Source first (rename-safe identity), title as the fallback/upgrade path. */
@@ -272,12 +335,14 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
     // The vault's directory structure becomes the note's tree path (cloud ADR-035).
     const rel = relative(params.dir, dirname(file));
     const folder = rel && rel !== "." ? rel.split(sep).join("/") : "";
+    const retitle = !!hit && hit.matched_by === "source" && hit.note.title.trim().toLowerCase() !== title.trim().toLowerCase();
+    const action = !hit ? "create" as const
+      : !retitle && hit.note.onTarget && isCurrent(hit.note, { body, folder, props, source }) ? "unchanged" as const
+      : "update" as const;
     return {
-      file, title, name, body, props, links, folder, source,
-      action: hit ? "update" as const : "create" as const,
+      file, title, name, body, props, links, folder, source, action,
       ...(hit ? { matched_by: hit.matched_by } : {}),
-      ...(hit && hit.matched_by === "source" && hit.note.title.trim().toLowerCase() !== title.trim().toLowerCase()
-        ? { retitle: true } : {}),
+      ...(retitle ? { retitle: true } : {}),
     };
   });
 
@@ -290,6 +355,7 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
       ok: true, files: plans,
       created: plans.filter((p) => p.action === "create").length,
       updated: plans.filter((p) => p.action === "update").length,
+      unchanged: plans.filter((p) => p.action === "unchanged").length,
       renamed: plans.filter((p) => p.retitle).length,
       linked: plans.reduce((n, p) => n + p.links.filter((t) => resolvable.has(t.toLowerCase())).length, 0),
       withProps: plans.filter((p) => Object.keys(p.props).length > 0).length,
@@ -300,23 +366,34 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
   // Write pass 1 — the notes. Every write stamps the source_path prop (shallow-merged), so a
   // pre-source pool upgrades itself: the first re-import matches by title and stamps identity.
   const failures: { file: string; message: string }[] = [];
-  let created = 0, updated = 0, renamed = 0;
+  let created = 0, updated = 0, unchanged = 0, renamed = 0;
   for (const p of plans) {
     const shared = { api: params.api, token: params.token, slug: params.slug };
+    // Re-resolved per file: an earlier file in this run may have created or rewritten the match.
     const hit = findExisting(p.source, p.title.trim().toLowerCase());
     if (hit) {
-      const retitle = hit.matched_by === "source" && hit.note.title.trim().toLowerCase() !== p.title.trim().toLowerCase();
-      const res = await updateNote(path, {
-        ...shared, note: hit.note.id, body: p.body, folder: p.folder || null,
-        ...(retitle ? { title: p.title } : {}), // source identity survives a retitle — update in place
-        props: { ...p.props, [SOURCE_KEY]: p.source }, // shallow-merge server-side
-      });
-      if (!res.ok || !res.note) { failures.push({ file: p.file, message: res.message ?? res.code ?? "update failed" }); continue; }
+      const note = hit.note;
+      const retitle = hit.matched_by === "source" && note.title.trim().toLowerCase() !== p.title.trim().toLowerCase();
+      const write = retitle || !isCurrent(note, p);
+      if (write) {
+        const res = await updateNote(path, {
+          ...shared, note: note.id, body: p.body, folder: p.folder || null,
+          ...(retitle ? { title: p.title } : {}), // source identity survives a retitle — update in place
+          props: { ...p.props, [SOURCE_KEY]: p.source }, // shallow-merge server-side
+        });
+        if (!res.ok || !res.note) { failures.push({ file: p.file, message: res.message ?? res.code ?? "update failed" }); continue; }
+        Object.assign(note, { title: res.note.title, body: res.note.body, folder: res.note.folder ?? null, props: res.note.props ?? null });
+      }
       // The note may live on other maps only — make sure it sits on the target map too.
-      const mem = await mapNote(path, { ...shared, noteRef: hit.note.id, mapSlug: params.mapSlug });
-      if (!mem.ok) { failures.push({ file: p.file, message: mem.message ?? mem.code ?? "map failed" }); continue; }
-      existingBySource.set(p.source, { id: hit.note.id, slug: hit.note.slug, title: p.title });
-      updated++;
+      const placed = !note.onTarget;
+      if (placed) {
+        const mem = await mapNote(path, { ...shared, noteRef: note.id, mapSlug: params.mapSlug });
+        if (!mem.ok) { failures.push({ file: p.file, message: mem.message ?? mem.code ?? "map failed" }); continue; }
+        note.onTarget = true;
+      }
+      existingBySource.set(p.source, note);
+      if (write || placed) updated++;
+      else unchanged++;
       if (retitle) renamed++;
     } else {
       const res = await createNote(path, {
@@ -324,8 +401,12 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
         props: { ...p.props, [SOURCE_KEY]: p.source },
       });
       if (!res.ok || !res.note) { failures.push({ file: p.file, message: res.message ?? res.code ?? "create failed" }); continue; }
-      existingByTitle.set(p.title.trim().toLowerCase(), { id: res.note.id, slug: res.note.slug, title: res.note.title });
-      existingBySource.set(p.source, { id: res.note.id, slug: res.note.slug, title: res.note.title });
+      const note: KnownNote = {
+        id: res.note.id, slug: res.note.slug, title: res.note.title, body: res.note.body,
+        folder: res.note.folder ?? null, props: res.note.props ?? null, onTarget: true, // created on the target map
+      };
+      existingByTitle.set(p.title.trim().toLowerCase(), note);
+      existingBySource.set(p.source, note);
       created++;
     }
   }
@@ -355,7 +436,7 @@ export async function importNotes(path: string, params: NotesImportParams): Prom
   }
 
   return {
-    ok: true, files: plans, created, updated, renamed, linked,
+    ok: true, files: plans, created, updated, unchanged, renamed, linked,
     withProps: plans.filter((p) => Object.keys(p.props).length > 0).length,
     defsAdded, defsMerged,
     unresolved: [...unresolvedSet], failures,
