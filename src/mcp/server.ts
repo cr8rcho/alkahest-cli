@@ -560,13 +560,14 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         "issue, parent_id groups it under an epic (contains edge), and target ties it to the code map — pass an " +
         "existing node key ('s:…'/'r:…'), or a planned route ('/orders/refund') for a screen that doesn't exist yet " +
         "(it shows as a ghost node and auto-converges when a scan finds the real screen). type/status must come from " +
-        "the project's issue_config (see the issues tool). If the work ALREADY EXISTS as one of the user's tasks " +
+        "the project's issue_config (see the issues tool) — or pass category to start by meaning without knowing the ids. If the work ALREADY EXISTS as one of the user's tasks " +
         "(list_tasks), do not re-create it here — call promote_task on that task instead, so the task's lineage and " +
         "thread carry over. Needs an API token; owner or collaborator only.",
       inputSchema: {
         title: z.string().describe("Issue title"),
         type: z.string().optional().describe("Node type from issue_config (default: task)"),
-        status: z.string().optional().describe("Status from issue_config (default: todo)"),
+        status: z.string().optional().describe("Status id from issue_config (default: the project's default status)"),
+        category: z.enum(["backlog", "todo", "in_progress", "done", "canceled"]).optional().describe("Start by MEANING instead of a status id: the project's first status of this category (ADR-113). Ignored when status is given."),
         body: z.string().optional().describe("Issue body as markdown (requirements, context)"),
         priority: z.enum(["none", "low", "medium", "high", "urgent"]).optional().describe("Priority (default: none)"),
         due_on: z.string().optional().describe("Due date as YYYY-MM-DD"),
@@ -579,7 +580,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, type, status, body, priority, due_on, assignee_id, props, parent_id, target, map, path, project }) => {
+    async ({ title, type, status, category, body, priority, due_on, assignee_id, props, parent_id, target, map, path, project }) => {
       const targetFields = target
         ? {
             target_kind: (target.startsWith("s:") || target.startsWith("r:") ? "node" : target.startsWith("/") ? "route" : "resource") as
@@ -587,7 +588,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
             target_key: target,
           }
         : {};
-      const res = await createIssue(rootOf(path), withAuth({ title, type, status, body, priority, due_on, assignee_id, props, parent_id, mapSlug: map, slug: project, ...targetFields }));
+      const res = await createIssue(rootOf(path), withAuth({ title, type, status, category, body, priority, due_on, assignee_id, props, parent_id, mapSlug: map, slug: project, ...targetFields }));
       if (!res.ok || !res.issue) return issueFail("Add issue", res.code, res.message, res.maps);
       return json({ ok: true, issue: res.issue });
     },

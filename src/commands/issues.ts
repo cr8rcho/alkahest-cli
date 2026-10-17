@@ -84,9 +84,14 @@ export async function issuesAdd(title: string, options: IssuesAddOptions): Promi
   if (options.due && !DATE_RE.test(options.due)) {
     return die("✗ --due must be a date in YYYY-MM-DD form.");
   }
+  // `--status` takes a category name too (backlog / todo / in_progress / done / canceled): the server
+  // picks the project's first status of that category (ADR-113). Anything else is a status id.
+  const start = options.status && (STATUS_CATEGORIES as readonly string[]).includes(options.status)
+    ? { category: options.status as (typeof STATUS_CATEGORIES)[number] }
+    : { status: options.status };
   const res = await createIssue(options.path || ".", {
     api: options.api, slug: options.slug, mapSlug: options.map,
-    title, type: options.type, status: options.status, body: options.body,
+    title, type: options.type, ...start, body: options.body,
     priority: options.priority, due_on: options.due, assignee_id: options.assignee,
     parent_id: options.parent,
     ...(options.target ? inferTarget(options.target) : {}),

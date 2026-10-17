@@ -229,6 +229,9 @@ export interface CreateIssueParams {
   title: string;
   type?: string;
   status?: string;
+  /** Start by MEANING: the server picks the project's first status of this category (ADR-113).
+   *  Ignored when `status` is also given. */
+  category?: StatusCategory;
   body?: string;
   /** none | low | medium | high | urgent (default none). */
   priority?: string;
@@ -266,6 +269,7 @@ export async function createIssue(path: string, params: CreateIssueParams): Prom
     title: params.title.trim(),
     type: params.type,
     status: params.status,
+    category: params.category,
     body: params.body,
     priority: params.priority,
     due_on: params.due_on ?? null,

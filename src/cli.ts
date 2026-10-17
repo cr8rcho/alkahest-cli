@@ -152,7 +152,7 @@ issues
   .description("create an issue (a node of the issue graph)")
   .argument("<title>", "issue title")
   .option("--type <type>", "node type from the project's issue config (default: task)")
-  .option("--status <status>", "status from the project's issue config (default: todo)")
+  .option("--status <status>", "status id, or a category (backlog | todo | in_progress | done | canceled) to start by meaning (default: the project's default status)")
   .option("--body <markdown>", "issue body")
   .option("--priority <level>", "none | low | medium | high | urgent (default: none)")
   .option("--due <date>", "due date in YYYY-MM-DD")
