@@ -11,7 +11,7 @@ import {
   createIssue,
   updateIssue,
   deriveIssueStates,
-  terminalStatuses,
+  doneStatus,
   pullIssueComments,
   postIssueComment,
   resolveIssueComment,
@@ -506,7 +506,9 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       description:
         "Read this project's Issue Map: a dependency-first issue tracker drawn as a graph on the hosted viewer. " +
         "Returns issues (work items with per-project type/status), edges (blocks = dependency, contains = grouping, " +
-        "relates), code-map links, and the project's issue_config (valid types/statuses). Each issue carries derived " +
+        "relates), code-map links, and the project's issue_config (valid types/statuses — each status carries a " +
+        "`category`: backlog | todo | in_progress | done | canceled, plus the team's `description`; use the category " +
+        "when you mean the stage, the id when you mean that exact status). Each issue carries derived " +
         "state: done (terminal status), actionable (not done, nothing unfinished blocks it, and no open decision " +
         "question awaits an answer), and awaitingDecision (open_questions > 0) — use actionable issues to decide what " +
         "to work on next. When you hit a decision you need the user to make mid-task, post it with ask_issue (the issue " +
@@ -519,15 +521,20 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         map: z.string().optional().describe("Restrict to one issue map (a project can hold several; omit when there's one). List them with the maps tool."),
         q: z.string().optional().describe("Filter issues by title/body substring (server-side). Edges/links stay unfiltered, so blockedBy may name issues outside the filtered list."),
         archived: z.boolean().optional().describe("Include archived issues (default: false — archived issues are 'put away' and hidden). Archived rows carry archived_at and are never actionable."),
+        status: z.string().optional().describe("Only issues with this exact status id (see issue_config.statuses)"),
+        category: z.enum(["backlog", "todo", "in_progress", "done", "canceled"]).optional().describe("Only issues whose status is in this category — e.g. in_progress = what is being worked on now"),
       },
     },
-    async ({ path, open, map, q, archived, project }) => {
+    async ({ path, open, map, q, archived, project, status, category }) => {
       const res = await pullIssues(rootOf(path), withAuth({ mapSlug: map, q, archived, slug: project }));
       if (!res.ok || !res.graph) return issueFail("Read issues", res.code, res.message, res.maps);
       const states = deriveIssueStates(res.graph);
+      const categoryOf = new Map((res.graph.issue_config.statuses ?? []).map((s) => [s.id, s.category]));
       const issues = res.graph.issues
-        .map((i) => ({ ...i, ...states.get(i.id)! }))
-        .filter((i) => !open || !i.done);
+        .map((i) => ({ ...i, category: categoryOf.get(i.status) ?? null, ...states.get(i.id)! }))
+        .filter((i) => !open || !i.done)
+        .filter((i) => !status || i.status === status)
+        .filter((i) => !category || i.category === category);
       return json({
         ok: true,
         slug: res.graph.slug,
@@ -1367,10 +1374,12 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         "Mutate an Issue Map node: move its status (e.g. to 'done' when you finish the work — this is how progress " +
         "gets painted onto the map), edit title/body/type, set its priority or due date, set or clear its code-map target, archive it " +
         "(put away without deleting — archived: true; archived: false restores), move it under another epic (parent_id; '' detaches), or delete it " +
-        "(delete: author/owner only). Statuses/types must come from the project's issue_config. Needs an API token.",
+        "(delete: author/owner only). Statuses/types must come from the project's issue_config — or move by `category` " +
+        "(the project's first status of that category) when you mean the stage rather than a named status. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Issue id (from the issues tool)"),
-        status: z.string().optional().describe("New status from issue_config"),
+        status: z.string().optional().describe("New status id from issue_config (wins over category when both are given)"),
+        category: z.enum(["backlog", "todo", "in_progress", "done", "canceled"]).optional().describe("Move to the project's first status of this category — use when you don't know the team's status ids"),
         title: z.string().optional(),
         body: z.string().optional().describe("New body markdown"),
         type: z.string().optional().describe("New node type from issue_config"),
@@ -1385,9 +1394,10 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ id, status, title, body, type, priority, due_on, assignee_id, target, props, archived, parent_id, delete: del, path }) => {
+    async ({ id, status, category, title, body, type, priority, due_on, assignee_id, target, props, archived, parent_id, delete: del, path }) => {
       const set: Record<string, unknown> = {};
       if (status !== undefined) set.status = status;
+      else if (category !== undefined) set.category = category;
       if (archived !== undefined) set.archived_at = archived ? new Date().toISOString() : null;
       if (title !== undefined) set.title = title;
       if (body !== undefined) set.body = body;
@@ -1560,7 +1570,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
     {
       title: "Complete an issue",
       description:
-        "Finish an issue: move it to a terminal status (default: the project's first terminal status, usually 'done'). " +
+        "Finish an issue: move it to the project's first DONE-category status (usually 'done'; never a canceled status). " +
         "Completion IS the status change — the same write the web's status chip makes — so nothing else is required " +
         "(ADR-107 in the web repo retired the mandatory result note). Pass `result` only when there is something worth " +
         "a line on the thread (an outcome the user should read, a caveat); routine closes need none — the issue's " +
@@ -1569,21 +1579,22 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       inputSchema: {
         id: z.string().describe("Issue id to complete (from the issues tool)"),
         result: z.string().optional().describe("Optional outcome note — posted as a 'result' comment on the issue's thread when given"),
-        status: z.string().optional().describe("Terminal status id from issue_config (default: the first terminal status, usually 'done')"),
+        status: z.string().optional().describe("Terminal status id from issue_config (default: the first done-category status, usually 'done')"),
         project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
     async ({ id, result, status, path, project }) => {
       const root = rootOf(path);
-      // Resolve the terminal status to move to (explicit, else the project's first terminal status).
+      // Resolve the status to move to: explicit, else the project's first DONE-category status
+      // (not "first terminal" — a team may list Canceled before Done; ADR-113).
       let target = status;
       if (!target) {
         const g = await pullIssues(root, withAuth({ slug: project }));
         if (!g.ok || !g.graph) return issueFail("Complete issue", g.code, g.message, g.maps);
-        const terminal = [...terminalStatuses(g.graph.issue_config)];
-        if (!terminal.length) return text("Complete issue failed: this project's issue_config has no terminal status. Set one, or use update_issue with an explicit status.");
-        target = terminal[0];
+        const done = doneStatus(g.graph.issue_config);
+        if (!done) return text("Complete issue failed: this project's issue_config has no done-category status. Add one in the workspace settings, or use update_issue with an explicit status.");
+        target = done;
       }
       const upd = await updateIssue(root, withAuth({ id, set: { status: target } }));
       if (!upd.ok) return issueFail("Complete issue", upd.code, upd.message);

@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { OUTPUT_DIR } from "../core/emit.js";
 import {
-  pullIssues, createIssue, updateIssue, mapIssue, deriveIssueStates, terminalStatuses,
+  pullIssues, createIssue, updateIssue, mapIssue, deriveIssueStates, doneStatus, STATUS_CATEGORIES,
   pullIssueComments, postIssueComment, resolveIssueComment,
   type IssueGraph, type IssueEdge,
 } from "../core/issues.js";
@@ -155,7 +155,12 @@ export async function issuesDue(id: string, date: string, options: IssuesWriteOp
 export interface IssuesWriteOptions { api?: string; slug?: string; path?: string; }
 
 export async function issuesStatus(id: string, status: string, options: IssuesWriteOptions): Promise<void> {
-  const res = await updateIssue(options.path || ".", { api: options.api, id, set: { status } });
+  // A category name (backlog / todo / in_progress / done / canceled) moves by meaning — the server
+  // picks the project's first status of that category (ADR-113). Anything else is a status id.
+  const set = (STATUS_CATEGORIES as readonly string[]).includes(status)
+    ? { category: status as (typeof STATUS_CATEGORIES)[number] }
+    : { status };
+  const res = await updateIssue(options.path || ".", { api: options.api, id, set });
   if (!res.ok || !res.issue) return die(failMessage(res.code, res.message, "issues status"));
   console.log(`[alkahest] ${res.issue.title} → ${res.issue.status}`);
 }
@@ -167,13 +172,13 @@ export async function issuesArchive(id: string, restore: boolean, options: Issue
   console.log(`[alkahest] ${res.issue.title} → ${res.issue.archived_at ? "archived 📦" : "restored"}`);
 }
 
-/** Move an issue to the project's (first) terminal status — "I finished this". */
+/** Move an issue to the project's first DONE-category status — "I finished this" (never Canceled). */
 export async function issuesDone(id: string, options: IssuesWriteOptions): Promise<void> {
   const pulled = await pullIssues(options.path || ".", { api: options.api, slug: options.slug });
   if (!pulled.ok || !pulled.graph) return die(failMessage(pulled.code, pulled.message, "issues done"));
-  const terminal = [...terminalStatuses(pulled.graph.issue_config)];
-  if (!terminal.length) return die("✗ No terminal status in this project's issue config — use 'issues status' instead.");
-  await issuesStatus(id, terminal[0], options);
+  const done = doneStatus(pulled.graph.issue_config);
+  if (!done) return die("✗ No done-category status in this project's issue config — use 'issues status' instead.");
+  await issuesStatus(id, done, options);
 }
 
 export interface IssuesLinkOptions extends IssuesWriteOptions { kind?: string; remove?: boolean; }

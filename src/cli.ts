@@ -179,9 +179,9 @@ issues
   .action((id: string, opts: Parameters<typeof issuesEdit>[1]) => issuesEdit(id, opts));
 issues
   .command("status")
-  .description("move an issue to a status from the project's issue config")
+  .description("move an issue to a status from the project's issue config (or by category: backlog / todo / in_progress / done / canceled)")
   .argument("<id>", "issue id (from 'issues pull')")
-  .argument("<status>", "new status id")
+  .argument("<status>", "new status id, or a category name")
   .option("--path <dir>", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((id: string, status: string, opts: { path?: string; api?: string }) => issuesStatus(id, status, opts));

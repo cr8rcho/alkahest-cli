@@ -12,9 +12,24 @@ import { resolveProject } from "./project.js";
  * writes to stdout/stderr.
  */
 
+/** The meaning layer behind a status (web ADR-113). The server reads only this; names are the team's. */
+export type StatusCategory = "backlog" | "todo" | "in_progress" | "done" | "canceled";
+export const STATUS_CATEGORIES: readonly StatusCategory[] = ["backlog", "todo", "in_progress", "done", "canceled"];
+
 export interface IssueConfig {
   nodeTypes: { id: string; label?: string; shape?: string }[];
-  statuses: { id: string; label?: string; terminal?: boolean }[];
+  statuses: {
+    id: string;
+    label?: string;
+    /** Derived by the server from `category` (done | canceled); older servers set it directly. */
+    terminal?: boolean;
+    category?: StatusCategory;
+    /** The status new issues get. */
+    is_default?: boolean;
+    /** The team's one-liner on when an issue belongs here. */
+    description?: string;
+    color?: string;
+  }[];
 }
 
 export interface Issue {
@@ -274,6 +289,9 @@ export interface UpdateIssueParams {
     body?: string | null;
     type?: string;
     status?: string;
+    /** Move by MEANING: the server picks the project's first status of this category (ADR-113).
+     *  Ignored when `status` is also given. */
+    category?: StatusCategory;
     priority?: string;
     due_on?: string | null;
     assignee_id?: string | null;
@@ -450,9 +468,24 @@ export async function resolveIssueComment(
   return { ok: true, id: res.body?.id, resolved: res.body?.resolved };
 }
 
-/** Status ids marked terminal in the config (= "this work is finished"). */
+/** Status ids marked terminal in the config (= "this work is finished", done OR canceled). */
 export function terminalStatuses(config: IssueConfig): Set<string> {
   return new Set((config.statuses ?? []).filter((s) => s.terminal).map((s) => s.id));
+}
+
+/** Status ids of one category, in config order (empty on a pre-category server). */
+export function statusesOfCategory(config: IssueConfig, category: StatusCategory): string[] {
+  return (config.statuses ?? []).filter((s) => s.category === category).map((s) => s.id);
+}
+
+/**
+ * The status "I finished this" should land on: the first DONE-category status. Terminal now also
+ * covers canceled (ADR-113), so "first terminal" could mean "Canceled" when a team lists it first;
+ * the terminal fallback only applies to servers that don't send categories yet.
+ */
+export function doneStatus(config: IssueConfig): string | null {
+  return statusesOfCategory(config, "done")[0]
+    ?? ((config.statuses ?? []).some((s) => s.category) ? null : [...terminalStatuses(config)][0] ?? null);
 }
 
 /**
