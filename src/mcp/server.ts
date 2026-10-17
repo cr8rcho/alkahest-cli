@@ -567,12 +567,13 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         props: z.record(z.any()).optional().describe("Issue properties (ADR-079, flat key→value): reserved key `tags` = string array; other keys should match the issue map's schema (see prop_defs in the issues tool) — unknown keys are kept but show as unregistered"),
         parent_id: z.string().optional().describe("Parent issue id — creates a contains edge (epic → task)"),
         target: z.string().optional().describe("Code-map target: 's:…'/'r:…' node key, '/route' (planned screen), or a resource label"),
+        external_key: z.string().optional().describe("The source tracker's id (e.g. Jira 'ABC-123'). Unique per project: if an issue already carries it, that issue is UPDATED with the fields you pass instead of a duplicate being created (the result says created:false) — always set it when importing"),
         map: z.string().optional().describe("Which issue map to add to (a project can hold several; omit when there's one). List them with the maps tool, or create one with create_map."),
         project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ title, type, status, category, body, priority, due_on, assignee_id, props, parent_id, target, map, path, project }) => {
+    async ({ title, type, status, category, body, priority, due_on, assignee_id, props, parent_id, target, external_key, map, path, project }) => {
       const targetFields = target
         ? {
             target_kind: (target.startsWith("s:") || target.startsWith("r:") ? "node" : target.startsWith("/") ? "route" : "resource") as
@@ -580,9 +581,9 @@ export function buildServer(remote?: RemoteOptions): McpServer {
             target_key: target,
           }
         : {};
-      const res = await createIssue(rootOf(path), withAuth({ title, type, status, category, body, priority, due_on, assignee_id, props, parent_id, mapSlug: map, slug: project, ...targetFields }));
+      const res = await createIssue(rootOf(path), withAuth({ title, type, status, category, body, priority, due_on, assignee_id, props, parent_id, external_key, mapSlug: map, slug: project, ...targetFields }));
       if (!res.ok || !res.issue) return issueFail("Add issue", res.code, res.message, res.maps);
-      return json({ ok: true, issue: res.issue });
+      return json({ ok: true, created: res.created !== false, issue: res.issue });
     },
   );
 

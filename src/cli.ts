@@ -190,6 +190,7 @@ issues
   .option("--assignee <user-id>", "assign to a project member (user id)")
   .option("--parent <id>", "parent issue — creates a contains edge (epic → task)")
   .option("--target <key>", "code-map target: s:/r: node key, /route (planned screen), or a resource label")
+  .option("--external-key <key>", "the source tracker's id (e.g. ABC-123) — unique per project; an existing issue with it is updated, not duplicated")
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--map <slug>", "which issue map to add to (a project can hold several)")

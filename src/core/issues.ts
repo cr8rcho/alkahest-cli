@@ -257,11 +257,16 @@ export interface CreateIssueParams {
   /** Existing issue id — creates a contains edge parent→new (epic→task). */
   parent_id?: string;
   links?: { node_key: string; kind: "navigate" | "call" }[];
+  /** The source tracker's id (e.g. a Jira key). Unique per project: an issue that already carries
+   *  it is UPDATED instead of duplicated (web 0154) — re-running an import is safe. */
+  external_key?: string;
 }
 
 export interface IssueWriteResult {
   ok: boolean;
   issue?: Issue;
+  /** createIssue: false when an issue with the same external_key existed and was updated. */
+  created?: boolean;
   deleted?: boolean;
   code?: string;
   message?: string;
@@ -288,11 +293,12 @@ export async function createIssue(path: string, params: CreateIssueParams): Prom
     target_kind: params.target_kind ?? null,
     target_key: params.target_key ?? null,
     props: params.props,
+    external_key: params.external_key,
     parent_id: params.parent_id,
     links: params.links,
   });
   if (!res.ok) return fail(res, "create");
-  return { ok: true, issue: res.body?.issue };
+  return { ok: true, created: res.body?.created !== false, issue: res.body?.issue };
 }
 
 export interface UpdateIssueParams {

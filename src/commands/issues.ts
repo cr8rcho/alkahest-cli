@@ -69,6 +69,7 @@ export interface IssuesAddOptions {
   type?: string; status?: string; body?: string;
   parent?: string; target?: string;
   priority?: string; due?: string; assignee?: string;
+  externalKey?: string;
 }
 
 /** `--target` infers the kind: s:/r: prefix = existing node, leading '/' = planned route, else resource label. */
@@ -93,11 +94,11 @@ export async function issuesAdd(title: string, options: IssuesAddOptions): Promi
     api: options.api, slug: options.slug, mapSlug: options.map,
     title, type: options.type, ...start, body: options.body,
     priority: options.priority, due_on: options.due, assignee_id: options.assignee,
-    parent_id: options.parent,
+    parent_id: options.parent, external_key: options.externalKey,
     ...(options.target ? inferTarget(options.target) : {}),
   });
   if (!res.ok || !res.issue) return die(failMessage(res.code, res.message, "issues add"));
-  console.log(`[alkahest] created [${res.issue.type}/${res.issue.status}] ${res.issue.title} — id ${res.issue.id}`);
+  console.log(`[alkahest] ${res.created === false ? "updated (same external key)" : "created"} [${res.issue.type}/${res.issue.status}] ${res.issue.title} — id ${res.issue.id}`);
 }
 
 export interface IssuesEditOptions extends IssuesWriteOptions {
