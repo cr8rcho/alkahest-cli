@@ -6,17 +6,7 @@ import { runScan, loadOrScan, loadMap } from "../core/pipeline.js";
 import { emitMap } from "../core/emit.js";
 import { publishMap } from "../core/publish.js";
 import { pullComments, resolveComment, enrichComments, postComment, resolveNode, promoteComments } from "../core/comments.js";
-import {
-  pullIssues,
-  createIssue,
-  updateIssue,
-  deriveIssueStates,
-  doneStatus,
-  pullIssueComments,
-  postIssueComment,
-  resolveIssueComment,
-  mapIssue,
-} from "../core/issues.js";
+import { pullIssues, createIssue, updateIssue, deriveIssueStates, doneStatus, pullIssueComments, postIssueComment, resolveIssueComment, mapIssue, setIssueConfig } from "../core/issues.js";
 import { completeTask, createTask, postTaskComment, promoteTask, pullSkills, pullTaskComments, pullTasks, resolveTaskComment, saveSkill, updateTask } from "../core/tasks.js";
 import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
@@ -539,6 +529,8 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         ok: true,
         slug: res.graph.slug,
         issue_config: res.graph.issue_config,
+        // Which keys this project overrides itself (set_issue_config, ADR-115); issue_config is already effective.
+        issue_config_overrides: res.graph.issue_config_overrides ?? { statuses: false, types: false },
         // The issue map's property schema (ADR-079) — issues carry their `props` values.
         prop_defs: res.graph.prop_defs ?? [],
         // Members = @mention targets for ask_issue (route a decision to a specific person, ADR-020 §9).
@@ -1364,6 +1356,53 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       const res = await createMap(rootOf(path), withAuth({ mapSlug: slug, type, mapName: name, slug: project }));
       if (!res.ok || !res.map) return issueFail("Create map", res.code, res.message);
       return json({ ok: true, map: res.map });
+    },
+  );
+
+  server.registerTool(
+    "set_issue_config",
+    {
+      title: "Set a project's issue statuses / types",
+      description:
+        "Give ONE project its own issue statuses and/or types — the override layer above the workspace vocabulary " +
+        "(web ADR-115). Reach for it when bringing work in from another tracker (Jira, Linear, GitHub Projects): read " +
+        "the source's statuses and issue types, copy them here with the same ids/labels, then add_issue each ticket " +
+        "with those ids. Every status needs a `category` (backlog | todo | in_progress | done | canceled — Jira's " +
+        "statusCategory maps To Do → todo, In Progress → in_progress, Done → done); every type may carry a `shape` " +
+        "(circle | square | diamond). Pass an array to set, null to inherit the workspace again, omit to leave a key " +
+        "alone. Ids of statuses/types that disappear must be reassigned for the project's existing issues: pass " +
+        "`reassign` or `auto_reassign` (status → first new status of the same category, type → the default). " +
+        "The workspace's own vocabulary is never changed from here — that stays a settings-page decision. " +
+        "Project owner or workspace admin only. Needs an API token and a named project.",
+      inputSchema: {
+        statuses: z.array(z.object({
+          id: z.string().describe("Stable id: lowercase letters, digits, - or _ (≤32)"),
+          label: z.string().describe("Shown name (≤32)"),
+          category: z.enum(["backlog", "todo", "in_progress", "done", "canceled"]).describe("The meaning the app reads"),
+          color: z.enum(["gray", "indigo", "blue", "violet", "pink", "teal", "red", "amber", "green"]).optional(),
+          description: z.string().optional().describe("When an issue belongs here (≤140)"),
+          is_default: z.boolean().optional().describe("The status new issues get (todo category; exactly one)"),
+        })).nullable().optional().describe("The project's own statuses (≤12, ≥1 todo + ≥1 done); null = inherit the workspace again"),
+        types: z.array(z.object({
+          id: z.string().describe("Stable id: lowercase letters, digits, - or _ (≤32)"),
+          label: z.string().describe("Shown name (≤32)"),
+          shape: z.enum(["circle", "square", "diamond"]).optional().describe("Node outline on the issue map (default circle)"),
+          description: z.string().optional().describe("When an issue is this type (≤140)"),
+          is_default: z.boolean().optional().describe("The type new issues get (exactly one)"),
+        })).nullable().optional().describe("The project's own types (1–8); null = inherit the workspace again"),
+        reassign: z.object({
+          statuses: z.record(z.string()).optional().describe("old status id → new status id"),
+          types: z.record(z.string()).optional().describe("old type id → new type id"),
+        }).optional().describe("Where existing issues go when their status/type id disappears"),
+        auto_reassign: z.boolean().optional().describe("Fill reassign gaps by meaning (same category / default type)"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ statuses, types, reassign, auto_reassign, project, path }) => {
+      const res = await setIssueConfig(rootOf(path), withAuth({ statuses, types, reassign, auto_reassign, slug: project }));
+      if (!res.ok) return issueFail("Set issue config", res.code, res.message);
+      return json({ ok: true, issue_config: res.issue_config, overrides: res.overrides, moved: res.moved });
     },
   );
 

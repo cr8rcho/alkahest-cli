@@ -17,7 +17,15 @@ export type StatusCategory = "backlog" | "todo" | "in_progress" | "done" | "canc
 export const STATUS_CATEGORIES: readonly StatusCategory[] = ["backlog", "todo", "in_progress", "done", "canceled"];
 
 export interface IssueConfig {
-  nodeTypes: { id: string; label?: string; shape?: string }[];
+  nodeTypes: {
+    id: string;
+    label?: string;
+    /** The node's outline on the issue map: circle | square | diamond (web ADR-114). */
+    shape?: string;
+    /** The type new issues get. */
+    is_default?: boolean;
+    description?: string;
+  }[];
   statuses: {
     id: string;
     label?: string;
@@ -99,6 +107,8 @@ export interface IssueGraph {
   slug: string;
   name: string | null;
   issue_config: IssueConfig;
+  /** Which keys this project overrides itself (ADR-115) — `issue_config` is already the effective result. */
+  issue_config_overrides?: { statuses: boolean; types: boolean };
   /** Project members — @mention targets for routing a decision (ADR-020 §9). */
   members: IssueMember[];
   /** The issue map's property schema (ADR-079 — the scoped/sole map's; [] when ambiguous). */
@@ -211,6 +221,7 @@ export async function pullIssues(path: string, params: PullIssuesParams = {}): P
       slug: ctx.slug!,
       name: proj?.name ?? null,
       issue_config: proj?.issue_config ?? { nodeTypes: [], statuses: [] },
+      issue_config_overrides: proj?.issue_config_overrides,
       prop_defs: proj?.prop_defs ?? [],
       members: proj?.members ?? [],
       issues: proj?.issues ?? [],
@@ -521,4 +532,49 @@ export function deriveIssueStates(
     });
   }
   return out;
+}
+
+// ---- project issue config (ADR-115) ----------------------------------------------------------
+
+export interface SetIssueConfigParams {
+  api?: string;
+  token?: string;
+  slug?: string;
+  /** An array sets the project's own statuses; null inherits the workspace's again; omit = untouched. */
+  statuses?: IssueConfig["statuses"] | null;
+  /** An array sets the project's own types; null inherits the workspace's again; omit = untouched. */
+  types?: IssueConfig["nodeTypes"] | null;
+  /** Where issues go whose status/type id disappears: {statuses: {old: new}, types: {old: new}}. */
+  reassign?: { statuses?: Record<string, string>; types?: Record<string, string> };
+  /** Fill reassign gaps by meaning: a status → the first new status of its category, a type → the default. */
+  auto_reassign?: boolean;
+}
+
+export interface SetIssueConfigResult {
+  ok: boolean;
+  /** The project's EFFECTIVE config after the write. */
+  issue_config?: IssueConfig;
+  overrides?: { statuses: boolean; types: boolean };
+  moved?: { statuses: number; types: number };
+  code?: string;
+  message?: string;
+}
+
+/**
+ * Set or reset a PROJECT's own issue statuses/types (the override layer above the workspace
+ * vocabulary — `issues-config` edge function, web ADR-115). Owner / workspace admin only. The
+ * workspace's vocabulary is never written from here; that is a web-settings decision.
+ */
+export async function setIssueConfig(path: string, params: SetIssueConfigParams): Promise<SetIssueConfigResult> {
+  const ctx = authContext(path, params, true);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (params.statuses === undefined && params.types === undefined) {
+    return { ok: false, code: "nothing_to_change", message: "Pass statuses and/or types (an array to set, null to inherit the workspace again)." };
+  }
+  const body: Record<string, unknown> = { slug: ctx.slug, reassign: params.reassign ?? {}, auto_reassign: !!params.auto_reassign };
+  if (params.statuses !== undefined) body.statuses = params.statuses;
+  if (params.types !== undefined) body.types = params.types;
+  const res = await request(`${ctx.apiUrl}/issues-config`, ctx.token, body);
+  if (!res.ok) return fail(res, "issues config");
+  return { ok: true, issue_config: res.body?.issue_config, overrides: res.body?.overrides, moved: res.body?.moved };
 }

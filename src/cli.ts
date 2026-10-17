@@ -9,7 +9,7 @@ import { login } from "./commands/login.js";
 import { status } from "./commands/status.js";
 import { logout } from "./commands/logout.js";
 import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsPromote } from "./commands/comments.js";
-import { issuesPull, issuesAdd, issuesEdit, issuesStatus, issuesDone, issuesArchive, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment } from "./commands/issues.js";
+import { issuesPull, issuesAdd, issuesEdit, issuesStatus, issuesDone, issuesArchive, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment, issuesConfigShow, issuesConfigSet, issuesConfigReset } from "./commands/issues.js";
 import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
 import { docsInitCmd, presetInstallCmd, presetsList, presetUpdateCmd } from "./commands/presets.js";
 import { skillsList, skillsShow } from "./commands/skills.js";
@@ -147,6 +147,37 @@ issues
     await issuesPull(path, opts);
     await maybeNotifyUpdate();
   });
+const issuesConfig = issues
+  .command("config")
+  .description("this project's issue statuses / types — show, or give the project its own (ADR-115)");
+issuesConfig
+  .command("show", { isDefault: true })
+  .description("print the effective statuses and types, and whether the project overrides them")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((opts: Parameters<typeof issuesConfigShow>[0]) => issuesConfigShow(opts));
+issuesConfig
+  .command("set")
+  .description("set the project's OWN statuses/types (e.g. copied from Jira) — the workspace vocabulary is untouched")
+  .option("--from <file>", "JSON file { statuses?: [...], types?: [...] } (the issues tool's issue_config shape round-trips)")
+  .option("--statuses <json>", "inline statuses array, or null to inherit the workspace again")
+  .option("--types <json>", "inline types array, or null to inherit the workspace again")
+  .option("--reassign <old=new...>", "where issues of a vanishing id go (status:old=new / type:old=new; default status)")
+  .option("--auto-reassign", "fill reassign gaps by meaning: status → same category, type → default", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((opts: Parameters<typeof issuesConfigSet>[0]) => issuesConfigSet(opts));
+issuesConfig
+  .command("reset")
+  .description("drop the project's own statuses / types / all so it inherits the workspace again")
+  .argument("<key>", "statuses | types | all")
+  .option("--auto-reassign", "move issues off vanishing ids by meaning", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((key: string, opts: Parameters<typeof issuesConfigReset>[1]) => issuesConfigReset(key, opts));
 issues
   .command("add")
   .description("create an issue (a node of the issue graph)")

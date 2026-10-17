@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { OUTPUT_DIR } from "../core/emit.js";
 import {
-  pullIssues, createIssue, updateIssue, mapIssue, deriveIssueStates, doneStatus, STATUS_CATEGORIES,
+  pullIssues, createIssue, updateIssue, mapIssue, deriveIssueStates, doneStatus, STATUS_CATEGORIES, setIssueConfig,
   pullIssueComments, postIssueComment, resolveIssueComment,
   type IssueGraph, type IssueEdge,
 } from "../core/issues.js";
@@ -266,3 +266,86 @@ export async function issuesResolveComment(id: string, options: IssuesResolveOpt
 }
 
 export { type IssueGraph };
+
+// ---- issues config (ADR-115): a project's own statuses / types -----------------------------------
+
+export interface IssuesConfigOptions { api?: string; slug?: string; path?: string }
+
+/** Print the project's effective statuses/types and which of them it overrides itself. */
+export async function issuesConfigShow(options: IssuesConfigOptions): Promise<void> {
+  const res = await pullIssues(options.path || ".", { api: options.api, slug: options.slug });
+  if (!res.ok || !res.graph) return die(failMessage(res.code, res.message, "issues config"));
+  const ov = res.graph.issue_config_overrides ?? { statuses: false, types: false };
+  const cfg = res.graph.issue_config;
+  console.log(`[alkahest] ${res.graph.slug} — statuses (${ov.statuses ? "project's own" : "from workspace"}):`);
+  for (const st of cfg.statuses ?? []) {
+    console.log(`  ${st.is_default ? "•" : " "} ${st.id.padEnd(14)} ${(st.label ?? st.id).padEnd(18)} ${st.category ?? ""}${st.description ? `  — ${st.description}` : ""}`);
+  }
+  console.log(`[alkahest] types (${ov.types ? "project's own" : "from workspace"}):`);
+  for (const t of cfg.nodeTypes ?? []) {
+    console.log(`  ${t.is_default ? "•" : " "} ${t.id.padEnd(14)} ${(t.label ?? t.id).padEnd(18)} ${t.shape ?? "circle"}${t.description ? `  — ${t.description}` : ""}`);
+  }
+  console.log("  (• = default for new issues)");
+}
+
+export interface IssuesConfigSetOptions extends IssuesConfigOptions {
+  /** A JSON file: { statuses?: [...], types?: [...] } — the shape `issues config export` writes. */
+  from?: string;
+  statuses?: string;
+  types?: string;
+  reassign?: string[];
+  autoReassign?: boolean;
+}
+
+/**
+ * Set the project's own statuses/types from a JSON file (`--from`) or inline JSON (`--statuses` /
+ * `--types`). `--reassign old=new` names where issues of a vanishing id go; `--auto-reassign`
+ * fills the gaps by meaning. The workspace vocabulary is never written from the CLI.
+ */
+export async function issuesConfigSet(options: IssuesConfigSetOptions): Promise<void> {
+  let statuses: unknown = undefined, types: unknown = undefined;
+  const parse = (label: string, raw: string): unknown => {
+    try { return JSON.parse(raw); } catch { return die(`✗ ${label} must be JSON (an array, or null to inherit).`); }
+  };
+  if (options.from) {
+    const { readFileSync } = await import("node:fs");
+    let doc: any;
+    try { doc = JSON.parse(readFileSync(options.from, "utf8")); } catch (e) { return die(`✗ Could not read ${options.from}: ${e instanceof Error ? e.message : e}`); }
+    if (!doc || typeof doc !== "object") return die("✗ --from must be a JSON object { statuses?, types? }.");
+    if ("statuses" in doc) statuses = doc.statuses;
+    if ("types" in doc) types = doc.types;
+    else if ("nodeTypes" in doc) types = doc.nodeTypes; // the `issues` tool's issue_config shape round-trips
+  }
+  if (options.statuses !== undefined) statuses = parse("--statuses", options.statuses);
+  if (options.types !== undefined) types = parse("--types", options.types);
+  if (statuses === undefined && types === undefined) return die("✗ Nothing to set — pass --from <file.json>, --statuses <json> or --types <json>.");
+  const reassign: { statuses: Record<string, string>; types: Record<string, string> } = { statuses: {}, types: {} };
+  for (const pair of options.reassign ?? []) {
+    const m = /^(?:(status|type):)?([^=]+)=(.+)$/.exec(pair);
+    if (!m) return die(`✗ --reassign takes old=new (optionally status:old=new / type:old=new), got "${pair}".`);
+    (m[1] === "type" ? reassign.types : reassign.statuses)[m[2]] = m[3];
+  }
+  const res = await setIssueConfig(options.path || ".", {
+    api: options.api, slug: options.slug,
+    statuses: statuses as any, types: types as any, reassign, auto_reassign: !!options.autoReassign,
+  });
+  if (!res.ok) return die(failMessage(res.code, res.message, "issues config set"));
+  const ov = res.overrides ?? { statuses: false, types: false };
+  const mv = res.moved ?? { statuses: 0, types: 0 };
+  console.log(`[alkahest] issue config saved — statuses: ${ov.statuses ? "project's own" : "inherit workspace"}, types: ${ov.types ? "project's own" : "inherit workspace"}` +
+    (mv.statuses || mv.types ? ` (moved ${mv.statuses} by status, ${mv.types} by type)` : ""));
+}
+
+/** Drop the project's own statuses and/or types so it inherits the workspace again. */
+export async function issuesConfigReset(key: string, options: IssuesConfigOptions & { autoReassign?: boolean }): Promise<void> {
+  if (!["statuses", "types", "all"].includes(key)) return die("✗ issues config reset <statuses | types | all>");
+  const res = await setIssueConfig(options.path || ".", {
+    api: options.api, slug: options.slug,
+    statuses: key === "statuses" || key === "all" ? null : undefined,
+    types: key === "types" || key === "all" ? null : undefined,
+    auto_reassign: !!options.autoReassign,
+  });
+  if (!res.ok) return die(failMessage(res.code, res.message, "issues config reset"));
+  const mv = res.moved ?? { statuses: 0, types: 0 };
+  console.log(`[alkahest] ${key === "all" ? "statuses and types" : key} now inherit the workspace` + (mv.statuses || mv.types ? ` (moved ${mv.statuses} by status, ${mv.types} by type)` : ""));
+}
