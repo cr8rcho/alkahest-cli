@@ -159,7 +159,7 @@ issuesConfig
   .action((opts: Parameters<typeof issuesConfigShow>[0]) => issuesConfigShow(opts));
 issuesConfig
   .command("set")
-  .description("set the project's OWN statuses/types (e.g. copied from Jira) — the workspace vocabulary is untouched")
+  .description("set the project's OWN statuses/types (e.g. copied from Jira) — each list given REPLACES that whole list; the workspace vocabulary is untouched")
   .option("--from <file>", "JSON file { statuses?: [...], types?: [...] } (the issues tool's issue_config shape round-trips)")
   .option("--statuses <json>", "inline statuses array, or null to inherit the workspace again")
   .option("--types <json>", "inline types array, or null to inherit the workspace again")

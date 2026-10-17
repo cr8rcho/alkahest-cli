@@ -1370,7 +1370,10 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         "with those ids. Every status needs a `category` (backlog | todo | in_progress | done | canceled — Jira's " +
         "statusCategory maps To Do → todo, In Progress → in_progress, Done → done); every type may carry a `shape` " +
         "(circle | square | diamond). Pass an array to set, null to inherit the workspace again, omit to leave a key " +
-        "alone. Ids of statuses/types that disappear must be reassigned for the project's existing issues: pass " +
+        "alone. **An array REPLACES the whole list** — to add a status/type, read the project's current `issue_config` " +
+        "(issues tool) and send existing entries + the new ones; sending only the new ones removes the rest. Before " +
+        "creating vocabulary the project doesn't have, show the user what is missing and ask whether to create it or " +
+        "map to an existing status/type. Ids of statuses/types that disappear must be reassigned for the project's existing issues: pass " +
         "`reassign` or `auto_reassign` (status → first new status of the same category, type → the default). " +
         "The workspace's own vocabulary is never changed from here — that stays a settings-page decision. " +
         "Project owner or workspace admin only. Needs an API token and a named project.",
