@@ -4,7 +4,7 @@ import { printStatus } from "./status.js";
 
 /**
  * Save a personal API token so the CLI/MCP can authenticate as you (publish, tasks, notes, issues, skills).
- * Get the token from the web app (Account → Create token) after signing in with GitHub.
+ * Get the token from the web app's API tokens page (https://www.alkahest.app/home/tokens) after signing in.
  *
  * Run BARE, this reports the current state instead of assuming you have none — a bare auth command
  * is where people look first for "am I signed in?", and answering with a canned "paste a token"
@@ -19,8 +19,8 @@ export interface LoginOptions {
 
 const HOW_TO = [
   "To sign in:",
-  "  1. Open alkahest.app and sign in",
-  "  2. Account → Create token, copy the alk_… value",
+  "  1. Sign in at https://www.alkahest.app",
+  "  2. Create a token at https://www.alkahest.app/home/tokens and copy the alk_… value",
   "  3. Run: alkahest login --token alk_xxxxx",
 ];
 

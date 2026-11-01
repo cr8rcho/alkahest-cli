@@ -55,7 +55,7 @@ program
 program
   .command("login")
   .description("save your personal API token (from the web app); run bare to see the current state")
-  .option("--token <token>", "alk_… token from the web app (Account → Create token)")
+  .option("--token <token>", "alk_… token from https://www.alkahest.app/home/tokens")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action(async (opts: { token?: string; api?: string }) => { await login(opts); });
 
