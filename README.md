@@ -60,7 +60,7 @@ cd ~/my-next-app
 alkahest scan                 # → .alkahest/map.json
 
 # 3. Publish it — this is where the map becomes viewable
-#    (sign up at alkahest.app → Account → Create token)
+#    (sign up at alkahest.app, then create one at alkahest.app/home/tokens)
 alkahest login --token alk_xxxxx
 alkahest publish              # → https://alkahest.app/p/<project>  (shareable, no login to view)
 
@@ -209,7 +209,7 @@ Or add it to any MCP-capable agent's config directly:
 
 The agent reads with `get_screen` / `who_calls` and writes back with `set_summary` / `set_prd`; both write into `map.json` — publish and the hosted map reflects the latest.
 
-**Publishing from the agent (optional).** `scan` / read / write-back need no key. `publish` does — it uploads the map to your account on the hosted viewer. Get a token at **alkahest.app → Account → Create token**, then put it in the MCP config so the server can authenticate:
+**Publishing from the agent (optional).** `scan` / read / write-back need no key. `publish` does — it uploads the map to your account on the hosted viewer. Get a token at **[alkahest.app/home/tokens](https://www.alkahest.app/home/tokens)**, then put it in the MCP config so the server can authenticate:
 
 ```bash
 claude mcp add alkahest -s project \
