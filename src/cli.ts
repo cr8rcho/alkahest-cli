@@ -66,7 +66,7 @@ program
 
 program
   .command("publish")
-  .description("upload .alkahest/map.json to the hosted viewer → shareable link (no login to view)")
+  .description("upload .alkahest/map.json to the hosted viewer → a link (private until you share it)")
   .argument("[path]", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .option("--name <name>", "project name (first publish only)")

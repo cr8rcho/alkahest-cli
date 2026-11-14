@@ -4,7 +4,9 @@ import type { PublishCandidate } from "../core/listProjects.js";
 
 /**
  * Upload `<projectRoot>/.alkahest/map.json` to the hosted viewer so non-developers
- * can open the product map at a shareable link — no install, no login to view.
+ * can open the product map in the browser — no install. A new project is PRIVATE: the
+ * link opens for its members and invited people until the owner switches the map to
+ * "Anyone with the link" in the viewer's Share dialog, so the output says which it is.
  * Only map.json is uploaded; source code never leaves the machine.
  *
  * Auth is a personal token from `alkahest login` (or the ALKAHEST_TOKEN env).
@@ -64,7 +66,7 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
       console.error(`[alkahest] no .alkahest/map.json found — run 'alkahest scan' first.`);
     } else if (res.code === "plan_limit") {
       console.error(`[alkahest] ✗ Publish blocked — ${res.message}`);
-      console.error("  Upgrade to Pro, or 'alkahest view' still works locally for free.");
+      console.error("  Upgrade to Pro at alkahest.app/home/billing.");
     } else if (res.code === "invalid_token") {
       console.error("[alkahest] ✗ Token invalid or revoked. Run 'alkahest login' again.");
     } else if (res.code === "client_too_old") {
@@ -93,6 +95,14 @@ export async function publish(path: string, options: PublishOptions): Promise<vo
 
   console.log(`[alkahest] published ${res.slug}${res.mapSlug ? ` (map: ${res.mapSlug})` : ""}`);
   console.log(`  → ${res.viewerUrl ?? res.mapUrl}`);
+  // Say who can open that link — a new project is private, and a link pasted to a teammate
+  // that lands on a sign-in wall is the surprise this line prevents.
+  if (res.access === "private") {
+    console.log("  private — only you and people you invite can open it.");
+    console.log("  To share: open the link → ⋯ → Share map (invite people, or \"Anyone with the link\").");
+  } else if (res.access === "public") {
+    console.log("  anyone with the link can view it — no sign-in needed.");
+  }
 
   // The address changed server-side (project/map slug rename, ADR-037) — the local config is
   // already rewritten to the new one; say so, since links the user hands out should use it.

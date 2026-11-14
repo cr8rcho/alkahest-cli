@@ -49,6 +49,10 @@ export interface PublishResult {
   mapSlug?: string;
   viewerUrl?: string | null;
   mapUrl?: string;
+  /** Who can open `viewerUrl` right now: "public" = anyone with the link, "private" = only the
+   *  project's members and invited people (the default for a new project). Absent when the
+   *  server predates the field. */
+  access?: "public" | "private" | null;
   /** Whether this was the project's first publish (a new slug was created). */
   created?: boolean;
   /** Set when the server answered with a DIFFERENT slug than the one sent — the project/map
@@ -221,6 +225,7 @@ export async function publishMap(path: string, params: PublishParams = {}): Prom
     mapSlug: pub.body.mapSlug,
     viewerUrl: pub.body.viewerUrl ?? null,
     mapUrl: pub.body.mapUrl,
+    access: pub.body.access === "public" || pub.body.access === "private" ? pub.body.access : null,
     created,
     // The server answers with CANONICAL slugs (ADR-037): a mismatch vs what we sent means a
     // rename happened server-side — the persistence above already rewrote the local config,
