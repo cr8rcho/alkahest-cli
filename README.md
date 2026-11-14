@@ -62,7 +62,7 @@ alkahest scan                 # → .alkahest/map.json
 # 3. Publish it — this is where the map becomes viewable
 #    (sign up at alkahest.app, then create one at alkahest.app/home/tokens)
 alkahest login --token alk_xxxxx
-alkahest publish              # → https://alkahest.app/p/<project>  (shareable, no login to view)
+alkahest publish              # → https://alkahest.app/p/<project>  (private until you share it from the viewer)
 
 # 4. Register the MCP server with Claude Code (project scope = shared via .mcp.json)
 claude mcp add alkahest -s project -- alkahest mcp

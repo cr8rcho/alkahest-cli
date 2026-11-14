@@ -62,7 +62,7 @@ alkahest scan                 # → .alkahest/map.json
 # 3. publish — 지도가 "보이는 것"이 되는 순간
 #    (alkahest.app 가입 → Account → Create token)
 alkahest login --token alk_xxxxx
-alkahest publish              # → https://alkahest.app/p/<project>  (공유 링크, 보는 데 로그인 불필요)
+alkahest publish              # → https://alkahest.app/p/<project>  (뷰어에서 공유하기 전까지는 비공개)
 
 # 4. Claude Code에 MCP 서버 등록 (project 스코프 = .mcp.json으로 공유)
 claude mcp add alkahest -s project -- alkahest mcp

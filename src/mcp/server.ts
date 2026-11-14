@@ -217,9 +217,10 @@ export function buildServer(remote?: RemoteOptions): McpServer {
     {
       title: "Publish to hosted viewer",
       description:
-        "Upload this project's product map (.alkahest/map.json) to the hosted viewer (alkahest.app) and return a " +
-        "shareable link anyone can open — no install, no login to view. Only map.json is uploaded; source code never " +
-        "leaves the machine. Run 'scan' first if the map is missing. Auth uses an API token from the ALKAHEST_TOKEN " +
+        "Upload this project's product map (.alkahest/map.json) to the hosted viewer (alkahest.app) and return its " +
+        "link — viewed in the browser, no install. A new project is PRIVATE: the link opens only for its members and " +
+        "invited people until the owner shares the map in the viewer (the result's `access` says which). Only " +
+        "map.json is uploaded; source code never leaves the machine. Run 'scan' first if the map is missing. Auth uses an API token from the ALKAHEST_TOKEN " +
         "env var (set it in this server's MCP config) or a prior 'alkahest login'.",
       inputSchema: {
         path: z.string().optional().describe("Project root (default: cwd)"),
@@ -261,6 +262,14 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         slug: res.slug,
         url: res.viewerUrl ?? res.mapUrl,
         created: res.created,
+        ...(res.access
+          ? {
+              access: res.access,
+              accessHint: res.access === "private"
+                ? "Tell the user: the link is private — only they and people they invite can open it. To share, open the link → ⋯ → Share map."
+                : "Anyone with the link can view it — no sign-in needed.",
+            }
+          : {}),
         ...(res.needs && waiting > 0
           ? {
               needs: res.needs,
