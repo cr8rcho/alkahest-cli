@@ -113,8 +113,9 @@ comments
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--map <slug>", "which code map the comment is on (defaults to this checkout's map)")
+  .option("--question", "ask the project owner a decision (notifies, stays open until decided)", false)
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .action((node: string, opts: { body?: string; slug?: string; map?: string; api?: string; path?: string }) => commentsAdd(node, opts));
+  .action((node: string, opts: { body?: string; slug?: string; map?: string; api?: string; path?: string; question?: boolean }) => commentsAdd(node, opts));
 comments
   .command("reply")
   .description("reply to an existing comment (id from 'comments pull')")

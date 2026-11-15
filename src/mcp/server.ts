@@ -388,21 +388,24 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       description:
         "Leave a NEW comment on a node of this project's published map. Specify the node by id/route/title (a screen) " +
         "or id/path/label (a resource/endpoint), or 'map' for the whole map. Use this to record feedback or a finding " +
-        "while working. Needs an API token; you must be the project owner or a collaborator.",
+        "while working. Set question=true to ask the project owner a decision about that screen/resource — it notifies " +
+        "them and stays open until decided; read the answer with the comments tool, then resolve_comment. Needs an API " +
+        "token; you must be the project owner or a collaborator.",
       inputSchema: {
         node: z.string().describe("screen id/route/title, resource id/path/label, or 'map'"),
         body: z.string().describe("the comment text"),
+        question: z.boolean().optional().describe("Ask a decision (kind 'question') instead of leaving a note"),
         project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ node, body, path, project }) => {
+    async ({ node, body, question, path, project }) => {
       const root = findProjectRoot(rootOf(path));
       const map = remote ? await getMap(undefined, project) : loadOrScan(root);
       if (!map) return text(remote ? noMapMsg : "No map for this project — run the scan/publish tools first.");
       const n = resolveNode(map, node);
       if (!n) return text(`No node matches '${node}'. Use the overview tool to list screens/resources.`);
-      const res = await postComment(root, withAuth({ node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: project }));
+      const res = await postComment(root, withAuth({ node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: project, kind: question ? "question" : "note" }));
       if (!res.ok) {
         const hints: Record<string, string> = hinted({
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
@@ -411,7 +414,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         });
         return text(`Add comment failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
       }
-      return json({ ok: true, id: res.comment?.id, node_key: n.node_key, anchor_label: n.anchor_label });
+      return json({ ok: true, id: res.comment?.id, kind: question ? "question" : "note", node_key: n.node_key, anchor_label: n.anchor_label });
     },
   );
 
