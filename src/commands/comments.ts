@@ -85,7 +85,9 @@ export async function commentsPromote(ids: string[], options: CommentsPromoteOpt
   console.log(`[alkahest] promoted ${res.ids!.length} comment${res.ids!.length === 1 ? "" : "s"} → issue ${ref} [${res.issue?.type}/${res.issue?.status}] ${res.issue?.title}`);
 }
 
-export interface CommentsAddOptions { body?: string; slug?: string; map?: string; api?: string; path?: string; }
+export interface CommentsAddOptions {
+  /** Ask a decision (cloud 0159) instead of leaving a note. */
+  question?: boolean; body?: string; slug?: string; map?: string; api?: string; path?: string; }
 
 export async function commentsAdd(node: string, options: CommentsAddOptions): Promise<void> {
   const body = (options.body || "").trim();
@@ -95,7 +97,7 @@ export async function commentsAdd(node: string, options: CommentsAddOptions): Pr
   if (!map) { console.error(`[alkahest] no ${OUTPUT_DIR}/map.json — run 'alkahest scan' first.`); process.exitCode = 1; return; }
   const n = resolveNode(map, node);
   if (!n) { console.error(`[alkahest] no node matches '${node}'. Try a screen route/title or resource path.`); process.exitCode = 1; return; }
-  const res = await postComment(projectRoot, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: options.slug, mapSlug: options.map, api: options.api });
+  const res = await postComment(projectRoot, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: options.slug, mapSlug: options.map, api: options.api, kind: options.question ? "question" : "note" });
   if (!res.ok) {
     console.error(res.code === "forbidden"
       ? "[alkahest] ✗ Only the project owner or a collaborator can comment."

@@ -34,6 +34,10 @@ export interface PulledComment {
   author_id: string;
   author_name: string | null;
   body: string;
+  /** note | question | answer (cloud 0159; older rows read as note). */
+  kind?: string;
+  /** web | token | widget — token rows were posted by an agent. */
+  origin?: string;
   resolved: boolean;
   /** True if the anchored node is gone from the current map (route renamed/removed). */
   orphaned?: boolean;
@@ -278,6 +282,9 @@ export interface PostParams {
   /** Reply: parent comment id (project/node/anchor are inherited from it). */
   parent_id?: string;
   body: string;
+  /** New comment: 'question' asks a decision (notifies the project owner, stays open until
+   *  decided — cloud 0159); default 'note'. A reply's kind follows its parent (answer under a question). */
+  kind?: "note" | "question";
 }
 
 export interface PostResult {
@@ -303,7 +310,7 @@ export async function postComment(path: string, params: PostParams): Promise<Pos
     const { slug, mapSlug: knownMap } = resolveProject(path, params.slug);
     if (!slug) return { ok: false, code: "no_slug", message: "Which project? Name it explicitly, or bind this folder by publishing" };
     if (!params.node_key) return { ok: false, code: "no_node", message: "node_key is required for a new comment." };
-    reqBody = { slug, mapSlug: params.mapSlug ?? knownMap, node_key: params.node_key, anchor_kind: params.anchor_kind, anchor_label: params.anchor_label, body: params.body };
+    reqBody = { slug, mapSlug: params.mapSlug ?? knownMap, node_key: params.node_key, anchor_kind: params.anchor_kind, anchor_label: params.anchor_label, body: params.body, kind: params.kind };
   }
 
   const res = await postJson(`${apiUrl}/comments-post`, reqBody, token);
