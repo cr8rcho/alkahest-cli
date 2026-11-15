@@ -1,4 +1,4 @@
-import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote, type PropDefInput } from "../core/notes.js";
+import { createNote, editPropDefs, getNote, linkNotes, mapNote, postNoteComment, pullNoteComments, pullNotes, resolveNoteComment, updateNote, type PropDefInput } from "../core/notes.js";
 import { importNotes } from "../core/notesImport.js";
 
 /**
@@ -23,6 +23,7 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
     ambiguous_map: `✗ ${message ?? "This project has several note maps."}\n  See them with 'alkahest maps list', or make a new one with 'alkahest maps create <slug> --type note'.`,
     reason_required: `✗ ${message ?? "Deleting requires a one-line reason."}\n  Pass --reason \"<why>\" — it shows in the Trash and the activity journal.`,
     note_deleted: `✗ ${message ?? "This note is in the Trash."}\n  Restore it first with 'alkahest notes restore <note>'.`,
+    quote_not_found: `✗ ${message ?? "That quote isn't in the note."}\n  See the note's text with 'alkahest notes show <note>'.`,
   };
   return known[code ?? ""] ?? `${action} failed: ${message}`;
 };
@@ -279,4 +280,53 @@ export async function notesLink(from: string, to: string, options: NotesLinkOpti
   console.log(options.remove
     ? `[alkahest] unlinked ${from} → ${to}`
     : `[alkahest] linked ${from} → ${to}`);
+}
+
+// ── Note comments (cloud ADR-122) ───────────────────────────────────────────────────────
+
+interface NoteCommentOptions { path?: string; slug?: string; api?: string }
+
+/** List review threads on notes (one note's with <note>, unresolved only with --open). */
+export async function notesComments(note: string | undefined, options: NoteCommentOptions & { open?: boolean }): Promise<void> {
+  const res = await pullNoteComments(options.path || ".", { api: options.api, slug: options.slug, note, open: options.open });
+  if (!res.ok || !res.threads) return die(failMessage(res.code, res.message, "notes comments"));
+  console.log(`[alkahest] ${res.threads.length} thread${res.threads.length === 1 ? "" : "s"}` +
+    (options.open ? " (unresolved)" : "") + (note ? ` on ${note}` : ""));
+  for (const t of res.threads) {
+    const tag = t.kind === "question" ? (t.resolved ? "question ✓" : "question ?") : t.resolved ? "resolved" : "open";
+    const where = t.quote ? `“${t.quote.replace(/\s+/g, " ").slice(0, 80)}”${t.anchor_found === false ? " (outdated)" : ""}` : "(whole note)";
+    console.log(`  [${tag}] ${t.note.slug} ${where}  ${t.id}`);
+    console.log(`      ${t.author_name ?? "someone"}: ${t.body.split("\n")[0]}`);
+    for (const r of t.replies) console.log(`      ↳ ${r.author_name ?? "someone"}: ${r.body.split("\n")[0]}`);
+    if (t.note.source_path) console.log(`      source: ${t.note.source_path}`);
+  }
+}
+
+/** Start a thread on a note — on a passage with --quote, or the whole note. */
+export async function notesComment(
+  note: string,
+  body: string,
+  options: NoteCommentOptions & { quote?: string; question?: boolean; mention?: string[] },
+): Promise<void> {
+  const res = await postNoteComment(options.path || ".", {
+    api: options.api, slug: options.slug, note, body, quote: options.quote,
+    kind: options.question ? "question" : "note", mention: options.mention,
+  });
+  if (!res.ok || !res.comment) return die(failMessage(res.code, res.message, "notes comment"));
+  console.log(`[alkahest] posted ${res.comment.kind} on ${note}${res.comment.quote ? " (on a passage)" : ""} — id ${res.comment.id}`);
+  if (res.url) console.log(`  ${res.url}`);
+}
+
+/** Reply under a note thread. */
+export async function notesReply(parent: string, body: string, options: NoteCommentOptions & { mention?: string[] }): Promise<void> {
+  const res = await postNoteComment(options.path || ".", { api: options.api, parent, body, mention: options.mention });
+  if (!res.ok || !res.comment) return die(failMessage(res.code, res.message, "notes reply"));
+  console.log(`[alkahest] replied — id ${res.comment.id}`);
+}
+
+/** Resolve (or, with --reopen, reopen) a note thread. */
+export async function notesResolveComment(id: string, options: NoteCommentOptions & { reopen?: boolean }): Promise<void> {
+  const res = await resolveNoteComment(options.path || ".", { api: options.api, id, resolved: !options.reopen });
+  if (!res.ok) return die(failMessage(res.code, res.message, "notes resolve"));
+  console.log(`[alkahest] ${options.reopen ? "reopened" : "resolved"} ${id}`);
 }

@@ -8,7 +8,7 @@ import { publishMap } from "../core/publish.js";
 import { pullComments, resolveComment, enrichComments, postComment, resolveNode, promoteComments } from "../core/comments.js";
 import { pullIssues, createIssue, updateIssue, deriveIssueStates, doneStatus, pullIssueComments, postIssueComment, resolveIssueComment, mapIssue, setIssueConfig } from "../core/issues.js";
 import { completeTask, createTask, postTaskComment, promoteTask, pullSkills, pullTaskComments, pullTasks, resolveTaskComment, saveSkill, updateTask } from "../core/tasks.js";
-import { createNote, editPropDefs, getNote, linkNotes, mapNote, pullNotes, updateNote } from "../core/notes.js";
+import { createNote, editPropDefs, getNote, linkNotes, mapNote, postNoteComment, pullNoteComments, pullNotes, resolveNoteComment, updateNote } from "../core/notes.js";
 import { listMaps, createMap } from "../core/maps.js";
 import { listPresets, readPresetBundle } from "../core/presets.js";
 import { listProjects } from "../core/listProjects.js";
@@ -1244,6 +1244,102 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       const res = await editPropDefs(rootOf(path), withAuth({ defs: define, remove, mapSlug: map, slug: project }));
       if (!res.ok) return issueFail("Edit note props", res.code, res.message, res.maps);
       return json({ ok: true, added: res.added ?? 0, merged: res.merged ?? 0, removed: res.removed ?? 0, skipped: res.skipped ?? 0 });
+    },
+  );
+
+  // ---- note comments: review threads on a note's passages (cloud ADR-122) ----
+  server.registerTool(
+    "note_comments",
+    {
+      title: "Read comments on notes",
+      description:
+        "Read the review threads people (and agents) left on this project's notes. Each thread is about a QUOTED " +
+        "passage (`quote`, the words as they read on the page, under `heading`) or the whole note (quote null). " +
+        "`anchor_found: false` means the quoted passage is no longer in the note (it was edited away). kind 'question' " +
+        "with resolved=false is a decision someone is waiting on. When a thread asks for a change, edit the note with " +
+        "update_note — but if `note.source_path` is set the note is a mirror of that repo file: edit the FILE, or the " +
+        "next sync overwrites your fix. Then reply_note_comment with what you changed and resolve_note_comment. " +
+        "Pass `note` for one note, `open` for unresolved threads only. Needs an API token.",
+      inputSchema: {
+        note: z.string().optional().describe("Restrict to one note (slug or id)"),
+        open: z.boolean().optional().describe("Only unresolved threads (default: false)"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ note, open, path, project }) => {
+      const res = await pullNoteComments(rootOf(path), withAuth({ note, open, slug: project }));
+      if (!res.ok || !res.threads) return issueFail("Read note comments", res.code, res.message);
+      return json({ ok: true, count: res.threads.length, threads: res.threads });
+    },
+  );
+
+  server.registerTool(
+    "comment_note",
+    {
+      title: "Comment on a note",
+      description:
+        "Start a thread on a note — about one passage (`quote`) or the whole note (omit quote). Use it when reviewing " +
+        "a document: point at the exact words instead of describing where they are. `quote` must be text that is " +
+        "actually in the note, copied as it READS (no markdown markers like **, `, [](), #) and inside one paragraph " +
+        "or list item; a quote that isn't there is refused. Set question=true to ask the reader a decision — it " +
+        "notifies them and stays open until resolved. `mention` routes it to specific members. Needs an API token.",
+      inputSchema: {
+        note: z.string().describe("Note slug (or id)"),
+        body: z.string().describe("The comment (markdown)"),
+        quote: z.string().optional().describe("The passage this is about, as it reads in the note (omit = whole note)"),
+        question: z.boolean().optional().describe("Ask a decision (kind 'question') instead of leaving a remark"),
+        mention: z.array(z.string()).optional().describe("Member(s) to tag — names/handles"),
+        project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ note, body, quote, question, mention, path, project }) => {
+      const res = await postNoteComment(rootOf(path), withAuth({ note, body, quote, kind: question ? "question" : "note", mention, slug: project }));
+      if (!res.ok || !res.comment) return issueFail("Comment on note", res.code, res.message);
+      return json({ ok: true, comment: res.comment, url: res.url });
+    },
+  );
+
+  server.registerTool(
+    "reply_note_comment",
+    {
+      title: "Reply on a note thread",
+      description:
+        "Reply under a note comment thread (id from note_comments) — e.g. say what you changed in the note, or answer " +
+        "a question. A reply under a question is its answer. Needs an API token.",
+      inputSchema: {
+        parent: z.string().describe("Thread id (the first comment's id, from note_comments)"),
+        body: z.string().describe("Reply (markdown)"),
+        mention: z.array(z.string()).optional().describe("Member(s) to tag — names/handles"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ parent, body, mention, path }) => {
+      const res = await postNoteComment(rootOf(path), withAuth({ parent, body, mention }));
+      if (!res.ok || !res.comment) return issueFail("Reply on note thread", res.code, res.message);
+      return json({ ok: true, comment: res.comment });
+    },
+  );
+
+  server.registerTool(
+    "resolve_note_comment",
+    {
+      title: "Resolve a note thread",
+      description:
+        "Mark a note comment thread resolved (or reopen it with resolved=false) — once the requested change is made or " +
+        "the question is answered. The thread's author, a workspace owner/admin, or anyone who can edit the note may " +
+        "do it. Needs an API token.",
+      inputSchema: {
+        id: z.string().describe("Thread id (from note_comments)"),
+        resolved: z.boolean().optional().describe("false to reopen (default: true)"),
+        path: z.string().optional().describe("Project root (default: cwd)"),
+      },
+    },
+    async ({ id, resolved, path }) => {
+      const res = await resolveNoteComment(rootOf(path), withAuth({ id, resolved }));
+      if (!res.ok) return issueFail("Resolve note thread", res.code, res.message);
+      return json({ ok: true, id: res.id, resolved: res.resolved });
     },
   );
 

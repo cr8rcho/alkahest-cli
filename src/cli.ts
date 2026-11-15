@@ -10,7 +10,7 @@ import { status } from "./commands/status.js";
 import { logout } from "./commands/logout.js";
 import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsPromote } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesEdit, issuesStatus, issuesDone, issuesArchive, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment, issuesConfigShow, issuesConfigSet, issuesConfigReset } from "./commands/issues.js";
-import { notesAdd, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
+import { notesAdd, notesComment, notesComments, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesReply, notesResolveComment, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
 import { docsInitCmd, presetInstallCmd, presetsList, presetUpdateCmd } from "./commands/presets.js";
 import { skillsList, skillsShow } from "./commands/skills.js";
 import { mapOverview, mapScreen, mapWhoCalls } from "./commands/map.js";
@@ -352,6 +352,44 @@ notes
   .option("--map <slug>", "restrict to one note map (default: all readable)")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action((opts: Parameters<typeof notesList>[0]) => notesList(opts));
+notes
+  .command("comments")
+  .description("read review threads on notes (? = open question; 'outdated' = the quoted passage is gone)")
+  .argument("[note]", "restrict to one note (slug or id)")
+  .option("--open", "only unresolved threads", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((note: string | undefined, opts: { open?: boolean; path?: string; slug?: string; api?: string }) => notesComments(note, opts));
+notes
+  .command("comment")
+  .description("comment on a note — on a passage with --quote (the words as they read), or the whole note")
+  .argument("<note>", "note slug (or id)")
+  .requiredOption("--body <text>", "comment text")
+  .option("--quote <text>", "the passage this is about, copied as it reads in the note")
+  .option("--question", "ask a decision (notifies, stays open until resolved)", false)
+  .option("--mention <handle...>", "tag member(s) by name/handle")
+  .option("--path <dir>", "project path", ".")
+  .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((note: string, opts: { body: string; quote?: string; question?: boolean; mention?: string[]; path?: string; slug?: string; api?: string }) => notesComment(note, opts.body, opts));
+notes
+  .command("reply")
+  .description("reply under a note thread (id from 'notes comments')")
+  .argument("<id>", "thread id")
+  .requiredOption("--body <text>", "reply text")
+  .option("--mention <handle...>", "tag member(s) by name/handle")
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: { body: string; mention?: string[]; path?: string; api?: string }) => notesReply(id, opts.body, opts));
+notes
+  .command("resolve")
+  .description("resolve a note thread (or reopen it with --reopen)")
+  .argument("<id>", "thread id (from 'notes comments')")
+  .option("--reopen", "reopen instead of resolving", false)
+  .option("--path <dir>", "project path", ".")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action((id: string, opts: { reopen?: boolean; path?: string; api?: string }) => notesResolveComment(id, opts));
 notes
   .command("show")
   .description("one note in full: body, connections and backlinks")
