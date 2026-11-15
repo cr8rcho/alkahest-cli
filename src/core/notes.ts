@@ -453,3 +453,87 @@ export async function linkNotes(path: string, params: LinkNotesParams): Promise<
   if (!res.ok) return fail(res, params.remove ? "unlink" : "link");
   return { ok: true, removed: !!res.body?.removed };
 }
+
+// ── Note comments (cloud ADR-122) ──────────────────────────────────────────────────────────
+// Threads on a note, optionally pinned to a quoted passage. The web stores the passage as the
+// text the reader SAW; note-comments-post checks an agent's quote against the note's rendered
+// text (markdown markers stripped) and refuses one that isn't there, so a comment never lands
+// already "outdated". Reads/writes go through note-comments-{pull,post,resolve}.
+
+export interface NoteCommentThread {
+  id: string;
+  kind: "note" | "question";
+  body: string;
+  resolved: boolean;
+  /** The passage the thread is about, as it reads on the page — null = the whole note. */
+  quote: string | null;
+  heading: string | null;
+  /** Whether the quote still appears in the note (false = the passage was edited away). */
+  anchor_found: boolean | null;
+  note: { id: string; slug: string; title: string; source_path?: string; url: string | null };
+  author_name: string | null;
+  origin: string;
+  created_at: string;
+  replies: { id: string; kind: string; body: string; author_name: string | null; origin: string; created_at: string }[];
+}
+
+export interface PullNoteCommentsParams { api?: string; token?: string; slug?: string; note?: string; open?: boolean }
+
+export async function pullNoteComments(
+  path: string,
+  params: PullNoteCommentsParams = {},
+): Promise<{ ok: boolean; threads?: NoteCommentThread[]; code?: string; message?: string }> {
+  const ctx = authContext(path, params, true);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  const qs = new URLSearchParams({ slug: ctx.slug! });
+  if (params.note?.trim()) qs.set("note", params.note.trim());
+  if (params.open) qs.set("open", "1");
+  const res = await request(`${ctx.apiUrl}/note-comments-pull?${qs}`, ctx.token);
+  if (!res.ok) return fail(res, "read note comments");
+  const proj = (res.body?.projects ?? [])[0];
+  return { ok: true, threads: proj?.threads ?? [] };
+}
+
+export interface PostNoteCommentParams {
+  api?: string;
+  token?: string;
+  slug?: string;
+  /** Note slug (or id) for a new thread; omit when replying. */
+  note?: string;
+  /** Reply under this thread (comment id). */
+  parent?: string;
+  body: string;
+  /** note | question for a thread; replies default to answer (under a question) or note. */
+  kind?: string;
+  /** The passage the comment is about, copied as it reads in the note. Omit = whole note. */
+  quote?: string;
+  mention?: string | string[];
+}
+
+export async function postNoteComment(
+  path: string,
+  params: PostNoteCommentParams,
+): Promise<{ ok: boolean; comment?: { id: string; kind: string; quote: string | null; heading: string | null; mentions?: string[] }; url?: string | null; code?: string; message?: string }> {
+  const ctx = authContext(path, params, !params.parent);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.body?.trim()) return { ok: false, code: "no_body", message: "Comment body is required." };
+  if (!params.parent && !params.note?.trim()) return { ok: false, code: "no_note", message: "A note slug (or a parent comment id for a reply) is required." };
+  const mentions = params.mention === undefined ? undefined : (Array.isArray(params.mention) ? params.mention : [params.mention]);
+  const res = await request(`${ctx.apiUrl}/note-comments-post`, ctx.token, params.parent
+    ? { parent_id: params.parent, body: params.body.trim(), kind: params.kind, mentions }
+    : { slug: ctx.slug, note: params.note!.trim(), body: params.body.trim(), kind: params.kind, quote: params.quote, mentions });
+  if (!res.ok) return fail(res, "post note comment");
+  return { ok: true, comment: res.body?.comment, url: res.body?.url ?? null };
+}
+
+export async function resolveNoteComment(
+  path: string,
+  params: { api?: string; token?: string; id: string; resolved?: boolean },
+): Promise<{ ok: boolean; id?: string; resolved?: boolean; code?: string; message?: string }> {
+  const ctx = authContext(path, params, false);
+  if ("code" in ctx) return { ok: false, code: ctx.code, message: ctx.message };
+  if (!params.id) return { ok: false, code: "no_id", message: "Comment id is required." };
+  const res = await request(`${ctx.apiUrl}/note-comments-resolve`, ctx.token, { id: params.id, resolved: params.resolved ?? true });
+  if (!res.ok) return fail(res, "resolve note comment");
+  return { ok: true, id: res.body?.id, resolved: res.body?.resolved };
+}
