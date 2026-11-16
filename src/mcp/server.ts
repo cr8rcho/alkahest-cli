@@ -395,17 +395,18 @@ export function buildServer(remote?: RemoteOptions): McpServer {
         node: z.string().describe("screen id/route/title, resource id/path/label, or 'map'"),
         body: z.string().describe("the comment text"),
         question: z.boolean().optional().describe("Ask a decision (kind 'question') instead of leaving a note"),
+        mention: z.array(z.string()).optional().describe("Member(s) to tag — names/handles (the issues tool lists project members). A question goes to them instead of the project owner; also write @name in body."),
         project: z.string().optional().describe("Which project (slug) — say it explicitly when the folder isn't a linked checkout. List them with list_projects."),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ node, body, question, path, project }) => {
+    async ({ node, body, question, mention, path, project }) => {
       const root = findProjectRoot(rootOf(path));
       const map = remote ? await getMap(undefined, project) : loadOrScan(root);
       if (!map) return text(remote ? noMapMsg : "No map for this project — run the scan/publish tools first.");
       const n = resolveNode(map, node);
       if (!n) return text(`No node matches '${node}'. Use the overview tool to list screens/resources.`);
-      const res = await postComment(root, withAuth({ node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: project, kind: question ? "question" : "note" }));
+      const res = await postComment(root, withAuth({ node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: project, kind: question ? "question" : "note", mention }));
       if (!res.ok) {
         const hints: Record<string, string> = hinted({
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
@@ -428,11 +429,12 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       inputSchema: {
         id: z.string().describe("parent comment id (from the comments tool)"),
         body: z.string().describe("the reply text"),
+        mention: z.array(z.string()).optional().describe("Member(s) to tag — names/handles"),
         path: z.string().optional().describe("Project root (default: cwd)"),
       },
     },
-    async ({ id, body, path }) => {
-      const res = await postComment(rootOf(path), withAuth({ parent_id: id, body }));
+    async ({ id, body, mention, path }) => {
+      const res = await postComment(rootOf(path), withAuth({ parent_id: id, body, mention }));
       if (!res.ok) {
         const hints: Record<string, string> = hinted({
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
