@@ -38,6 +38,8 @@ export interface PulledComment {
   kind?: string;
   /** web | token | widget — token rows were posted by an agent. */
   origin?: string;
+  /** User ids @mentioned (cloud 0160). */
+  mentions?: string[];
   resolved: boolean;
   /** True if the anchored node is gone from the current map (route renamed/removed). */
   orphaned?: boolean;
@@ -285,6 +287,9 @@ export interface PostParams {
   /** New comment: 'question' asks a decision (notifies the project owner, stays open until
    *  decided — cloud 0159); default 'note'. A reply's kind follows its parent (answer under a question). */
   kind?: "note" | "question";
+  /** @mention targets (cloud 0160): member ids OR display-name handles; the server keeps only
+   *  project people. A question goes to them instead of the project owner. */
+  mention?: string | string[];
 }
 
 export interface PostResult {
@@ -304,13 +309,14 @@ export async function postComment(path: string, params: PostParams): Promise<Pos
   if (!params.body || !params.body.trim()) return { ok: false, code: "no_body", message: "Comment body is required." };
 
   let reqBody: Record<string, unknown>;
+  const mentions = params.mention === undefined ? undefined : (Array.isArray(params.mention) ? params.mention : [params.mention]);
   if (params.parent_id) {
-    reqBody = { parent_id: params.parent_id, body: params.body };
+    reqBody = { parent_id: params.parent_id, body: params.body, mentions };
   } else {
     const { slug, mapSlug: knownMap } = resolveProject(path, params.slug);
     if (!slug) return { ok: false, code: "no_slug", message: "Which project? Name it explicitly, or bind this folder by publishing" };
     if (!params.node_key) return { ok: false, code: "no_node", message: "node_key is required for a new comment." };
-    reqBody = { slug, mapSlug: params.mapSlug ?? knownMap, node_key: params.node_key, anchor_kind: params.anchor_kind, anchor_label: params.anchor_label, body: params.body, kind: params.kind };
+    reqBody = { slug, mapSlug: params.mapSlug ?? knownMap, node_key: params.node_key, anchor_kind: params.anchor_kind, anchor_label: params.anchor_label, body: params.body, kind: params.kind, mentions };
   }
 
   const res = await postJson(`${apiUrl}/comments-post`, reqBody, token);

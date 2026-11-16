@@ -113,17 +113,19 @@ comments
   .option("--path <dir>", "project path", ".")
   .option("--slug <slug>", "project slug (defaults to the saved slug for this path)")
   .option("--map <slug>", "which code map the comment is on (defaults to this checkout's map)")
-  .option("--question", "ask the project owner a decision (notifies, stays open until decided)", false)
+  .option("--question", "ask a decision (notifies the people you mention, else the project owner)", false)
+  .option("--mention <handle...>", "tag member(s) by name/handle — a question goes to them")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .action((node: string, opts: { body?: string; slug?: string; map?: string; api?: string; path?: string; question?: boolean }) => commentsAdd(node, opts));
+  .action((node: string, opts: { body?: string; slug?: string; map?: string; api?: string; path?: string; question?: boolean; mention?: string[] }) => commentsAdd(node, opts));
 comments
   .command("reply")
   .description("reply to an existing comment (id from 'comments pull')")
   .argument("<id>", "parent comment id")
   .requiredOption("--body <text>", "reply text")
+  .option("--mention <handle...>", "tag member(s) by name/handle")
   .option("--path <dir>", "project path", ".")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
-  .action((id: string, opts: { body?: string; api?: string; path?: string }) => commentsReply(id, opts));
+  .action((id: string, opts: { body?: string; api?: string; path?: string; mention?: string[] }) => commentsReply(id, opts));
 comments
   .command("resolve")
   .description("mark a comment resolved (or reopen with --reopen) — author or project owner only")

@@ -87,7 +87,7 @@ export async function commentsPromote(ids: string[], options: CommentsPromoteOpt
 
 export interface CommentsAddOptions {
   /** Ask a decision (cloud 0159) instead of leaving a note. */
-  question?: boolean; body?: string; slug?: string; map?: string; api?: string; path?: string; }
+  question?: boolean; mention?: string[]; body?: string; slug?: string; map?: string; api?: string; path?: string; }
 
 export async function commentsAdd(node: string, options: CommentsAddOptions): Promise<void> {
   const body = (options.body || "").trim();
@@ -97,7 +97,7 @@ export async function commentsAdd(node: string, options: CommentsAddOptions): Pr
   if (!map) { console.error(`[alkahest] no ${OUTPUT_DIR}/map.json — run 'alkahest scan' first.`); process.exitCode = 1; return; }
   const n = resolveNode(map, node);
   if (!n) { console.error(`[alkahest] no node matches '${node}'. Try a screen route/title or resource path.`); process.exitCode = 1; return; }
-  const res = await postComment(projectRoot, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: options.slug, mapSlug: options.map, api: options.api, kind: options.question ? "question" : "note" });
+  const res = await postComment(projectRoot, { node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: options.slug, mapSlug: options.map, api: options.api, kind: options.question ? "question" : "note", mention: options.mention });
   if (!res.ok) {
     console.error(res.code === "forbidden"
       ? "[alkahest] ✗ Only the project owner or a collaborator can comment."
@@ -107,12 +107,12 @@ export async function commentsAdd(node: string, options: CommentsAddOptions): Pr
   console.log(`[alkahest] commented on ${n.node_key} (${n.anchor_label ?? n.node_key}) — id ${res.comment?.id}`);
 }
 
-export interface CommentsReplyOptions { body?: string; api?: string; path?: string; }
+export interface CommentsReplyOptions { mention?: string[]; body?: string; api?: string; path?: string; }
 
 export async function commentsReply(id: string, options: CommentsReplyOptions): Promise<void> {
   const body = (options.body || "").trim();
   if (!body) { console.error("[alkahest] --body is required."); process.exitCode = 1; return; }
-  const res = await postComment(resolve(options.path || "."), { parent_id: id, body, api: options.api });
+  const res = await postComment(resolve(options.path || "."), { parent_id: id, body, api: options.api, mention: options.mention });
   if (!res.ok) {
     console.error(res.code === "not_found"
       ? "[alkahest] ✗ Parent comment not found."
