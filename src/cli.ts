@@ -128,7 +128,7 @@ comments
   .action((id: string, opts: { body?: string; api?: string; path?: string; mention?: string[] }) => commentsReply(id, opts));
 comments
   .command("resolve")
-  .description("mark a comment resolved (or reopen with --reopen) — author or project owner only")
+  .description("mark a comment resolved (or reopen with --reopen) — author, map editor, or workspace owner/admin")
   .argument("<id>", "comment id (from 'comments pull')")
   .option("--reopen", "reopen instead of resolving", false)
   .option("--path <dir>", "project path", ".")

@@ -359,7 +359,8 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       title: "Resolve a map comment",
       description:
         "Mark a map comment resolved after you've addressed it (or reopen it with resolved:false). Pass the comment id " +
-        "from the comments tool. Only the comment author or the project owner can change it. Needs an API token.",
+        "from the comments tool. Thread roots only. The comment author, an editor of the map, or a workspace owner/admin " +
+        "can change it. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Comment id (from the comments tool)"),
         resolved: z.boolean().optional().describe("true (default) to resolve, false to reopen"),
@@ -371,7 +372,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       if (!res.ok) {
         const hints: Record<string, string> = hinted({
           no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
-          forbidden: "Only the comment author or project owner can resolve it.",
+          forbidden: "Only the comment author, an editor of the map, or a workspace owner/admin can resolve it.",
           not_found: "No comment with that id.",
         });
         const hint = hints[res.code ?? ""] ? ` ${hints[res.code ?? ""]}` : "";
@@ -1705,7 +1706,8 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       description:
         "Mark a decision question on an issue's thread resolved (or reopen it with resolved=false) — the 'decision " +
         "closed' signal (ADR-020). Resolve a question once the user has answered and you've captured the decision; the " +
-        "issue becomes actionable again. Only the comment author or the project owner can toggle it. Needs an API token.",
+        "issue becomes actionable again. Also closes a plain note thread. Thread roots only. The comment author, anyone " +
+        "who can edit the issue, or a workspace owner/admin can toggle it. Needs an API token.",
       inputSchema: {
         id: z.string().describe("Comment id of the question (from issue_comments)"),
         resolved: z.boolean().optional().describe("false to reopen (default: true)"),

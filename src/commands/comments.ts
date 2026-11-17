@@ -126,7 +126,7 @@ export async function commentsReply(id: string, options: CommentsReplyOptions): 
 
 export interface CommentsResolveOptions { reopen?: boolean; api?: string; path?: string; }
 
-/** Mark a map comment resolved (or reopen it with --reopen) — author or project owner only. */
+/** Mark a map comment resolved (or reopen it with --reopen) — author, map editor, or workspace owner/admin. */
 export async function commentsResolve(id: string, options: CommentsResolveOptions): Promise<void> {
   const resolved = !options.reopen;
   const res = await resolveComment(resolve(options.path || "."), id, resolved, { api: options.api });
@@ -134,7 +134,7 @@ export async function commentsResolve(id: string, options: CommentsResolveOption
     console.error(res.code === "not_found"
       ? "[alkahest] ✗ No comment with that id."
       : res.code === "forbidden"
-        ? "[alkahest] ✗ Only the comment author or project owner can resolve it."
+        ? "[alkahest] ✗ Only the comment author, an editor of the map, or a workspace owner/admin can resolve it."
         : res.code === "no_token"
           ? "[alkahest] ✗ Not authenticated. Run 'alkahest login' first."
           : `[alkahest] resolve failed: ${res.message}`);
