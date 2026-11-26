@@ -1,6 +1,7 @@
 import { DEFAULT_API_URL, loadCredentials, resolveApiUrl, resolveToken } from "./credentials.js";
 import { listProjects, type CodeMapFingerprint, type ProjectInfo, type WorkspaceInfo } from "./listProjects.js";
-import { resolveProject } from "./project.js";
+import { readMcpJson, shadowedMcpEnv } from "./link.js";
+import { resolveProject, type SlugSource } from "./project.js";
 
 /**
  * "Where am I signed in, and where does this folder publish?" — the state behind
@@ -95,12 +96,19 @@ export interface CheckoutStatus {
   map?: CodeMapFingerprint;
   /** Linked locally, but the account cannot see that project — moved, deleted, or another account's. */
   unreachable: boolean;
+  /** Where the slug came from (project.json, the path-keyed creds, ALKAHEST_PROJECT). */
+  slugSource?: SlugSource;
+  /** `.mcp.json` env keys here that nothing reads any more (see core/link.ts shadowedMcpEnv). */
+  deadMcpEnv: string[];
+  /** ALKAHEST_PROJECT in this folder's `.mcp.json` — what `setup` with no argument would link. */
+  mcpProject?: string;
 }
 
 /** Join the local link (`.alkahest/project.json`) to what the account can actually see. */
 export function checkoutStatus(path: string, auth: AuthStatus): CheckoutStatus {
-  const { root, slug, mapSlug } = resolveProject(path);
-  if (!slug) return { root, unreachable: false };
+  const { root, slug, mapSlug, slugSource } = resolveProject(path);
+  const deadMcpEnv = shadowedMcpEnv(root);
+  if (!slug) return { root, unreachable: false, deadMcpEnv, mcpProject: readMcpJson(root)?.env.ALKAHEST_PROJECT };
 
   const project = auth.projects?.find((p) => p.slug === slug);
   const map = project
@@ -108,5 +116,5 @@ export function checkoutStatus(path: string, auth: AuthStatus): CheckoutStatus {
       (mapSlug ? undefined : project.codeMaps[0])
     : undefined;
   // Only call it unreachable when we actually had a list to miss in.
-  return { root, slug, mapSlug, project, map, unreachable: Boolean(auth.projects && !project) };
+  return { root, slug, mapSlug, project, map, unreachable: Boolean(auth.projects && !project), slugSource, deadMcpEnv };
 }

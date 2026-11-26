@@ -8,6 +8,7 @@ import { publish } from "./commands/publish.js";
 import { login } from "./commands/login.js";
 import { status } from "./commands/status.js";
 import { logout } from "./commands/logout.js";
+import { link, setup } from "./commands/setup.js";
 import { commentsPull, commentsAdd, commentsReply, commentsResolve, commentsPromote } from "./commands/comments.js";
 import { issuesPull, issuesAdd, issuesEdit, issuesStatus, issuesDone, issuesArchive, issuesLink, issuesMap, issuesRm, issuesPriority, issuesDue, issuesAssign, issuesComments, issuesComment, issuesReply, issuesResolveComment, issuesConfigShow, issuesConfigSet, issuesConfigReset } from "./commands/issues.js";
 import { notesAdd, notesComment, notesComments, notesDelete, notesImport, notesLink, notesList, notesMap, notesProps, notesReply, notesResolveComment, notesRestore, notesShow, notesUpdate } from "./commands/notes.js";
@@ -58,6 +59,29 @@ program
   .option("--token <token>", "alk_… token from https://www.alkahest.app/home/tokens")
   .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
   .action(async (opts: { token?: string; api?: string }) => { await login(opts); });
+
+program
+  .command("setup")
+  .description("make this folder ready for your agent: check sign-in, link it to a project, register the MCP server once")
+  .argument("[project]", "project slug or name (default: this folder's .mcp.json ALKAHEST_PROJECT, its current link, or a picker)")
+  .option("--path <dir>", "folder to set up", ".")
+  .option("--yes", "answer yes to every question (switch the link, clean up .mcp.json)", false)
+  .option("--no-mcp", "don't register the MCP server")
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action(async (project: string | undefined, opts: { path?: string; yes?: boolean; mcp?: boolean; api?: string }) => {
+    await setup(project, opts);
+  });
+
+program
+  .command("link")
+  .description("link this folder to a project (writes .alkahest/project.json) — no publish needed")
+  .argument("[project]", "project slug or name (default: this folder's .mcp.json ALKAHEST_PROJECT, its current link, or a picker)")
+  .option("--path <dir>", "folder to link", ".")
+  .option("--yes", "answer yes to every question (switch the link, clean up .mcp.json)", false)
+  .option("--api <url>", "API base URL (or env ALKAHEST_API_URL)")
+  .action(async (project: string | undefined, opts: { path?: string; yes?: boolean; api?: string }) => {
+    await link(project, opts);
+  });
 
 program
   .command("logout")

@@ -55,6 +55,9 @@ export function localMapSlug(root: string): string | undefined {
   return undefined;
 }
 
+/** Where `resolveProject` found the slug — `status` says so, since an env slug is easy to forget. */
+export type SlugSource = "explicit" | "checkout" | "credentials" | "env";
+
 /**
  * Resolve { root, slug, mapSlug } from any path:
  * explicit → local file → saved creds (by root/path) → ALKAHEST_PROJECT.
@@ -66,19 +69,21 @@ export function localMapSlug(root: string): string | undefined {
 export function resolveProject(
   path: string,
   explicitSlug?: string,
-): { root: string; slug?: string; mapSlug?: string } {
+): { root: string; slug?: string; mapSlug?: string; slugSource?: SlugSource } {
   const root = findProjectRoot(path);
   const creds = loadCredentials();
-  const slug =
-    explicitSlug ||
-    localSlug(root) ||
-    creds.projects?.[root]?.slug ||
-    creds.projects?.[resolve(path || ".")]?.slug ||
-    process.env.ALKAHEST_PROJECT?.trim() ||
-    undefined;
+  const local = localSlug(root);
+  const saved = creds.projects?.[root]?.slug || creds.projects?.[resolve(path || ".")]?.slug;
+  const env = process.env.ALKAHEST_PROJECT?.trim();
+  const [slug, slugSource]: [string | undefined, SlugSource | undefined] =
+    explicitSlug ? [explicitSlug, "explicit"]
+    : local ? [local, "checkout"]
+    : saved ? [saved, "credentials"]
+    : env ? [env, "env"]
+    : [undefined, undefined];
   const mapSlug =
     localMapSlug(root) ||
     creds.projects?.[root]?.mapSlug ||
     creds.projects?.[resolve(path || ".")]?.mapSlug;
-  return { root, slug, mapSlug };
+  return { root, slug, mapSlug, slugSource };
 }

@@ -64,12 +64,21 @@ server-side in the `publish` edge function.
 
 **Which project — addressing vs. binding.** A project is addressed by its **slug**, not by
 the folder you happen to be in. `resolveProject` (`core/project.ts`) takes the first of:
-explicit slug → `.alkahest/project.json` → creds (path-keyed) → `ALKAHEST_PROJECT`. Only
-`publish` ever *writes* the middle two, so a folder that was never published has no binding —
-which is why every project-scoped MCP tool takes a **`project`** param (CLI: `--slug`) and why
-the env var exists as a last resort. Notes/issues/maps never required a publish: their edge
-functions resolve the slug and never look at code maps. When adding a tool, pass the slug
-through `params.slug` and don't reintroduce "run publish first" as the answer to `no_slug`.
+explicit slug → `.alkahest/project.json` → creds (path-keyed) → `ALKAHEST_PROJECT`. The middle
+two are written by `publish` and by **`setup` / `link`** (`core/link.ts`, `commands/setup.ts`) —
+the publish-free binder, so a repo with no code map can be bound too. A folder nobody bound has
+no slug, which is why every project-scoped MCP tool still takes a **`project`** param (CLI:
+`--slug`) and why the env var stays as the last resort (a folder-less client pinned to one
+project). Notes/issues/maps never required a publish: their edge functions resolve the slug and
+never look at code maps. When adding a tool, pass the slug through `params.slug`; the answer to
+`no_slug` is "pass `project`, or `alkahest setup <slug>` in this folder" — never "run publish first".
+
+**MCP registration is per machine, not per repo.** `alkahest setup` registers the stdio server at
+Claude Code's **user** scope (`claude mcp add -s user alkahest -- alkahest mcp`, no env): the
+server takes the token from `alkahest login` and the project from its cwd (Claude Code starts
+user-scope servers in the session's folder — measured 2026-11-27). Don't steer docs or hints back
+to a per-repo `.mcp.json` carrying `ALKAHEST_TOKEN` / `ALKAHEST_PROJECT` — that copy-around
+config is what `setup` replaces (it offers to strip those now-dead env lines).
 
 ## Build & checks
 

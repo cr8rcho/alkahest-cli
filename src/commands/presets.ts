@@ -109,7 +109,7 @@ function printNextStep(res: InstallPresetResult): void {
   console.log(`  "${res.handoff}"`);
   if (maps) console.log(`\n  It works against the ${maps} note map${res.maps!.length > 1 ? "s" : ""} and hands you the map link.`);
   if ((res.maps ?? []).some((m) => m.action === "no_project")) {
-    console.log("\n  This folder isn't bound to a project yet — pass --slug <project>, or run `alkahest publish` first,");
+    console.log("\n  This folder isn't linked to a project yet — run `alkahest setup <project>` (or pass --slug <project>),");
     console.log("  or the note maps have nowhere to land.");
   }
 }

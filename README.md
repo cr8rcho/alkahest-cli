@@ -64,9 +64,10 @@ alkahest scan                 # → .alkahest/map.json
 alkahest login --token alk_xxxxx
 alkahest publish              # → https://alkahest.app/p/<project>  (private until you share it from the viewer)
 
-# 4. Register the MCP server with Claude Code (project scope = shared via .mcp.json)
-claude mcp add alkahest -s project -- alkahest mcp
-#   verify it's connected:  run `claude` then `/mcp`  → "alkahest" should be listed
+# 4. Connect your agent — registers the MCP server at Claude Code's user scope (once per machine;
+#    no token or project in any config: it reads your login and the folder it runs in)
+alkahest setup
+#   then restart Claude Code; verify with `/mcp`  → "alkahest" should be listed
 ```
 
 Now just **talk to Claude Code** — it uses the alkahest MCP tools for you:
@@ -97,6 +98,8 @@ alkahest hook install  # run scan automatically on commit/merge (diff-driven ref
 alkahest mcp           # run the MCP server (agents query the product map; no key)
 alkahest login         # save your API token (Account → API tokens on alkahest.app); bare = show current state
 alkahest status        # are you signed in, and where does this checkout publish?
+alkahest setup [proj]  # make this folder agent-ready: check sign-in, link it to a project, register the MCP server once (idempotent; --yes, --no-mcp)
+alkahest link [proj]   # link this folder to a project (.alkahest/project.json) without publishing — slug or name; no arg = picker
 alkahest logout        # forget the saved token (local only — revoke it on the web to cut it off)
 alkahest publish       # upload the map to the hosted viewer → shareable link
 alkahest projects      # list your account's workspaces & projects (recover a slug after a move, etc.)
@@ -139,8 +142,8 @@ alkahest update        # update to the latest GitHub release (--check to only ch
 
 > **Lost a project's link?** A checkout remembers its project slug in `.alkahest/project.json`, but a
 > fresh clone (or a project moved between workspaces) can lose it. `alkahest projects` lists every
-> workspace & project on your account so you can re-publish with `--slug <slug>` (which also re-links
-> the checkout). And `publish` won't blindly create a duplicate: when the checkout has **no link** —
+> workspace & project on your account; `alkahest link <slug>` re-links the checkout (or re-publish
+> with `--slug <slug>`, which does the same). And `publish` won't blindly create a duplicate: when the checkout has **no link** —
 > or its remembered project **was deleted on the web** (the old slug 404s) — it finds the project that
 > matches this one and asks before overwriting. CI / non-interactive runs stop with the candidates and
 > point you at `--slug` rather than guessing.
@@ -162,9 +165,15 @@ Your published map at `alkahest.app/p/<project>/<map>`:
 Register the MCP server once, then the agent reads the map and **writes summaries / PRDs / requirements itself** — no key needed.
 
 ```bash
-# Claude Code (recommended): project scope writes a shared .mcp.json
-claude mcp add alkahest -s project -- alkahest mcp
+# Claude Code (recommended): run in the repo — links the folder and registers the server at
+# USER scope the first time, so the next repo only needs `alkahest setup <project>` again
+alkahest setup my-project-a1b2c3
+# (the same registration by hand:  claude mcp add -s user alkahest -- alkahest mcp)
 ```
+
+One registration serves every repo: the server resolves the project from the folder it runs in
+(`.alkahest/project.json`, written by `setup` / `link` / `publish`) and the token from your
+`alkahest login`. There's nothing per-repo to copy — no `.mcp.json`, no token, no project in env.
 
 Or add it to any MCP-capable agent's config directly:
 
@@ -209,7 +218,7 @@ Or add it to any MCP-capable agent's config directly:
 
 The agent reads with `get_screen` / `who_calls` and writes back with `set_summary` / `set_prd`; both write into `map.json` — publish and the hosted map reflects the latest.
 
-**Publishing from the agent (optional).** `scan` / read / write-back need no key. `publish` does — it uploads the map to your account on the hosted viewer. Get a token at **[alkahest.app/home/tokens](https://www.alkahest.app/home/tokens)**, then put it in the MCP config so the server can authenticate:
+**Publishing from the agent (optional).** `scan` / read / write-back need no key. `publish` does — it uploads the map to your account on the hosted viewer. Get a token at **[alkahest.app/home/tokens](https://www.alkahest.app/home/tokens)** and run `alkahest login --token alk_…` once — every agent on the machine uses it. Where a saved login isn't an option (CI, a shared machine), put the token in the MCP config instead:
 
 ```bash
 claude mcp add alkahest -s project \
@@ -231,7 +240,7 @@ claude mcp add alkahest -s project \
 }
 ```
 
-The token is all you need — the CLI defaults to the hosted service (alkahest.app). If you've already run `alkahest login`, even the token env is optional (saved credentials are used). Then just ask the agent to *"publish this"* and it returns the link.
+The token is all you need — the CLI defaults to the hosted service (alkahest.app). A saved `alkahest login` **wins over** this env, so on a signed-in machine the line does nothing (`alkahest status` points that out). Then just ask the agent to *"publish this"* and it returns the link.
 
 > `ALKAHEST_API_URL` (or `alkahest login --api <url>`) points the CLI at a different backend
 > deployment. The backend is **not** part of this repo — the MIT scope is the scanner, the
@@ -245,7 +254,7 @@ notes / add_note / issues / add_issue / maps / create_map / search / …
   → project: "my-wiki-2772c2"      # a slug from the list_projects tool
 ```
 
-`alkahest publish` binds a checkout to a project (`.alkahest/project.json`), and inside such a folder the parameter is redundant. Everywhere else, name the project. To make one MCP server permanently point at a single project — a personal wiki, say — set it once in the config:
+`alkahest setup <slug>` / `alkahest link <slug>` bind a folder to a project (`.alkahest/project.json`) — no publish or code map needed; `alkahest publish` writes the same file. Inside such a folder the parameter is redundant. Everywhere else, name the project. To make one MCP server permanently point at a single project — a personal wiki, say — set it once in the config:
 
 ```json
 { "env": { "ALKAHEST_TOKEN": "alk_xxxxx", "ALKAHEST_PROJECT": "my-wiki-2772c2" } }
