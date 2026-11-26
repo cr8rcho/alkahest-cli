@@ -234,7 +234,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       if (!res.ok) {
         const hints: Record<string, string> = {
           no_map: "Run the scan tool first to build .alkahest/map.json.",
-          no_token: "Set ALKAHEST_TOKEN in this MCP server's config (get a token at alkahest.app → Account).",
+          no_token: "Not signed in — run `alkahest login --token alk_…` in a shell (token from alkahest.app → API tokens); every agent on this machine picks it up.",
           no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
           plan_limit: "Free plan project limit reached — upgrade to Pro for more.",
           invalid_token: "The API token is invalid or revoked — create a new one at alkahest.app → Account.",
@@ -338,9 +338,9 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       const res = await pullComments(root, withAuth({ open, slug: project }));
       if (!res.ok) {
         const hints: Record<string, string> = hinted({
-          no_token: "Set ALKAHEST_TOKEN in this MCP server's config (token from alkahest.app → Account).",
+          no_token: "Not signed in — run `alkahest login --token alk_…` in a shell (token from alkahest.app → API tokens); every agent on this machine picks it up.",
           no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
-          no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
+          no_slug: "Pass `project` — a slug from list_projects. To bind this folder for good, run `alkahest setup <slug>` in it (shell).",
           invalid_token: "The API token is invalid or revoked — create a new one at alkahest.app → Account.",
           not_found: "No accessible project for this slug.",
         });
@@ -371,7 +371,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       const res = await resolveComment(rootOf(path), id, resolved === undefined ? true : resolved, withAuth({}));
       if (!res.ok) {
         const hints: Record<string, string> = hinted({
-          no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
+          no_token: "Not signed in — run `alkahest login --token alk_…` in a shell (token from alkahest.app → API tokens); every agent on this machine picks it up.",
           forbidden: "Only the comment author, an editor of the map, or a workspace owner/admin can resolve it.",
           not_found: "No comment with that id.",
         });
@@ -410,8 +410,8 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       const res = await postComment(root, withAuth({ node_key: n.node_key, anchor_kind: n.anchor_kind, anchor_label: n.anchor_label, body, slug: project, kind: question ? "question" : "note", mention }));
       if (!res.ok) {
         const hints: Record<string, string> = hinted({
-          no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
-          no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
+          no_token: "Not signed in — run `alkahest login --token alk_…` in a shell (token from alkahest.app → API tokens); every agent on this machine picks it up.",
+          no_slug: "Pass `project` — a slug from list_projects. To bind this folder for good, run `alkahest setup <slug>` in it (shell).",
           forbidden: "Only the project owner or a collaborator can comment.",
         });
         return text(`Add comment failed (${res.code}): ${res.message}.${hints[res.code ?? ""] ? " " + hints[res.code ?? ""] : ""}`);
@@ -438,7 +438,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       const res = await postComment(rootOf(path), withAuth({ parent_id: id, body, mention }));
       if (!res.ok) {
         const hints: Record<string, string> = hinted({
-          no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
+          no_token: "Not signed in — run `alkahest login --token alk_…` in a shell (token from alkahest.app → API tokens); every agent on this machine picks it up.",
           not_found: "No comment with that id (parent).",
           forbidden: "Only the project owner or a collaborator can comment.",
         });
@@ -475,8 +475,8 @@ export function buildServer(remote?: RemoteOptions): McpServer {
       const res = await promoteComments(rootOf(path), ids, withAuth({ title, mapSlug: map, type, status, force, slug: project }));
       if (!res.ok) {
         const hints = hinted({
-          no_token: "Set ALKAHEST_TOKEN in this MCP server's config.",
-          no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
+          no_token: "Not signed in — run `alkahest login --token alk_…` in a shell (token from alkahest.app → API tokens); every agent on this machine picks it up.",
+          no_slug: "Pass `project` — a slug from list_projects. To bind this folder for good, run `alkahest setup <slug>` in it (shell).",
           already_tracked: "Some comments already have an issue — pass force:true to promote again.",
           ambiguous_map: "This project has several issue maps — pass `map` (list them with the maps tool).",
           forbidden: "You need editor access to promote comments.",
@@ -491,9 +491,9 @@ export function buildServer(remote?: RemoteOptions): McpServer {
   // ---- issues: the Issue Map — a map-shaped issue tracker on the hosted viewer ----
 
   const issueHints: Record<string, string> = hinted({
-    no_token: "Set ALKAHEST_TOKEN in this MCP server's config (token from alkahest.app → Account).",
+    no_token: "Not signed in — run `alkahest login --token alk_…` in a shell (token from alkahest.app → API tokens); every agent on this machine picks it up.",
     no_api: "Set ALKAHEST_API_URL in this MCP server's config.",
-    no_slug: "Pass `project` — a slug from list_projects — or set ALKAHEST_PROJECT in this MCP server's config.",
+    no_slug: "Pass `project` — a slug from list_projects. To bind this folder for good, run `alkahest setup <slug>` in it (shell).",
     invalid_token: "The API token is invalid or revoked — create a new one at alkahest.app → Account.",
     forbidden: "Only the project owner or a collaborator can write issues.",
     not_found: "Not found — list ids with the issues tool, or the project's issue maps with the maps tool.",
@@ -1388,7 +1388,7 @@ export function buildServer(remote?: RemoteOptions): McpServer {
     async () => {
       const res = await listProjects(withAuth({}));
       if (!res.ok || !res.projects) {
-        const h = hinted({ no_token: "Set ALKAHEST_TOKEN in this MCP server's config." })[res.code ?? ""];
+        const h = hinted({ no_token: "Not signed in — run `alkahest login --token alk_…` in a shell (token from alkahest.app → API tokens); every agent on this machine picks it up." })[res.code ?? ""];
         return text(`List projects failed (${res.code}): ${res.message}.${h ? ` ${h}` : ""}`);
       }
       return json({

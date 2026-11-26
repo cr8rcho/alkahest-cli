@@ -46,6 +46,13 @@ function authLines(auth: AuthStatus): { head: string; notes: string[] } {
   }
 }
 
+/** Only the surprising sources get a note — a checkout link is the normal case. */
+function sourceNote(c: CheckoutStatus): string {
+  if (c.slugSource === "env") return "  (from ALKAHEST_PROJECT — 'alkahest setup' links this folder instead)";
+  if (c.slugSource === "credentials") return "  (from ~/.alkahest/credentials.json)";
+  return "";
+}
+
 /**
  * Print the shared status block. Returns false when the state is a failure (for exit codes).
  * `hint: false` drops the trailing "run login" note for callers that follow with their own
@@ -70,12 +77,14 @@ export function printStatus(auth: AuthStatus, checkout: CheckoutStatus, opts: { 
 
   console.log(`\n  this checkout  ${checkout.root}`);
   if (!checkout.slug) {
-    console.log("    not linked to a project yet — 'alkahest publish' links it.");
+    console.log(checkout.mcpProject
+      ? `    not linked — .mcp.json names ${checkout.mcpProject}; 'alkahest setup' links this folder to it.`
+      : "    not linked to a project yet — 'alkahest setup <project>' links it (so does 'alkahest publish').");
   } else if (checkout.project) {
     const p = checkout.project;
     const named = p.name && p.name !== p.slug ? `  — ${p.name}` : "";
     const ws = p.workspace ? `  (${p.workspace.name || p.workspace.slug})` : "";
-    console.log(`    project  ${p.slug}${named}${ws}`);
+    console.log(`    project  ${p.slug}${named}${ws}${sourceNote(checkout)}`);
     const m = checkout.map;
     if (m) {
       const when = m.lastPublishedAt ? `last publish ${relTime(m.lastPublishedAt)}` : "never published";
@@ -88,6 +97,11 @@ export function printStatus(auth: AuthStatus, checkout: CheckoutStatus, opts: { 
   } else {
     // Linked, but we have no server list to check it against (not signed in / unreachable).
     console.log(`    project  ${checkout.slug}${checkout.mapSlug ? ` / ${checkout.mapSlug}` : ""}  ·  unverified`);
+  }
+
+  if (checkout.deadMcpEnv.length) {
+    console.log(`\n  .mcp.json sets ${checkout.deadMcpEnv.join(" and ")} — unused (your login and this folder's link win).`);
+    console.log("  'alkahest setup --yes' removes it.");
   }
 
   if (tail.length) console.log(`\n  ${tail.join("\n  ")}`);
@@ -115,6 +129,8 @@ export async function status(options: StatusOptions = {}): Promise<void> {
         workspace: checkout.project?.workspace?.slug ?? null,
         lastPublishedAt: checkout.map?.lastPublishedAt ?? null,
         unreachable: checkout.unreachable,
+        slugSource: checkout.slugSource ?? null,
+        deadMcpEnv: checkout.deadMcpEnv,
       },
     }, null, 2));
     if (!auth.ok) process.exitCode = 1;

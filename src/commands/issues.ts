@@ -28,7 +28,7 @@ const failMessage = (code: string | undefined, message: string | undefined, acti
     invalid_token: "✗ Token invalid or revoked. Run 'alkahest login' again.",
     forbidden: "✗ Only the project owner or a collaborator can do this.",
     not_found: `✗ ${message ?? "Not found."}`,
-    no_slug: `${message ?? "Which project?"}\n  Pass --slug <slug> — 'alkahest projects' lists them, or set ALKAHEST_PROJECT.`,
+    no_slug: `${message ?? "Which project?"}\n  Pass --slug <slug> ('alkahest projects' lists them), or run 'alkahest setup <slug>' to link this folder.`,
     ambiguous_map: `✗ ${message ?? "This project has several issue maps."}\n  See them with 'alkahest maps list', or make a new one with 'alkahest maps create <slug> --type issue'.`,
   };
   return known[code ?? ""] ?? `${action} failed: ${message}`;

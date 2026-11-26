@@ -64,9 +64,10 @@ alkahest scan                 # → .alkahest/map.json
 alkahest login --token alk_xxxxx
 alkahest publish              # → https://alkahest.app/p/<project>  (뷰어에서 공유하기 전까지는 비공개)
 
-# 4. Claude Code에 MCP 서버 등록 (project 스코프 = .mcp.json으로 공유)
-claude mcp add alkahest -s project -- alkahest mcp
-#   연결 확인:  `claude` 실행 후 `/mcp`  → 목록에 "alkahest" 표시
+# 4. 에이전트 연결 — Claude Code 사용자 스코프에 MCP 서버 등록 (기계당 한 번.
+#    설정 어디에도 토큰·프로젝트가 없음: 로그인과 실행 폴더에서 읽음)
+alkahest setup
+#   Claude Code 재시작 후 `/mcp`  → 목록에 "alkahest" 표시
 ```
 
 이제 **Claude Code에 말만 하면** 됩니다 — 알아서 alkahest MCP 도구를 씁니다:
@@ -97,6 +98,8 @@ alkahest hook install  # 커밋·머지 시 scan 자동 실행 (diff 자동 갱�
 alkahest mcp           # MCP 서버 실행 (에이전트가 제품 지도를 질의, 키 불필요)
 alkahest login         # publish 토큰 저장 (alkahest.app → Account → Create token); 인자 없이 실행하면 현재 상태 표시
 alkahest status        # 로그인 상태 + 이 체크아웃이 어느 프로젝트/맵으로 publish 되는지
+alkahest setup [proj]  # 이 폴더를 에이전트용으로 준비: 로그인 확인 → 프로젝트 연결 → MCP 서버 1회 등록 (멱등; --yes, --no-mcp)
+alkahest link [proj]   # publish 없이 이 폴더를 프로젝트에 연결 (.alkahest/project.json) — slug 또는 이름, 인자 없으면 선택
 alkahest logout        # 저장된 토큰 삭제 (로컬 한정 — 서버에서 끊으려면 웹에서 revoke)
 alkahest publish       # 지도를 hosted 뷰어에 업로드 → 공유 링크
 alkahest projects      # 계정의 워크스페이스·프로젝트 목록 (이동 후 slug 복구 등)
@@ -138,9 +141,14 @@ alkahest update        # 최신 GitHub 릴리스로 업데이트 (--check: 확�
 MCP 서버를 한 번 등록하면, 에이전트가 제품 지도를 읽고 **요약·PRD·요구사항을 직접** 작성합니다 — 키 불필요.
 
 ```bash
-# Claude Code (권장): project 스코프는 공유용 .mcp.json 에 기록
-claude mcp add alkahest -s project -- alkahest mcp
+# Claude Code (권장): 리포에서 실행 — 폴더를 연결하고, 처음이면 서버를 사용자 스코프에 등록.
+# 다음 리포에서는 `alkahest setup <project>` 만 다시 실행하면 됨
+alkahest setup my-project-a1b2c3
+# (같은 등록을 직접:  claude mcp add -s user alkahest -- alkahest mcp)
 ```
+
+등록 하나가 모든 리포를 커버합니다: 서버는 실행된 폴더의 `.alkahest/project.json`(`setup`/`link`/`publish`가 기록)에서
+프로젝트를, `alkahest login`에서 토큰을 찾습니다. 리포마다 복사할 것이 없습니다 — `.mcp.json`도, env 토큰·프로젝트도.
 
 또는 MCP를 지원하는 다른 에이전트 설정에 직접 추가:
 
@@ -184,7 +192,7 @@ claude mcp add alkahest -s project -- alkahest mcp
 
 에이전트는 `get_screen` / `who_calls` 로 읽고 `set_summary` / `set_prd` 로 써넣습니다. 둘 다 `map.json`에 기록되며, publish 하면 호스팅 지도가 최신을 반영합니다.
 
-**에이전트에서 publish (선택).** `scan`·읽기·쓰기는 키가 필요 없지만, `publish`는 지도를 계정에 업로드하므로 토큰이 필요합니다. **alkahest.app → Account → Create token** 에서 토큰을 받아 MCP 설정에 넣어주세요:
+**에이전트에서 publish (선택).** `scan`·읽기·쓰기는 키가 필요 없지만, `publish`는 지도를 계정에 업로드하므로 토큰이 필요합니다. **[alkahest.app/home/tokens](https://www.alkahest.app/home/tokens)** 에서 토큰을 받아 `alkahest login --token alk_…` 을 한 번 실행하면 이 기계의 모든 에이전트가 씁니다. 저장된 로그인을 쓸 수 없는 곳(CI, 공용 기계)에서는 MCP 설정에 넣으세요:
 
 ```bash
 claude mcp add alkahest -s project \
@@ -206,7 +214,7 @@ claude mcp add alkahest -s project \
 }
 ```
 
-토큰만 있으면 됩니다 — CLI가 호스팅 서비스(alkahest.app)를 기본값으로 씁니다. 이미 `alkahest login` 을 했다면 토큰 env조차 생략 가능합니다(저장된 자격증명 사용). 그다음 에이전트에게 *"이거 publish 해줘"* 라고만 하면 링크를 돌려줍니다.
+토큰만 있으면 됩니다 — CLI가 호스팅 서비스(alkahest.app)를 기본값으로 씁니다. 저장된 `alkahest login` 이 이 env를 **이기므로**, 로그인한 기계에서는 이 줄이 아무 일도 하지 않습니다(`alkahest status` 가 알려줌). 그다음 에이전트에게 *"이거 publish 해줘"* 라고만 하면 링크를 돌려줍니다.
 
 > `ALKAHEST_API_URL`(또는 `alkahest login --api <url>`)은 CLI를 다른 백엔드 배포로 향하게 합니다.
 > 백엔드는 **이 저장소에 없습니다** — MIT 범위는 스캐너·어댑터·MCP 서버입니다. 자기 Supabase
@@ -219,7 +227,7 @@ notes / add_note / issues / add_issue / maps / create_map / search / …
   → project: "my-wiki-2772c2"      # list_projects 도구가 알려주는 slug
 ```
 
-`alkahest publish` 는 체크아웃을 프로젝트에 묶고(`.alkahest/project.json`), 그런 폴더 안에서는 이 파라미터가 불필요합니다. 그 밖에서는 프로젝트를 지목하세요. MCP 서버 하나를 한 프로젝트 전용(예: 개인 위키)으로 고정하려면 설정에 한 번만 넣으면 됩니다:
+`alkahest setup <slug>` / `alkahest link <slug>` 가 폴더를 프로젝트에 묶습니다(`.alkahest/project.json` — publish·코드맵 불필요, `alkahest publish` 도 같은 파일을 씀). 그런 폴더 안에서는 이 파라미터가 불필요합니다. 그 밖에서는 프로젝트를 지목하세요. MCP 서버 하나를 한 프로젝트 전용(예: 개인 위키)으로 고정하려면 설정에 한 번만 넣으면 됩니다:
 
 ```json
 { "env": { "ALKAHEST_TOKEN": "alk_xxxxx", "ALKAHEST_PROJECT": "my-wiki-2772c2" } }

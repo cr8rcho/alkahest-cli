@@ -74,7 +74,7 @@ export async function commentsPromote(ids: string[], options: CommentsPromoteOpt
       already_tracked: `[alkahest] ✗ ${res.message} Use --force to promote again (a new issue).`,
       ambiguous_map: `[alkahest] ✗ ${res.message ?? "This project has several issue maps."}\n  Pass --map <slug> — 'alkahest maps list' shows them.`,
       forbidden: "[alkahest] ✗ You need editor access to promote comments.",
-      no_slug: `[alkahest] ✗ ${res.message}\n  Pass --slug <slug> — 'alkahest projects' lists them, or set ALKAHEST_PROJECT.`,
+      no_slug: `[alkahest] ✗ ${res.message}\n  Pass --slug <slug> ('alkahest projects' lists them), or run 'alkahest setup <slug>' to link this folder.`,
       not_found: `[alkahest] ✗ ${res.message}`,
     };
     console.error(msg[res.code ?? ""] ?? `[alkahest] promote failed: ${res.message}`);
